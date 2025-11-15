@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Settings, LogOut, Eye } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
+import { FlightOpsConfigPanel } from './FlightOpsConfigPanel';
 
 export function AdminPanel() {
   const { isAdmin, isLoading, signOut } = useAuth();
@@ -59,13 +60,7 @@ export function AdminPanel() {
           </div>
         </div>
 
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">PC-24 Configuration</h2>
-          <p className="text-muted-foreground">
-            Admin configuration panel will be updated in the next phase with PC-24 aircraft settings, 
-            airport service criteria, and other backend parameters.
-          </p>
-        </Card>
+        <FlightOpsConfigPanel />
       </div>
     </div>
   );
