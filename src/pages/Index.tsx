@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Settings, LogOut } from 'lucide-react';
+import { Settings, LogOut, Sparkles } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { TransplantTimeCalculator } from '@/components/TransplantTimeCalculator';
 import northwellLogo from '@/assets/northwell-health-logo.png';
@@ -28,6 +28,16 @@ const Index = () => {
             </div>
 
             <div className="flex items-center gap-2">
+              <Button 
+                onClick={() => navigate('/demo')} 
+                variant="outline"
+                className="gap-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span className="hidden md:inline">View AI Demo</span>
+                <span className="md:hidden">Demo</span>
+              </Button>
+              
               {isAdmin ? (
                 <>
                   <TooltipProvider>
