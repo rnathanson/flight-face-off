@@ -35,6 +35,43 @@ export const AIRPORT_COORDS: Record<string, { lat: number; lng: number; name?: s
   'KBWI': { lat: 39.1754, lng: -76.6683, name: 'Baltimore/Washington International Airport' },
   'KDCA': { lat: 38.8521, lng: -77.0377, name: 'Ronald Reagan Washington National Airport' },
   'KIAD': { lat: 38.9445, lng: -77.4558, name: 'Washington Dulles International Airport' },
+  
+  // Southeast Regional
+  'KATL': { lat: 33.6367, lng: -84.4281, name: 'Hartsfield-Jackson Atlanta International Airport' },
+  'KCLT': { lat: 35.2140, lng: -80.9431, name: 'Charlotte Douglas International Airport' },
+  'KRDU': { lat: 35.8776, lng: -78.7875, name: 'Raleigh-Durham International Airport' },
+  'KGSO': { lat: 36.0978, lng: -79.9373, name: 'Piedmont Triad International Airport' },
+  'KAVL': { lat: 35.4362, lng: -82.5418, name: 'Asheville Regional Airport' },
+  'KHKY': { lat: 35.7411, lng: -81.3895, name: 'Hickory Regional Airport' },
+  'KJAX': { lat: 30.4941, lng: -81.6879, name: 'Jacksonville International Airport' },
+  'KMCO': { lat: 28.4294, lng: -81.3089, name: 'Orlando International Airport' },
+  'KTPA': { lat: 27.9755, lng: -82.5332, name: 'Tampa International Airport' },
+  'KMIA': { lat: 25.7932, lng: -80.2906, name: 'Miami International Airport' },
+  'KFLL': { lat: 26.0726, lng: -80.1527, name: 'Fort Lauderdale-Hollywood International Airport' },
+  'KSAV': { lat: 32.1276, lng: -81.2021, name: 'Savannah/Hilton Head International Airport' },
+  'KCHS': { lat: 32.8986, lng: -80.0405, name: 'Charleston International Airport' },
+  'KMYR': { lat: 33.6817, lng: -78.9283, name: 'Myrtle Beach International Airport' },
+  'KTYS': { lat: 35.8109, lng: -83.9940, name: 'McGhee Tyson Airport' },
+  'KBNA': { lat: 36.1245, lng: -86.6782, name: 'Nashville International Airport' },
+  
+  // West Coast
+  'KSFO': { lat: 37.6213, lng: -122.3790, name: 'San Francisco International Airport' },
+  'KLAX': { lat: 33.9425, lng: -118.4081, name: 'Los Angeles International Airport' },
+  'KSEA': { lat: 47.4502, lng: -122.3088, name: 'Seattle-Tacoma International Airport' },
+  'KPDX': { lat: 45.5887, lng: -122.5975, name: 'Portland International Airport' },
+  'KSAN': { lat: 32.7336, lng: -117.1897, name: 'San Diego International Airport' },
+  
+  // Central
+  'KORD': { lat: 41.9742, lng: -87.9073, name: 'Chicago O\'Hare International Airport' },
+  'KMDW': { lat: 41.7868, lng: -87.7522, name: 'Chicago Midway International Airport' },
+  'KDFW': { lat: 32.8998, lng: -97.0403, name: 'Dallas/Fort Worth International Airport' },
+  'KIAH': { lat: 29.9902, lng: -95.3368, name: 'George Bush Intercontinental Airport' },
+  'KDEN': { lat: 39.8561, lng: -104.6737, name: 'Denver International Airport' },
+  'KPHX': { lat: 33.4343, lng: -112.0116, name: 'Phoenix Sky Harbor International Airport' },
+  'KSLC': { lat: 40.7884, lng: -111.9778, name: 'Salt Lake City International Airport' },
+  'KLAS': { lat: 36.0840, lng: -115.1537, name: 'Harry Reid International Airport' },
+  'KMSP': { lat: 44.8848, lng: -93.2223, name: 'Minneapolis-St Paul International Airport' },
+  'KSTL': { lat: 38.7487, lng: -90.3700, name: 'St. Louis Lambert International Airport' },
 };
 
 /**
