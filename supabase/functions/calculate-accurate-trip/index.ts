@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { fetchAndParseAirNav } from '../_shared/airnav-parser.ts';
 import { parseMETAR, getWeatherDelayMinutes } from '../_shared/metar-parser.ts';
+import { parseRoute, getFAARoute } from '../_shared/route-parser.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -55,39 +56,70 @@ serve(async (req) => {
 
     console.log(`Using airports: ${originAirport.code} -> ${destAirport.code}`);
 
-    // Step 2: Get detailed airport data and weather
+    // Step 2: Try to get FAA preferred route
+    let routeString = await getFAARoute(originAirport.code, destAirport.code, supabase);
+    let routeDistanceNM = null;
+    let routeSource = 'great-circle';
+
+    if (routeString) {
+      console.log(`Found FAA preferred route: ${routeString}`);
+      try {
+        const parsedRoute = await parseRoute(routeString, originAirport, destAirport, supabase);
+        routeDistanceNM = parsedRoute.totalDistanceNM;
+        routeSource = 'faa-preferred';
+      } catch (error) {
+        console.warn('Failed to parse route, using great-circle:', error);
+        routeString = null;
+      }
+    }
+
+    // Step 3: Get detailed airport data and weather
     const [originData, destData] = await Promise.all([
       fetchAndParseAirNav(originAirport.code, false),
       fetchAndParseAirNav(destAirport.code, false)
     ]);
 
-    // Step 3: Calculate ground segments with traffic
-    const departureHour = new Date(departureDateTime).getHours();
-    const dayOfWeek = new Date(departureDateTime).getDay();
+    // Step 4: Calculate ground segments with enhanced OSRM and traffic
+    const departureTime = new Date(departureDateTime);
+    const departureHour = departureTime.getHours();
+    const dayOfWeek = departureTime.getDay();
     const isRushHour = (departureHour >= 7 && departureHour <= 9) || (departureHour >= 16 && departureHour <= 19);
     const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
-    const trafficMultiplier = (isRushHour && isWeekday) ? 1.3 : 1.0;
+    
+    // Smart traffic multiplier
+    let trafficMultiplier = 1.0;
+    if (isRushHour && isWeekday) {
+      trafficMultiplier = 1.4;
+    } else if (departureHour >= 6 && departureHour <= 20) {
+      trafficMultiplier = 1.15;
+    }
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      trafficMultiplier *= 0.9;
+    }
 
-    // Calculate ground distance using OSRM API
-    const groundOriginTime = await calculateGroundSegment(
+    // Calculate ground distance using enhanced OSRM API
+    const groundOriginData = await calculateGroundSegmentEnhanced(
       originLocation,
       { lat: originAirport.lat, lng: originAirport.lng },
       trafficMultiplier
     );
 
-    const groundDestTime = await calculateGroundSegment(
+    const groundDestData = await calculateGroundSegmentEnhanced(
       { lat: destAirport.lat, lng: destAirport.lng },
       destinationLocation,
       trafficMultiplier
     );
 
-    // Step 4: Calculate flight segment
-    const flightDistance = calculateDistance(
+    // Step 5: Calculate flight segment
+    const straightLineDistance = calculateDistance(
       originAirport.lat,
       originAirport.lng,
       destAirport.lat,
       destAirport.lng
     );
+    
+    // Use route distance if available
+    const flightDistance = routeDistanceNM || straightLineDistance;
 
     // Determine altitude and calculate flight
     let cruiseAltitudeFt: number;
@@ -167,34 +199,40 @@ serve(async (req) => {
 
     const totalFlightTimeMin = climbTimeMin + cruiseTimeMin + descentTimeMin + taxiTimeMin + bufferTimeMin + weatherDelay;
 
-    // Step 5: Calculate total trip time
-    const totalTripTimeMin = groundOriginTime + totalFlightTimeMin + groundDestTime;
-    const arrivalTime = new Date(new Date(departureDateTime).getTime() + totalTripTimeMin * 60000);
+    // Step 6: Calculate total trip time
+    const totalTripTimeMin = groundOriginData.timeMinutes + totalFlightTimeMin + groundDestData.timeMinutes;
+    const arrivalTime = new Date(departureTime.getTime() + totalTripTimeMin * 60000);
 
     // Calculate confidence score
-    let confidence = 90;
+    let confidence = 95;
     if (weatherDelay > 15) confidence -= 10;
     if (headwind > 20) confidence -= 10;
-    if (trafficMultiplier > 1.2) confidence -= 10;
-    if (!originMetar || !destMetar) confidence -= 15;
+    if (trafficMultiplier > 1.2) confidence -= 5;
+    if (!originMetar || !destMetar) confidence -= 10;
+    if (routeSource === 'great-circle') confidence -= 5;
 
     const result = {
       totalTimeMinutes: Math.round(totalTripTimeMin),
       arrivalTime: arrivalTime.toISOString(),
       confidence: Math.max(50, confidence),
+      routeSource,
+      routeString: routeString || 'Direct',
       segments: [
         {
           type: 'ground',
           name: 'Hospital to Airport',
-          timeMinutes: Math.round(groundOriginTime),
+          timeMinutes: Math.round(groundOriginData.timeMinutes),
+          distance_miles: groundOriginData.distanceMiles,
           distance_nm: originAirport.distance_nm,
-          notes: trafficMultiplier > 1.2 ? 'Heavy traffic expected' : 'Normal traffic'
+          polyline: groundOriginData.polyline,
+          notes: trafficMultiplier > 1.3 ? 'Heavy traffic expected' : 'Moderate traffic'
         },
         {
           type: 'flight',
           name: 'Flight',
           timeMinutes: Math.round(totalFlightTimeMin),
           distance_nm: flightDistance,
+          straightLineDistance_nm: straightLineDistance,
           details: {
             climb: Math.round(climbTimeMin),
             cruise: Math.round(cruiseTimeMin),
@@ -204,13 +242,16 @@ serve(async (req) => {
             weatherDelay: Math.round(weatherDelay)
           },
           altitude: `${Math.round(cruiseAltitudeFt / 100) >= 180 ? 'FL' : ''}${Math.round(cruiseAltitudeFt / 100)}`,
-          headwind: Math.round(headwind)
+          headwind: Math.round(headwind),
+          route: routeString || 'Direct'
         },
         {
           type: 'ground',
           name: 'Airport to Hospital',
-          timeMinutes: Math.round(groundDestTime),
+          timeMinutes: Math.round(groundDestData.timeMinutes),
+          distance_miles: groundDestData.distanceMiles,
           distance_nm: destAirport.distance_nm,
+          polyline: groundDestData.polyline,
           notes: 'Normal traffic'
         }
       ],
@@ -258,6 +299,50 @@ serve(async (req) => {
     );
   }
 });
+
+// Enhanced ground segment calculation with OSRM
+async function calculateGroundSegmentEnhanced(
+  origin: any,
+  dest: any,
+  trafficMultiplier: number
+): Promise<{ timeMinutes: number; distanceMiles: number; polyline?: string }> {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${dest.lng},${dest.lat}?overview=full&geometries=polyline`;
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error('OSRM API failed');
+    }
+    
+    const data = await response.json();
+    
+    if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
+      throw new Error('No route found');
+    }
+    
+    const route = data.routes[0];
+    const distanceMiles = route.distance / 1609.344;
+    const baseTimeMinutes = route.duration / 60;
+    const timeMinutes = baseTimeMinutes * trafficMultiplier;
+    
+    return {
+      timeMinutes,
+      distanceMiles,
+      polyline: route.geometry
+    };
+  } catch (error) {
+    console.warn('OSRM failed, using heuristic:', error);
+    const distance = calculateDistance(origin.lat, origin.lng, dest.lat, dest.lng);
+    const distanceMiles = distance * 1.15078;
+    const roadMiles = distanceMiles * 1.3;
+    const baseTimeMinutes = (roadMiles / 50) * 60;
+    return {
+      timeMinutes: baseTimeMinutes * trafficMultiplier,
+      distanceMiles: roadMiles
+    };
+  }
+}
 
 async function calculateGroundSegment(origin: any, dest: any, trafficMultiplier: number): Promise<number> {
   const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${dest.lng},${dest.lat}?overview=false`;

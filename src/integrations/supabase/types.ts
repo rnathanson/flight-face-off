@@ -35,6 +35,48 @@ export type Database = {
         }
         Relationships: []
       }
+      airports: {
+        Row: {
+          airport_type: string | null
+          elevation_ft: number | null
+          has_instrument_approach: boolean | null
+          has_lighting: boolean | null
+          iata_code: string | null
+          icao_code: string
+          id: string
+          lat: number
+          lng: number
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          airport_type?: string | null
+          elevation_ft?: number | null
+          has_instrument_approach?: boolean | null
+          has_lighting?: boolean | null
+          iata_code?: string | null
+          icao_code: string
+          id?: string
+          lat: number
+          lng: number
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          airport_type?: string | null
+          elevation_ft?: number | null
+          has_instrument_approach?: boolean | null
+          has_lighting?: boolean | null
+          iata_code?: string | null
+          icao_code?: string
+          id?: string
+          lat?: number
+          lng?: number
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       custom_ownership_estimates: {
         Row: {
           aircraft_cost: number
@@ -188,6 +230,45 @@ export type Database = {
         }
         Relationships: []
       }
+      faa_preferred_routes: {
+        Row: {
+          altitude_high: string | null
+          altitude_low: string | null
+          area: string | null
+          destination_airport: string
+          hours: string | null
+          id: string
+          origin_airport: string
+          route_string: string
+          type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          altitude_high?: string | null
+          altitude_low?: string | null
+          area?: string | null
+          destination_airport: string
+          hours?: string | null
+          id?: string
+          origin_airport: string
+          route_string: string
+          type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          altitude_high?: string | null
+          altitude_low?: string | null
+          area?: string | null
+          destination_airport?: string
+          hours?: string | null
+          id?: string
+          origin_airport?: string
+          route_string?: string
+          type?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       flight_ops_config: {
         Row: {
           acceptable_approaches: string[]
@@ -272,6 +353,33 @@ export type Database = {
           taxi_time_private_fbo_min?: number
           taxi_time_regional_airport_min?: number
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      nav_waypoints: {
+        Row: {
+          id: string
+          lat: number
+          lng: number
+          updated_at: string | null
+          waypoint_code: string
+          waypoint_type: string | null
+        }
+        Insert: {
+          id?: string
+          lat: number
+          lng: number
+          updated_at?: string | null
+          waypoint_code: string
+          waypoint_type?: string | null
+        }
+        Update: {
+          id?: string
+          lat?: number
+          lng?: number
+          updated_at?: string | null
+          waypoint_code?: string
+          waypoint_type?: string | null
         }
         Relationships: []
       }
@@ -457,6 +565,47 @@ export type Database = {
           usage_seasonal_pattern?: string | null
         }
         Relationships: []
+      }
+      runways: {
+        Row: {
+          airport_icao: string
+          id: string
+          is_lighted: boolean | null
+          length_ft: number
+          runway_number: string
+          surface: string
+          updated_at: string | null
+          width_ft: number
+        }
+        Insert: {
+          airport_icao: string
+          id?: string
+          is_lighted?: boolean | null
+          length_ft: number
+          runway_number: string
+          surface: string
+          updated_at?: string | null
+          width_ft: number
+        }
+        Update: {
+          airport_icao?: string
+          id?: string
+          is_lighted?: boolean | null
+          length_ft?: number
+          runway_number?: string
+          surface?: string
+          updated_at?: string | null
+          width_ft?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "runways_airport_icao_fkey"
+            columns: ["airport_icao"]
+            isOneToOne: false
+            referencedRelation: "airports"
+            referencedColumns: ["icao_code"]
+          },
+        ]
       }
       user_roles: {
         Row: {
