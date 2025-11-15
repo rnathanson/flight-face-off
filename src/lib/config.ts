@@ -20,8 +20,8 @@ export async function loadConfig() {
     }
 
     if (!data) {
-      // No config in database yet, save default and return it
-      await saveConfig(DEFAULT_CONFIG);
+      // No config in database yet, return default
+      // Only admins can save config through the Admin Panel
       return DEFAULT_CONFIG;
     }
 
@@ -185,11 +185,6 @@ export async function loadConfig() {
         defaultOwnerHours: Number(parsed.ownersFleetOwnership?.defaultOwnerHours ?? DEFAULT_CONFIG.ownersFleetOwnership.defaultOwnerHours),
       }
     };
-    
-    // If sr22Leaseback wasn't in the loaded config, save the merged version
-    if (!parsed.sr22Leaseback) {
-      await saveConfig(validated);
-    }
     
     return validated;
   } catch (error) {
