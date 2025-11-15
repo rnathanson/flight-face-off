@@ -10,6 +10,7 @@ import NotFound from "./pages/NotFound";
 import AdminLogin from "./pages/AdminLogin";
 import AdminEstimates from "./pages/AdminEstimates";
 import CustomerEstimate from "./pages/CustomerEstimate";
+import Demo from "./pages/Demo";
 import { AdminPanel } from "./components/AdminPanel";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Index />} />
+              <Route path="/demo" element={<Demo />} />
               <Route path="/admin-login" element={<AdminLogin />} />
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/admin/estimates" element={<AdminEstimates />} />
