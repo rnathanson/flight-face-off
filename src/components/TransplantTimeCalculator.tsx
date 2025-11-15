@@ -6,7 +6,7 @@ import { LocationAutocomplete } from '@/components/LocationAutocomplete';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
-import { CalendarIcon, Clock, MapPin, Plane, Car, Timer } from 'lucide-react';
+import { CalendarIcon, MapPin, Plane, Zap, Clock, Car, Timer } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { GeocodeResult, geocodeAddress } from '@/lib/geocoding';
@@ -45,7 +45,11 @@ interface TripResult {
   };
 }
 
-export function TransplantTimeCalculator() {
+interface TransplantTimeCalculatorProps {
+  onAIPlatformClick?: (tripData: any) => void;
+}
+
+export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCalculatorProps) {
   const [originHospital, setOriginHospital] = useState('');
   const [destinationHospital, setDestinationHospital] = useState('');
   const [selectedOrigin, setSelectedOrigin] = useState<GeocodeResult | null>(null);
@@ -701,6 +705,29 @@ export function TransplantTimeCalculator() {
                     <span className="font-medium">{format(tripResult.arrivalTime, 'PPp')}</span>
                   </div>
                 </div>
+
+                {onAIPlatformClick && (
+                  <div className="pt-3 border-t border-border">
+                    <Button
+                      onClick={() =>
+                        onAIPlatformClick({
+                          origin: selectedOrigin,
+                          destination: selectedDestination,
+                          originHospital,
+                          destinationHospital,
+                          originAirport: tripResult.route.originAirport,
+                          destAirport: tripResult.route.destAirport,
+                        })
+                      }
+                      className="w-full gap-2"
+                      variant="outline"
+                      size="lg"
+                    >
+                      <Zap className="w-4 h-4" />
+                      Analyze with AI Intelligence Platform
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

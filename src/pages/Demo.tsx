@@ -1,8 +1,7 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
 import { ArrowLeft } from 'lucide-react';
 import northwellLogo from '@/assets/northwell-health-logo.png';
 import { DemoTripPredictions } from '@/components/demo/DemoTripPredictions';
@@ -12,10 +11,20 @@ import { DemoCrewBrief } from '@/components/demo/DemoCrewBrief';
 import { DemoROI } from '@/components/demo/DemoROI';
 import { DemoChiefPilot } from '@/components/demo/DemoChiefPilot';
 import { DemoLearning } from '@/components/demo/DemoLearning';
+import { TripData } from '@/types/trip';
 
 const Demo = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('predictions');
+  const [initialTripData, setInitialTripData] = useState<TripData | null>(null);
+
+  useEffect(() => {
+    const state = location.state as { tripData?: TripData } | null;
+    if (state?.tripData) {
+      setInitialTripData(state.tripData);
+    }
+  }, [location]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -74,7 +83,7 @@ const Demo = () => {
             </TabsList>
 
             <TabsContent value="predictions" className="animate-fade-in">
-              <DemoTripPredictions />
+              <DemoTripPredictions initialTripData={initialTripData} />
             </TabsContent>
 
             <TabsContent value="success" className="animate-fade-in">
