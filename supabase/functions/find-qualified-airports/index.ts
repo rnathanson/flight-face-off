@@ -63,14 +63,16 @@ serve(async (req) => {
     const AIRPORT_COORDS: Record<string, { lat: number; lng: number; name: string }> = {
       // Major airports (sample - you'll need the full list)
       'KJFK': { lat: 40.6398, lng: -73.7789, name: 'John F Kennedy Intl' },
-      'KLGA': { lat: 40.7769, lng: -73.8740, name: 'LaGuardia' },
+      'KFRG': { lat: 40.7288, lng: -73.4134, name: 'Republic Airport' }, // Preferred over KLGA
       'KEWR': { lat: 40.6925, lng: -74.1687, name: 'Newark Liberty Intl' },
+      'KTEB': { lat: 40.8501, lng: -74.0608, name: 'Teterboro' },
       'KBOS': { lat: 42.3656, lng: -71.0096, name: 'Boston Logan Intl' },
       'KPHL': { lat: 39.8719, lng: -75.2411, name: 'Philadelphia Intl' },
       'KBWI': { lat: 39.1754, lng: -76.6683, name: 'Baltimore Washington Intl' },
       'KDCA': { lat: 38.8521, lng: -77.0377, name: 'Ronald Reagan Washington' },
       'KIAD': { lat: 38.9445, lng: -77.4558, name: 'Washington Dulles Intl' },
       'KRDU': { lat: 35.8776, lng: -78.7875, name: 'Raleigh-Durham Intl' },
+      'KHKY': { lat: 35.7411, lng: -81.3895, name: 'Hickory Regional' },
       'KCLT': { lat: 35.2140, lng: -80.9431, name: 'Charlotte Douglas Intl' },
       'KATL': { lat: 33.6407, lng: -84.4277, name: 'Hartsfield-Jackson Atlanta' },
       'KMCO': { lat: 28.4294, lng: -81.3089, name: 'Orlando Intl' },
