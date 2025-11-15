@@ -4,6 +4,48 @@ export interface DrivingRouteResult {
   distanceMiles: number;
   durationMinutes: number;
   source: 'osrm' | 'heuristic';
+  polyline?: string; // Encoded polyline for map display
+  alternativeRoutes?: {
+    distanceMiles: number;
+    durationMinutes: number;
+    polyline: string;
+  }[];
+}
+
+export interface TrafficEstimateParams {
+  baseTimeMinutes: number;
+  departureTime: Date;
+  isUrbanArea: boolean;
+  isNearHospital: boolean;
+}
+
+// Smart traffic estimation based on time-of-day patterns
+export function estimateTrafficMultiplier(params: TrafficEstimateParams): number {
+  const hour = params.departureTime.getHours();
+  const dayOfWeek = params.departureTime.getDay();
+  
+  let multiplier = 1.0;
+  
+  // Rush hour penalties
+  if (params.isUrbanArea) {
+    if ((hour >= 7 && hour <= 9) || (hour >= 16 && hour <= 19)) {
+      multiplier = 1.4; // 40% longer in rush hour
+    } else if (hour >= 6 && hour <= 20) {
+      multiplier = 1.15; // 15% longer during day
+    }
+  }
+  
+  // Hospital area (always congested)
+  if (params.isNearHospital) {
+    multiplier *= 1.2;
+  }
+  
+  // Weekend bonus
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    multiplier *= 0.9; // 10% faster on weekends
+  }
+  
+  return multiplier;
 }
 
 // Rate limiting
@@ -100,8 +142,8 @@ export async function getRouteDriving(
   lastRequestTime = Date.now();
   
   try {
-    // Call OSRM
-    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=false&alternatives=false&steps=false`;
+    // Enhanced OSRM call with full geometry and alternatives
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&alternatives=true&steps=true&geometries=polyline&annotations=duration,distance`;
     
     const response = await fetch(url, {
       method: 'GET',
@@ -126,10 +168,19 @@ export async function getRouteDriving(
     const baseDurationMinutes = route.duration / 60; // seconds to minutes
     const durationMinutes = baseDurationMinutes * 1.05; // Add 5% for traffic
     
+    // Extract alternative routes if available
+    const alternativeRoutes = json.routes.slice(1, 3).map((altRoute: any) => ({
+      distanceMiles: altRoute.distance / 1609.344,
+      durationMinutes: (altRoute.duration / 60) * 1.05,
+      polyline: altRoute.geometry
+    }));
+    
     const result: DrivingRouteResult = {
       distanceMiles,
       durationMinutes,
-      source: 'osrm'
+      source: 'osrm',
+      polyline: route.geometry, // Encoded polyline
+      alternativeRoutes: alternativeRoutes.length > 0 ? alternativeRoutes : undefined
     };
     
     // Cache the result

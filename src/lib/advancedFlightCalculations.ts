@@ -42,21 +42,33 @@ export interface FlightCalculationResult {
   fuelBurnLbs: number;
 }
 
+export interface FlightSegment {
+  phase: 'climb' | 'cruise' | 'descent';
+  altitude: number;
+  distanceNM: number;
+  timeMinutes: number;
+  speedKts: number;
+}
+
 export function calculateRealisticFlightTime(
   distanceNM: number,
   config: FlightOpsConfig,
   headwindKts: number = 0,
   originAirportSize: 'major' | 'regional' | 'private' = 'regional',
-  destAirportSize: 'major' | 'regional' | 'private' = 'regional'
+  destAirportSize: 'major' | 'regional' | 'private' = 'regional',
+  routeDistanceNM?: number // Actual route distance if available
 ): FlightCalculationResult {
+  // Use actual route distance if provided, otherwise add routing factor
+  const actualDistanceNM = routeDistanceNM || (distanceNM * 1.05); // 5% routing factor
+  
   // Determine cruise altitude based on distance
   let cruiseAltitudeFt: number;
   let cruiseLevel: string;
 
-  if (distanceNM < 100) {
+  if (actualDistanceNM < 100) {
     cruiseAltitudeFt = config.altitude_rules.under_100nm.max_ft;
     cruiseLevel = `${Math.round(cruiseAltitudeFt / 100)}`;
-  } else if (distanceNM < 350) {
+  } else if (actualDistanceNM < 350) {
     cruiseAltitudeFt = config.altitude_rules['100_to_350nm'].max_ft;
     cruiseLevel = `FL${Math.round(cruiseAltitudeFt / 100)}`;
   } else {
@@ -95,7 +107,7 @@ export function calculateRealisticFlightTime(
   const descentNM = descentDistanceAbove10k + descentDistanceBelow10k;
 
   // Calculate cruise segment
-  const cruiseNM = Math.max(0, distanceNM * 1.05 - climbNM - descentNM); // Add 5% for routing
+  const cruiseNM = Math.max(0, actualDistanceNM - climbNM - descentNM); // Use actual route distance
   const cruiseGroundSpeed = config.cruise_speed_ktas - headwindKts;
   const cruiseTimeMin = (cruiseNM / cruiseGroundSpeed) * 60;
 
