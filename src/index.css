@@ -99,6 +99,20 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  @keyframes markerPop {
+    0% {
+      transform: rotate(-45deg) scale(0);
+      opacity: 0;
+    }
+    50% {
+      transform: rotate(-45deg) scale(1.2);
+    }
+    100% {
+      transform: rotate(-45deg) scale(1);
+      opacity: 1;
+    }
+  }
+
   body {
     @apply bg-background text-foreground;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
