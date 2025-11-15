@@ -188,6 +188,93 @@ export type Database = {
         }
         Relationships: []
       }
+      flight_ops_config: {
+        Row: {
+          acceptable_approaches: string[]
+          acceptable_surfaces: string[]
+          altitude_rules: Json
+          climb_rate_fpm: number
+          created_at: string | null
+          cruise_speed_ktas: number
+          descent_rate_fpm: number
+          fuel_burn_cruise_lbs_per_hr: number
+          fuel_capacity_lbs: number
+          id: string
+          ifr_requires_instrument_approach: boolean
+          max_range_nm: number
+          min_runway_length_ft: number
+          min_runway_width_ft: number
+          minimum_ceiling_ft: number
+          minimum_visibility_sm: number
+          requires_lighting: boolean
+          requires_paved_surface: boolean
+          reserve_fuel_minutes: number
+          speed_above_fl100_kias: number
+          speed_below_fl100_kias: number
+          takeoff_landing_buffer_min: number
+          taxi_time_major_airport_min: number
+          taxi_time_private_fbo_min: number
+          taxi_time_regional_airport_min: number
+          updated_at: string | null
+        }
+        Insert: {
+          acceptable_approaches?: string[]
+          acceptable_surfaces?: string[]
+          altitude_rules?: Json
+          climb_rate_fpm?: number
+          created_at?: string | null
+          cruise_speed_ktas?: number
+          descent_rate_fpm?: number
+          fuel_burn_cruise_lbs_per_hr?: number
+          fuel_capacity_lbs?: number
+          id?: string
+          ifr_requires_instrument_approach?: boolean
+          max_range_nm?: number
+          min_runway_length_ft?: number
+          min_runway_width_ft?: number
+          minimum_ceiling_ft?: number
+          minimum_visibility_sm?: number
+          requires_lighting?: boolean
+          requires_paved_surface?: boolean
+          reserve_fuel_minutes?: number
+          speed_above_fl100_kias?: number
+          speed_below_fl100_kias?: number
+          takeoff_landing_buffer_min?: number
+          taxi_time_major_airport_min?: number
+          taxi_time_private_fbo_min?: number
+          taxi_time_regional_airport_min?: number
+          updated_at?: string | null
+        }
+        Update: {
+          acceptable_approaches?: string[]
+          acceptable_surfaces?: string[]
+          altitude_rules?: Json
+          climb_rate_fpm?: number
+          created_at?: string | null
+          cruise_speed_ktas?: number
+          descent_rate_fpm?: number
+          fuel_burn_cruise_lbs_per_hr?: number
+          fuel_capacity_lbs?: number
+          id?: string
+          ifr_requires_instrument_approach?: boolean
+          max_range_nm?: number
+          min_runway_length_ft?: number
+          min_runway_width_ft?: number
+          minimum_ceiling_ft?: number
+          minimum_visibility_sm?: number
+          requires_lighting?: boolean
+          requires_paved_surface?: boolean
+          reserve_fuel_minutes?: number
+          speed_above_fl100_kias?: number
+          speed_below_fl100_kias?: number
+          takeoff_landing_buffer_min?: number
+          taxi_time_major_airport_min?: number
+          taxi_time_private_fbo_min?: number
+          taxi_time_regional_airport_min?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       partnership_groups: {
         Row: {
           actual_delivery_date: string | null
