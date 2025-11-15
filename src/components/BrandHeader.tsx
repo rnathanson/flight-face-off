@@ -1,32 +1,25 @@
-import nassauFlyersLogo from '@/assets/nassau-flyers-logo.webp';
-import cirrusLogo from '@/assets/cirrus-international-logo.png';
+import northwellLogo from '@/assets/northwell-health-logo.png';
 
 interface BrandHeaderProps {
-  customerName?: string;
+  title?: string;
 }
 
-export function BrandHeader({ customerName }: BrandHeaderProps) {
+export function BrandHeader({ title }: BrandHeaderProps) {
   return (
     <header className="bg-card border-b border-border shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 py-3 md:py-4">
-        <div className="flex flex-col items-center gap-3 md:flex-row md:justify-between md:gap-4">
+      <div className="max-w-7xl mx-auto px-4 py-4 md:py-5">
+        <div className="flex flex-col md:flex-row items-center md:justify-between gap-4">
           <img 
-            src={nassauFlyersLogo} 
-            alt="Nassau Flyers" 
-            className="h-8 md:h-10"
+            src={northwellLogo} 
+            alt="Northwell Health" 
+            className="h-10 md:h-12"
           />
           
-          {customerName && (
-            <h1 className="text-lg md:text-3xl font-bold text-foreground text-center md:absolute md:left-1/2 md:-translate-x-1/2">
-              {customerName}
+          {title && (
+            <h1 className="text-xl md:text-2xl font-semibold text-foreground text-center">
+              {title}
             </h1>
           )}
-          
-          <img 
-            src={cirrusLogo} 
-            alt="Cirrus Authorized International" 
-            className="h-7 md:h-9"
-          />
         </div>
       </div>
     </header>

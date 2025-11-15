@@ -7,12 +7,9 @@ import { SpeedGallery } from '@/components/SpeedGallery';
 import RangeAirportExplorer from '@/components/RangeAirportExplorer';
 import { JetChallenge } from '@/components/JetChallenge';
 import { LeasebackCalculator } from '@/components/LeasebackCalculator';
-import { PartnershipCTA } from '@/components/FloatingPartnershipCTA';
 import { Settings, LogOut, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import nassauFlyersLogo from '@/assets/nassau-flyers-logo.webp';
-import cirrusLogo from '@/assets/cirrus-international-logo.png';
+import northwellLogo from '@/assets/northwell-health-logo.png';
 import { useConfig } from '@/context/ConfigContext';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -79,48 +76,50 @@ const Index = () => {
   };
 
   return <div className="min-h-screen bg-background flex flex-col">
-      <header className="min-h-[120px] md:h-20 lg:h-24 border-b border-border bg-card shadow-sm flex items-center justify-between px-4 md:px-6 lg:px-8 py-4 md:py-0">
-        <div className="flex items-center gap-4 w-full md:w-auto">
-          {/* Mobile hamburger menu */}
-          {isMobile && (
-            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="md:hidden">
-                  <Menu className="w-6 h-6" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="w-[280px]">
-                <SheetHeader>
-                  <SheetTitle>Menu</SheetTitle>
-                </SheetHeader>
-                <nav className="flex flex-col gap-2 mt-6">
-                  {visibleTabs.map(tab => (
-                    <Button
-                      key={tab.value}
-                      variant={activeTab === tab.value ? "default" : "ghost"}
-                      className="justify-start text-left w-full"
-                      onClick={() => handleTabChange(tab.value)}
-                    >
-                      {tab.label}
+      <header className="border-b border-border bg-card shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            {/* Left: Logo and Mobile Menu */}
+            <div className="flex items-center gap-4">
+              {isMobile && (
+                <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon" className="md:hidden">
+                      <Menu className="w-6 h-6" />
                     </Button>
-                  ))}
-                </nav>
-              </SheetContent>
-            </Sheet>
-          )}
-          
-          <div className="flex flex-col md:flex-row items-center md:items-center gap-6 md:gap-6">
-            <img src={nassauFlyersLogo} alt="Nassau Flyers" className="h-10 md:h-12 lg:h-16" />
-            <div className="hidden md:block h-12 w-px bg-border" />
-            <div className="text-center md:text-left">
-              <span className="text-xl md:text-3xl lg:text-4xl font-display font-bold text-primary block">MISSION STUDIO</span>
-              <p className="text-[10px] md:text-sm text-muted-foreground uppercase tracking-wider mt-1">PRESENTED BY NASSAU FLYERS • CIRRUS PLATINUM TRAINING CENTER</p>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="w-[280px]">
+                    <SheetHeader>
+                      <SheetTitle>Menu</SheetTitle>
+                    </SheetHeader>
+                    <nav className="flex flex-col gap-2 mt-6">
+                      {visibleTabs.map(tab => (
+                        <Button
+                          key={tab.value}
+                          variant={activeTab === tab.value ? "default" : "ghost"}
+                          className="justify-start text-left w-full"
+                          onClick={() => handleTabChange(tab.value)}
+                        >
+                          {tab.label}
+                        </Button>
+                      ))}
+                    </nav>
+                  </SheetContent>
+                </Sheet>
+              )}
+              
+              <img src={northwellLogo} alt="Northwell Health" className="h-10 md:h-12" />
+              
+              <div className="hidden md:block">
+                <h1 className="text-lg md:text-xl font-semibold text-foreground">
+                  Heart Transplant Transportation Calculator
+                </h1>
+              </div>
             </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <PartnershipCTA />
-          {isAdmin ? (
+
+            {/* Right: Admin Controls */}
+            <div className="flex items-center gap-2">
+              {isAdmin ? (
             <>
               <TooltipProvider>
                 <Tooltip>
@@ -148,9 +147,23 @@ const Index = () => {
               </TooltipProvider>
             </>
           ) : (
-            <Button onClick={() => navigate('/admin-login')} variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-              <Settings className="w-5 h-5 md:w-6 md:h-6" />
+            <Button 
+              onClick={() => navigate('/admin-login')} 
+              variant="ghost" 
+              size="icon"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Settings className="w-5 h-5" />
             </Button>
+          )}
+            </div>
+          </div>
+          
+          {/* Mobile title */}
+          {isMobile && (
+            <h1 className="text-base font-semibold text-foreground mt-3 text-center">
+              Heart Transplant Transportation Calculator
+            </h1>
           )}
         </div>
       </header>
@@ -199,13 +212,14 @@ const Index = () => {
         </div>
       </Tabs>
 
-      <footer className="h-12 md:h-16 border-t border-border bg-card flex items-center justify-center">
-        <div className="flex flex-col md:flex-row items-center gap-2 md:gap-4">
-          <img src={nassauFlyersLogo} alt="Nassau Flyers" className="h-6 md:h-8" />
-          <div className="hidden md:block h-6 w-px bg-border" />
-          <p className="text-sm text-muted-foreground">Cirrus Platinum Training & Service Center</p>
-          <div className="hidden md:block h-6 w-px bg-border" />
-          <img src={cirrusLogo} alt="Cirrus Authorized International" className="h-5 md:h-7" />
+      <footer className="border-t border-border bg-card">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex flex-col md:flex-row items-center justify-center gap-3">
+            <img src={northwellLogo} alt="Northwell Health" className="h-7" />
+            <p className="text-sm text-muted-foreground text-center">
+              © {new Date().getFullYear()} Northwell Health. All rights reserved.
+            </p>
+          </div>
         </div>
       </footer>
     </div>;

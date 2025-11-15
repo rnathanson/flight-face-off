@@ -47,14 +47,14 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        jet: "hsl(var(--jet-color))",
-        sr22: "hsl(var(--sr22-color))",
+        northwell: "hsl(var(--northwell-blue))",
+        "northwell-green": "hsl(var(--northwell-green))",
         success: "hsl(var(--success))",
         warning: "hsl(var(--warning))",
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        display: ['Montserrat', 'Inter', 'sans-serif'],
+        sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Helvetica Neue', 'Arial', 'sans-serif'],
+        display: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Helvetica Neue', 'Arial', 'sans-serif'],
       },
       borderRadius: {
         lg: "var(--radius)",

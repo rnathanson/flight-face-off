@@ -8,89 +8,89 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* Titanium & Cobalt - Apple/Cirrus inspired premium aviation theme */
-    --background: 210 25% 8%;
-    --foreground: 0 0% 100%;
+    /* Northwell Health Professional Theme */
+    --background: 0 0% 98%;           /* Off-white, clean medical background */
+    --foreground: 200 100% 18%;       /* Northwell dark blue for text */
 
-    --card: 210 24% 16%;
-    --card-foreground: 0 0% 100%;
+    --card: 0 0% 100%;                /* Pure white cards */
+    --card-foreground: 200 100% 18%;  /* Dark blue text on cards */
 
-    --popover: 210 24% 16%;
-    --popover-foreground: 0 0% 100%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 200 100% 18%;
 
-    /* Bright white primary */
-    --primary: 0 0% 100%;
-    --primary-foreground: 210 25% 8%;
+    /* Northwell Blue primary */
+    --primary: 200 100% 26%;          /* #005587 */
+    --primary-foreground: 0 0% 100%;  /* White text on blue */
 
-    /* Deep cobalt accent - sophisticated and minimal */
-    --secondary: 217 25% 27%;
+    /* Accent green from logo */
+    --secondary: 88 50% 48%;          /* #7CB342 */
     --secondary-foreground: 0 0% 100%;
 
-    /* Gunmetal muted tones */
-    --muted: 210 20% 22%;
-    --muted-foreground: 210 10% 60%;
+    /* Muted tones - light grays */
+    --muted: 200 10% 90%;
+    --muted-foreground: 200 20% 40%;
 
-    /* Muted slate for interactive elements - brightened for metallic feel */
-    --accent: 210 15% 45%;
+    /* Interactive elements - lighter Northwell blue */
+    --accent: 200 80% 35%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 210 20% 25%;
-    --input: 210 24% 16%;
-    --ring: 210 15% 45%;
+    --border: 200 15% 85%;            /* Subtle blue-gray borders */
+    --input: 0 0% 100%;               /* White inputs */
+    --ring: 200 100% 26%;             /* Northwell blue focus ring */
 
-    --radius: 0.5rem;
+    --radius: 0.375rem;               /* Slightly less rounded, more professional */
 
-    /* Aviation-specific colors - bright metallic palette with distinct hues */
-    --jet-color: 217 40% 58%;
-    --sr22-color: 180 38% 65%;
-    --success: 180 35% 60%;
-    --warning: 35 90% 60%;
+    /* Northwell-specific colors */
+    --northwell-blue: 200 100% 26%;
+    --northwell-green: 88 50% 48%;
+    --northwell-light-green: 74 59% 57%;
+    --success: 88 50% 48%;            /* Use green for success */
+    --warning: 36 100% 50%;           /* Orange for warnings */
     
-    /* Premium gradients - Brightened metallic platinum/silver theme */
-    --gradient-light: linear-gradient(180deg, hsl(210 24% 16%) 0%, hsl(210 25% 8%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(210 15% 40%) 0%, hsl(210 18% 48%) 50%, hsl(210 15% 45%) 100%);
-    --gradient-hero: linear-gradient(135deg, hsl(210 25% 6%) 0%, hsl(210 24% 14%) 100%);
+    /* Professional gradients - subtle and clean */
+    --gradient-light: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(0 0% 98%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(200 100% 26%) 0%, hsl(200 100% 32%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(200 100% 18%) 0%, hsl(200 100% 26%) 100%);
     
-    /* Shadows - deeper and more sophisticated */
-    --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.5);
-    --shadow-elevated: 0 12px 40px rgba(0, 0, 0, 0.6);
-    --shadow-glow: 0 0 40px rgba(6, 182, 212, 0.2);
+    /* Shadows - softer, professional */
+    --shadow-card: 0 2px 8px rgba(0, 85, 135, 0.08);
+    --shadow-elevated: 0 4px 16px rgba(0, 85, 135, 0.12);
     
-    /* Animations */
-    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Animations - smooth and professional */
+    --transition-smooth: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .dark {
-    --background: 210 20% 8%;
+    --background: 200 20% 12%;
     --foreground: 0 0% 98%;
 
-    --card: 210 18% 12%;
+    --card: 200 15% 16%;
     --card-foreground: 0 0% 98%;
 
-    --popover: 210 18% 12%;
+    --popover: 200 15% 16%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 0 0% 98%;
-    --primary-foreground: 210 15% 20%;
+    --primary: 200 100% 35%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 14 90% 55%;
+    --secondary: 88 50% 48%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 210 18% 18%;
-    --muted-foreground: 210 10% 65%;
+    --muted: 200 10% 25%;
+    --muted-foreground: 200 10% 65%;
 
-    --accent: 205 90% 50%;
+    --accent: 200 80% 40%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 210 18% 22%;
-    --input: 210 18% 22%;
-    --ring: 205 90% 50%;
+    --border: 200 15% 25%;
+    --input: 200 15% 20%;
+    --ring: 200 100% 35%;
   }
 }
 
@@ -101,12 +101,12 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
   }
   
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Montserrat', 'Inter', sans-serif;
-    font-weight: 700;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 600;
   }
 }
 
@@ -117,170 +117,17 @@ All colors MUST be HSL.
   
   .gradient-accent {
     background: var(--gradient-accent);
-    position: relative;
-    overflow: hidden;
-  }
-  
-  .gradient-accent::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: linear-gradient(
-      45deg,
-      transparent 30%,
-      rgba(255, 255, 255, 0.1) 50%,
-      transparent 70%
-    );
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-  
-  .gradient-accent:hover::before {
-    animation: shimmer 1.5s ease-in-out;
-    opacity: 1;
-  }
-  
-  .gradient-accent.shimmer-once::before {
-    animation: shimmer 1.5s ease-in-out;
-    opacity: 1;
-  }
-  
-  @keyframes shimmer {
-    0% {
-      transform: translateX(-100%) translateY(-100%) rotate(45deg);
-    }
-    100% {
-      transform: translateX(100%) translateY(100%) rotate(45deg);
-    }
   }
   
   .gradient-hero {
     background: var(--gradient-hero);
   }
-  
+
   .shadow-card {
     box-shadow: var(--shadow-card);
   }
-  
+
   .shadow-elevated {
     box-shadow: var(--shadow-elevated);
-  }
-  
-  .shadow-glow {
-    box-shadow: 0 0 40px rgba(255, 255, 255, 0.15);
-  }
-  
-  .transition-smooth {
-    transition: var(--transition-smooth);
-  }
-  
-  .animate-flight-path {
-    animation: flightPath 2s ease-in-out forwards;
-  }
-  
-  @keyframes flightPath {
-    0% {
-      stroke-dashoffset: 1000;
-      opacity: 0;
-    }
-    20% {
-      opacity: 1;
-    }
-    100% {
-      stroke-dashoffset: 0;
-      opacity: 1;
-    }
-  }
-  
-  @keyframes flight-path {
-    to {
-      stroke-dashoffset: 0;
-    }
-  }
-  
-  @keyframes scale-in {
-    from {
-      opacity: 0;
-      transform: scale(0);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-  
-  .animate-slide-up {
-    animation: slideUp 0.5s ease-out forwards;
-  }
-  
-  @keyframes slideUp {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
-  .animate-scale-in {
-    animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-  }
-  
-  @keyframes scaleIn {
-    from {
-      opacity: 0;
-      transform: scale(0.9);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-  
-  .animate-progress {
-    animation: progress 1.5s ease-out forwards;
-  }
-  
-  @keyframes progress {
-    from {
-      transform: scaleX(0);
-    }
-    to {
-      transform: scaleX(1);
-    }
-  }
-  
-  /* Racing animations */
-  @keyframes moveAcross {
-    from { transform: translateX(0); }
-    to { transform: translateX(100%); }
-  }
-
-  @keyframes pitStop {
-    0%, 30% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(0.8); }
-    70%, 100% { opacity: 1; transform: scale(1); }
-  }
-
-  @keyframes confetti {
-    0% { transform: translateY(-100%) rotate(0deg); opacity: 1; }
-    100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
-  }
-  
-  .jet-glow {
-    filter: drop-shadow(0 0 12px hsl(var(--jet-color) / 0.6));
-  }
-  
-  .sr22-glow {
-    filter: drop-shadow(0 0 12px hsl(var(--sr22-color) / 0.6));
-  }
-  
-  .text-glow {
-    text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
   }
 }
