@@ -69,7 +69,7 @@ export default function CustomerEstimate() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20">
-      <BrandHeader customerName={estimate.customer_name} />
+      <BrandHeader title={estimate.customer_name} />
       
       <div className="max-w-7xl mx-auto px-4 py-8">
           <LeasebackCalculator
