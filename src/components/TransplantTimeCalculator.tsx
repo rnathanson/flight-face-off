@@ -118,83 +118,50 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
 
     setCalculating(true);
     try {
-      // Find nearest airports
-      const originAirport = await findNearestAirport(selectedOrigin.lat, selectedOrigin.lon);
-      const destAirport = await findNearestAirport(selectedDestination.lat, selectedDestination.lon);
-
-      console.log('Origin Airport:', originAirport);
-      console.log('Destination Airport:', destAirport);
-
-      // Calculate ground segments
-      const groundSegment1 = await getRouteDriving(selectedOrigin, {
-        lat: originAirport.lat,
-        lon: originAirport.lng,
-        displayName: originAirport.name,
-        placeId: 0,
-      });
-
-      const groundSegment2 = await getRouteDriving(
-        {
-          lat: destAirport.lat,
-          lon: destAirport.lng,
-          displayName: destAirport.name,
-          placeId: 0,
-        },
-        selectedDestination
-      );
-
-      // Calculate flight time
-      const flightDistanceNM = Math.sqrt(
-        Math.pow((destAirport.lat - originAirport.lat) * 60, 2) +
-        Math.pow((destAirport.lng - originAirport.lng) * 60 * Math.cos(originAirport.lat * Math.PI / 180), 2)
-      );
-      const flightTime = calculateFlightTime(flightDistanceNM);
-
       // Combine time of day with date
       const [hours, minutes] = departureTime.split(':').map(Number);
       const departureDateTime = new Date(departureDate);
       departureDateTime.setHours(hours, minutes, 0, 0);
 
-      // Build segments
-      const segments: TripSegment[] = [
-        {
-          type: 'ground',
-          from: selectedOrigin.displayName.split(',')[0],
-          to: originAirport.code,
-          duration: groundSegment1.durationMinutes,
-          distance: groundSegment1.distanceMiles,
-          traffic: 'Normal',
-        },
-        {
-          type: 'flight',
-          from: originAirport.code,
-          to: destAirport.code,
-          duration: flightTime,
-          distance: flightDistanceNM,
-        },
-        {
-          type: 'ground',
-          from: destAirport.code,
-          to: selectedDestination.displayName.split(',')[0],
-          duration: groundSegment2.durationMinutes,
-          distance: groundSegment2.distanceMiles,
-          traffic: 'Normal',
-        },
-      ];
+      console.log('Calling calculate-accurate-trip with enhanced routing...');
+      
+      // Call the enhanced edge function
+      const { data, error } = await supabase.functions.invoke('calculate-accurate-trip', {
+        body: {
+          originLocation: { lat: selectedOrigin.lat, lng: selectedOrigin.lon },
+          destinationLocation: { lat: selectedDestination.lat, lng: selectedDestination.lon },
+          departureDateTime: departureDateTime.toISOString(),
+          passengers: passengerCount
+        }
+      });
 
-      const totalTime = segments.reduce((sum, seg) => sum + seg.duration, 0);
-      const arrivalTime = new Date(departureDateTime.getTime() + totalTime * 60000);
+      if (error) {
+        console.error('Error calculating trip:', error);
+        throw error;
+      }
+
+      console.log('Trip calculation result:', data);
+
+      // Build segments from enhanced response
+      const segments: TripSegment[] = data.segments.map((seg: any) => ({
+        type: seg.type,
+        from: seg.name.split(' to ')[0] || seg.name.split(' → ')[0],
+        to: seg.name.split(' to ')[1] || seg.name.split(' → ')[1] || seg.name,
+        duration: seg.timeMinutes,
+        distance: seg.distance_nm || seg.distance_miles || 0,
+        traffic: seg.notes || undefined,
+      }));
 
       const result: TripResult = {
         segments,
-        totalTime,
-        arrivalTime,
+        totalTime: data.totalTimeMinutes,
+        arrivalTime: new Date(data.arrivalTime),
         route: {
           origin: selectedOrigin,
           destination: selectedDestination,
-          originAirport,
-          destAirport,
-        },
+          originAirport: data.airports.origin,
+          destAirport: data.airports.destination,
+        }
       };
 
       setTripResult(result);
@@ -204,7 +171,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         if (mapboxToken && mapContainer.current && !map.current) {
           initializeMap(result);
         } else if (map.current && mapboxToken) {
-          updateMap(result);
+          updateMap(result, data.segments);
         }
       }, 100);
     } catch (error) {
@@ -245,7 +212,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     });
   };
 
-  const updateMap = (result: TripResult) => {
+  const updateMap = (result: TripResult, segments?: any[]) => {
     if (!map.current) return;
 
     // Remove existing layers and sources
