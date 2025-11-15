@@ -493,189 +493,228 @@ export function TransplantTimeCalculator() {
 
   return (
     <div className="w-full space-y-6 py-8">
-      <div className="grid lg:grid-cols-[400px_1fr] gap-6">
-        {/* Input Panel */}
-        <Card className="h-fit">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-primary" />
-              Trip Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Origin Hospital */}
-            <div className="space-y-2">
-              <LocationAutocomplete
-                value={originHospital}
-                onChange={setOriginHospital}
-                onLocationSelect={setSelectedOrigin}
-                placeholder="Enter hospital name or address"
-                label="Origin Hospital"
-                selectedLocation={selectedOrigin}
-              />
-            </div>
-
-            {/* Destination Hospital */}
-            <div className="space-y-2">
-              <LocationAutocomplete
-                value={destinationHospital}
-                onChange={setDestinationHospital}
-                onLocationSelect={setSelectedDestination}
-                placeholder="Enter hospital name or address"
-                label="Destination Hospital"
-                selectedLocation={selectedDestination}
-              />
-            </div>
-
-            {/* Date & Time */}
-            <div className="grid grid-cols-2 gap-4">
+      {!tripResult ? (
+        /* Centered form before calculation */
+        <div className="max-w-2xl mx-auto">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <MapPin className="w-6 h-6 text-primary" />
+                Plan Your Medical Transport
+              </CardTitle>
+              <p className="text-muted-foreground mt-2">
+                Calculate door-to-door travel time with our private medical aviation service
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Origin Hospital */}
               <div className="space-y-2">
-                <Label>Departure Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        'w-full justify-start text-left font-normal',
-                        !departureDate && 'text-muted-foreground'
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {departureDate ? format(departureDate, 'PPP') : 'Pick date'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={departureDate}
-                      onSelect={setDepartureDate}
-                      initialFocus
+                <LocationAutocomplete
+                  value={originHospital}
+                  onChange={setOriginHospital}
+                  onLocationSelect={setSelectedOrigin}
+                  placeholder="Enter hospital name or address"
+                  label="Origin Hospital"
+                  selectedLocation={selectedOrigin}
+                />
+              </div>
+
+              {/* Destination Hospital */}
+              <div className="space-y-2">
+                <LocationAutocomplete
+                  value={destinationHospital}
+                  onChange={setDestinationHospital}
+                  onLocationSelect={setSelectedDestination}
+                  placeholder="Enter hospital name or address"
+                  label="Destination Hospital"
+                  selectedLocation={selectedDestination}
+                />
+              </div>
+
+              {/* Date & Time */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Departure Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          'w-full justify-start text-left font-normal',
+                          !departureDate && 'text-muted-foreground'
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {departureDate ? format(departureDate, 'PPP') : 'Pick date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={departureDate}
+                        onSelect={setDepartureDate}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="time">Departure Time</Label>
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <input
+                      id="time"
+                      type="time"
+                      value={departureTime}
+                      onChange={(e) => setDepartureTime(e.target.value)}
+                      className="w-full h-10 pl-10 pr-3 rounded-md border border-input bg-background text-sm"
                     />
-                  </PopoverContent>
-                </Popover>
+                  </div>
+                </div>
               </div>
 
+              {/* Passenger Count */}
               <div className="space-y-2">
-                <Label htmlFor="time">Departure Time</Label>
-                <div className="relative">
-                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <input
-                    id="time"
-                    type="time"
-                    value={departureTime}
-                    onChange={(e) => setDepartureTime(e.target.value)}
-                    className="w-full h-10 pl-10 pr-3 rounded-md border border-input bg-background text-sm"
-                  />
-                </div>
+                <Label>Passengers: {passengerCount}</Label>
+                <Slider
+                  value={[passengerCount]}
+                  onValueChange={(value) => setPassengerCount(value[0])}
+                  min={1}
+                  max={8}
+                  step={1}
+                  className="w-full"
+                />
               </div>
-            </div>
 
-            {/* Passenger Count */}
-            <div className="space-y-2">
-              <Label>Passengers: {passengerCount}</Label>
-              <Slider
-                value={[passengerCount]}
-                onValueChange={(value) => setPassengerCount(value[0])}
-                min={1}
-                max={8}
-                step={1}
+              {/* Calculate Button */}
+              <Button
+                onClick={calculateTrip}
+                disabled={calculating || !selectedOrigin || !selectedDestination || !departureDate}
                 className="w-full"
-              />
-            </div>
-
-            {/* Calculate Button */}
-            <Button
-              onClick={calculateTrip}
-              disabled={calculating || !selectedOrigin || !selectedDestination || !departureDate}
-              className="w-full"
-              size="lg"
-            >
-              {calculating ? (
-                <>
-                  <Timer className="w-4 h-4 mr-2 animate-spin" />
-                  Calculating...
-                </>
-              ) : (
-                <>
-                  <Plane className="w-4 h-4 mr-2" />
-                  Calculate Trip Time
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Map - Full Width on Large Screens */}
-        <Card className="overflow-hidden">
-          <CardContent className="p-0">
-            <div
-              ref={mapContainer}
-              className="w-full h-[600px]"
-            />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Trip Breakdown Below */}
-      {tripResult && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-primary" />
-              Trip Breakdown
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {tripResult.segments.map((segment, index) => (
-              <div
-                key={index}
-                className="flex items-start gap-3 p-4 rounded-lg bg-muted/50 border border-border"
+                size="lg"
               >
-                <div className="mt-1 p-2 rounded-full bg-background">
-                  {segment.type === 'ground' ? (
-                    <Car className="w-5 h-5 text-primary" />
-                  ) : (
-                    <Plane className="w-5 h-5 text-success" />
-                  )}
+                {calculating ? (
+                  <>
+                    <Timer className="w-4 h-4 mr-2 animate-spin" />
+                    Calculating...
+                  </>
+                ) : (
+                  <>
+                    <Plane className="w-4 h-4 mr-2" />
+                    Calculate Trip Time
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        /* Side-by-side layout after calculation */
+        <div className="grid lg:grid-cols-[400px_1fr] gap-6">
+          {/* Input Panel - Compact */}
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <MapPin className="w-5 h-5 text-primary" />
+                  Trip Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2 text-sm">
+                  <div className="font-medium text-muted-foreground">Origin</div>
+                  <div>{selectedOrigin?.displayName.split(',')[0]}</div>
                 </div>
-                <div className="flex-1 space-y-1">
-                  <div className="font-semibold text-lg">
-                    {segment.type === 'ground' ? 'Ground Transport' : 'PC-24 Flight'}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {segment.from} → {segment.to}
-                  </div>
-                  <div className="flex gap-4 text-sm mt-2">
-                    <span className="font-semibold text-foreground">
-                      {formatDuration(segment.duration)}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {segment.distance.toFixed(0)} {segment.type === 'ground' ? 'mi' : 'nm'}
-                    </span>
-                    {segment.traffic && (
-                      <span className="text-muted-foreground">
-                        Traffic: {segment.traffic}
-                      </span>
-                    )}
-                  </div>
+                <div className="space-y-2 text-sm">
+                  <div className="font-medium text-muted-foreground">Destination</div>
+                  <div>{selectedDestination?.displayName.split(',')[0]}</div>
                 </div>
-              </div>
-            ))}
+                <div className="space-y-2 text-sm">
+                  <div className="font-medium text-muted-foreground">Departure</div>
+                  <div>{departureDate && format(departureDate, 'PPP')} at {departureTime}</div>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="font-medium text-muted-foreground">Passengers</div>
+                  <div>{passengerCount}</div>
+                </div>
+                <Button
+                  onClick={() => setTripResult(null)}
+                  variant="outline"
+                  className="w-full"
+                  size="sm"
+                >
+                  New Calculation
+                </Button>
+              </CardContent>
+            </Card>
 
-            <div className="pt-4 border-t border-border">
-              <div className="flex items-center justify-between text-xl font-bold">
-                <span>Total Trip Time</span>
-                <span className="text-primary">
-                  {formatDuration(tripResult.totalTime)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm text-muted-foreground mt-2">
-                <span>Estimated Arrival</span>
-                <span className="font-medium">{format(tripResult.arrivalTime, 'PPp')}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            {/* Trip Breakdown */}
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Clock className="w-5 h-5 text-primary" />
+                  Trip Breakdown
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {tripResult.segments.map((segment, index) => (
+                  <div
+                    key={index}
+                    className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border border-border"
+                  >
+                    <div className="mt-0.5 p-1.5 rounded-full bg-background">
+                      {segment.type === 'ground' ? (
+                        <Car className="w-4 h-4 text-primary" />
+                      ) : (
+                        <Plane className="w-4 h-4 text-success" />
+                      )}
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <div className="font-semibold text-sm">
+                        {segment.type === 'ground' ? 'Ground Transport' : 'PC-24 Flight'}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {segment.from} → {segment.to}
+                      </div>
+                      <div className="flex gap-3 text-xs mt-1">
+                        <span className="font-semibold text-foreground">
+                          {formatDuration(segment.duration)}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {segment.distance.toFixed(0)} {segment.type === 'ground' ? 'mi' : 'nm'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="pt-3 border-t border-border space-y-2">
+                  <div className="flex items-center justify-between text-lg font-bold">
+                    <span>Total Time</span>
+                    <span className="text-primary">
+                      {formatDuration(tripResult.totalTime)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Estimated Arrival</span>
+                    <span className="font-medium">{format(tripResult.arrivalTime, 'PPp')}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Map - Full Width */}
+          <Card className="overflow-hidden">
+            <CardContent className="p-0">
+              <div
+                ref={mapContainer}
+                className="w-full h-[800px]"
+              />
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );
