@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Lock, Eye, EyeOff } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export default function AdminLogin() {
@@ -13,16 +13,14 @@ export default function AdminLogin() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
-  const { signIn, isAdmin, isLoading: authLoading } = useAuth();
 
-  // Redirect to admin panel if already logged in as admin
+  // Check if already logged in
   useEffect(() => {
-    if (!authLoading && isAdmin) {
+    const adminToken = localStorage.getItem('admin_session');
+    if (adminToken) {
       navigate('/admin');
     }
-  }, [isAdmin, authLoading, navigate]);
-
-  const ADMIN_EMAIL = 'admin@nassauflyers.local'; // Fixed admin email (hidden from user)
+  }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,18 +33,24 @@ export default function AdminLogin() {
     setIsLoading(true);
 
     try {
-      const { error } = await signIn(ADMIN_EMAIL, password);
+      const { data, error } = await supabase.functions.invoke('validate-admin-password', {
+        body: { password }
+      });
 
       if (error) {
-        if (error.message.includes('Invalid login credentials')) {
-          toast.error('Invalid admin password');
-        } else {
-          toast.error(error.message);
-        }
+        console.error('Validation error:', error);
+        toast.error('Failed to validate password');
         setIsLoading(false);
-      } else {
+        return;
+      }
+
+      if (data?.valid && data?.token) {
+        localStorage.setItem('admin_session', data.token);
         toast.success('Login successful');
-        // Don't navigate here - let the useEffect handle it after isAdmin updates
+        navigate('/admin');
+      } else {
+        toast.error('Invalid admin password');
+        setIsLoading(false);
       }
     } catch (error) {
       console.error('Login error:', error);
