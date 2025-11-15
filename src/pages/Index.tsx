@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Settings, LogOut, Sparkles } from 'lucide-react';
+import { Settings, LogOut, Sparkles, Zap } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { TransplantTimeCalculator } from '@/components/TransplantTimeCalculator';
 import northwellLogo from '@/assets/northwell-health-logo.png';
@@ -13,6 +13,10 @@ const Index = () => {
   const handleLogout = async () => {
     await signOut();
     window.location.reload();
+  };
+
+  const handleAIPlatformClick = (tripData?: any) => {
+    navigate('/demo', { state: { tripData } });
   };
 
   return (
@@ -29,7 +33,7 @@ const Index = () => {
 
             <div className="flex items-center gap-2">
               <Button 
-                onClick={() => navigate('/demo')} 
+                onClick={() => handleAIPlatformClick()} 
                 variant="outline"
                 className="gap-2"
               >
@@ -91,7 +95,7 @@ const Index = () => {
       </header>
 
       <main className="flex-1 py-8">
-        <TransplantTimeCalculator />
+        <TransplantTimeCalculator onAIPlatformClick={handleAIPlatformClick} />
       </main>
 
       <footer className="border-t border-border bg-card">

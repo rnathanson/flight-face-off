@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -9,6 +9,7 @@ import { AlertTriangle, CheckCircle, Target, MapPin, Plane, Clock, Loader2 } fro
 import { GeocodeResult } from '@/lib/geocoding';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { TripData } from '@/types/trip';
 
 interface Airport {
   code: string;
@@ -26,7 +27,11 @@ interface TripCalculation {
   baseTime: number;
 }
 
-export const DemoTripPredictions = () => {
+interface DemoTripPredictionsProps {
+  initialTripData?: TripData | null;
+}
+
+export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProps) => {
   const [originHospital, setOriginHospital] = useState('');
   const [destinationHospital, setDestinationHospital] = useState('');
   const [selectedOrigin, setSelectedOrigin] = useState<GeocodeResult | null>(null);
@@ -34,6 +39,38 @@ export const DemoTripPredictions = () => {
   const [calculating, setCalculating] = useState(false);
   const [tripCalc, setTripCalc] = useState<TripCalculation | null>(null);
   const { toast } = useToast();
+
+  // Initialize with incoming trip data
+  useEffect(() => {
+    if (initialTripData) {
+      setOriginHospital(initialTripData.originHospital);
+      setDestinationHospital(initialTripData.destinationHospital);
+      setSelectedOrigin(initialTripData.origin);
+      setSelectedDestination(initialTripData.destination);
+
+      // Auto-calculate if we have airports
+      if (initialTripData.originAirport && initialTripData.destAirport) {
+        const flightDistance = calculateDistance(
+          initialTripData.originAirport.lat,
+          initialTripData.originAirport.lng,
+          initialTripData.destAirport.lat,
+          initialTripData.destAirport.lng
+        );
+        const flightTime = calculateFlightTime(flightDistance);
+        const originGroundTime = Math.round((initialTripData.originAirport.distance_nm || 10) * 2.5);
+        const destGroundTime = Math.round((initialTripData.destAirport.distance_nm || 10) * 2.5);
+        const baseTime = originGroundTime + flightTime + destGroundTime;
+
+        setTripCalc({
+          origin: initialTripData.origin,
+          destination: initialTripData.destination,
+          originAirport: initialTripData.originAirport,
+          destAirport: initialTripData.destAirport,
+          baseTime,
+        });
+      }
+    }
+  }, [initialTripData]);
 
   const findNearestAirport = async (lat: number, lon: number): Promise<Airport> => {
     const { data, error } = await supabase.functions.invoke('find-nearest-airport', {
