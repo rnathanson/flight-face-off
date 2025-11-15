@@ -25,16 +25,11 @@ const Demo = () => {
             <div className="flex items-center gap-4">
               <img src={northwellLogo} alt="Northwell Health" className="h-10 md:h-12" />
               <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-lg md:text-xl font-semibold text-foreground">
-                    AI-Powered Dispatch Intelligence
-                  </h1>
-                  <Badge variant="secondary" className="bg-warning/20 text-warning-foreground border-warning/30">
-                    DEMO
-                  </Badge>
-                </div>
+                <h1 className="text-lg md:text-xl font-semibold text-foreground">
+                  AI-Powered Dispatch Intelligence Platform
+                </h1>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  Executive Preview of Future Capabilities
+                  Advanced organ transplant transportation system
                 </p>
               </div>
             </div>
@@ -45,7 +40,7 @@ const Demo = () => {
               className="gap-2"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back to Calculator
+              Back to Basic Calculator
             </Button>
           </div>
         </div>

@@ -34,8 +34,8 @@ const Index = () => {
                 className="gap-2"
               >
                 <Sparkles className="w-4 h-4" />
-                <span className="hidden md:inline">View AI Demo</span>
-                <span className="md:hidden">Demo</span>
+                <span className="hidden md:inline">AI Intelligence Platform</span>
+                <span className="md:hidden">AI Platform</span>
               </Button>
               
               {isAdmin ? (
