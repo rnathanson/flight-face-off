@@ -16,7 +16,7 @@ const Index = () => {
   };
 
   const handleAIPlatformClick = (tripData?: any) => {
-    navigate('/demo', { state: { tripData } });
+    navigate('/ai-platform', { state: { tripData } });
   };
 
   return (
