@@ -112,12 +112,12 @@ serve(async (req) => {
         ? result.name
         : addressFirstPart || prediction.description.split(',')[0];
       
-      // If we only have an address (no named place), try to find a business at this location
-      if (!hasPlaceName) {
-        try {
-          const lat = result.geometry.location.lat;
-          const lng = result.geometry.location.lng;
-          // Prefer hospitals near this coordinate
+      // Prefer hospitals/medical centers for the display name
+      const nameLooksMedical = /hospital|medical|clinic|center|health/i.test(placeName || '');
+      try {
+        const lat = result.geometry.location.lat;
+        const lng = result.geometry.location.lng;
+        if (!nameLooksMedical || !result.types?.includes('hospital')) {
           const nearHospitalUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&type=hospital&key=${GOOGLE_MAPS_KEY}`;
           const nearbyHospitalRes = await fetch(nearHospitalUrl);
           const nearbyHospital = await nearbyHospitalRes.json();
@@ -127,12 +127,11 @@ serve(async (req) => {
             nearbyPlace = nearbyHospital.results[0];
           } else {
             // Fallback: try keyword-based medical search
-            const nearMedicalUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&keyword=medical%20center|hospital&key=${GOOGLE_MAPS_KEY}`;
+            const nearMedicalUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&keyword=medical%20center|hospital|clinic|health&key=${GOOGLE_MAPS_KEY}`;
             const nearbyMedicalRes = await fetch(nearMedicalUrl);
             const nearbyMedical = await nearbyMedicalRes.json();
             if (nearbyMedical.status === 'OK' && nearbyMedical.results && nearbyMedical.results.length > 0) {
-              // Prefer results whose name contains hospital-related keywords
-              nearbyPlace = nearbyMedical.results.find((p: any) => /hospital|medical|clinic|center/i.test(p.name)) || nearbyMedical.results[0];
+              nearbyPlace = nearbyMedical.results.find((p: any) => /hospital|medical|clinic|center|health/i.test(p.name)) || nearbyMedical.results[0];
             }
           }
           
@@ -140,10 +139,10 @@ serve(async (req) => {
             placeName = nearbyPlace.name;
             console.log(`Found nearby place: ${placeName} at ${addressFirstPart}`);
           }
-        } catch (error) {
-          console.warn('Nearby search failed:', error);
-          // Continue with address-based name
         }
+      } catch (error) {
+        console.warn('Nearby search failed:', error);
+        // Continue with existing placeName
       }
       
       // Always provide both name and full address for comprehensive display

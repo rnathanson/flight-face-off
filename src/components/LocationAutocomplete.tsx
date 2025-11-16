@@ -78,13 +78,16 @@ export function LocationAutocomplete({
   };
 
   const handleSelectSuggestion = (suggestion: LocationSuggestion) => {
-    // Show place name in input if available, otherwise show address
-    const displayValue = suggestion.name || suggestion.address;
-    onChange(displayValue);
+    // Build a combined label: "Place name, Full address" (or just address if no name)
+    const combined = suggestion.name
+      ? `${suggestion.name}, ${suggestion.address}`
+      : suggestion.address;
+
+    onChange(combined);
     onLocationSelect({
       lat: suggestion.lat,
       lon: suggestion.lon,
-      displayName: suggestion.name || suggestion.displayName,
+      displayName: combined,
       address: suggestion.address,
       placeId: suggestion.placeId,
     });
