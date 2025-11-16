@@ -632,11 +632,21 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               <div className="grid md:grid-cols-3 gap-4 mb-6">
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Pick Up Hospital</div>
-                  <div className="font-semibold text-lg">{originHospital}</div>
+                  <div className="font-bold text-base">
+                    {selectedOrigin?.displayName?.split(',')[0] || originHospital.split(',')[0]}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {selectedOrigin?.address || originHospital.split(',').slice(1).join(',')}
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Delivery Hospital</div>
-                  <div className="font-semibold text-lg">{destinationHospital}</div>
+                  <div className="font-bold text-base">
+                    {selectedDestination?.displayName?.split(',')[0] || destinationHospital.split(',')[0]}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {selectedDestination?.address || destinationHospital.split(',').slice(1).join(',')}
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Departure</div>
@@ -811,6 +821,58 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                         </div>
                       </div>
                     ))}
+                    
+                    {/* Subtotals */}
+                    <div className="space-y-3 pt-3 border-t border-border">
+                      {/* Time to Pickup Subtotal */}
+                      {(() => {
+                        // Find the index where we reach the pickup hospital
+                        let pickupIndex = tripResult.segments.findIndex(seg => 
+                          seg.to.toLowerCase().includes('pickup hospital')
+                        );
+                        if (pickupIndex >= 0) {
+                          const timeToPickup = tripResult.segments
+                            .slice(0, pickupIndex + 1)
+                            .reduce((sum, seg) => sum + seg.duration, 0);
+                          return (
+                            <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                              <div className="flex items-center gap-2">
+                                <Timer className="w-4 h-4 text-muted-foreground" />
+                                <span className="font-medium text-sm">FRG to Pick Up Location</span>
+                              </div>
+                              <div className="text-base font-semibold text-foreground">
+                                {formatDuration(timeToPickup)}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+
+                      {/* Time from Pickup to Delivery Subtotal */}
+                      {(() => {
+                        let pickupIndex = tripResult.segments.findIndex(seg => 
+                          seg.to.toLowerCase().includes('pickup hospital')
+                        );
+                        if (pickupIndex >= 0) {
+                          const timeToDeliver = tripResult.segments
+                            .slice(pickupIndex + 1)
+                            .reduce((sum, seg) => sum + seg.duration, 0);
+                          return (
+                            <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                              <div className="flex items-center gap-2">
+                                <Timer className="w-4 h-4 text-muted-foreground" />
+                                <span className="font-medium text-sm">Pick Up Location to Delivery Location</span>
+                              </div>
+                              <div className="text-base font-semibold text-foreground">
+                                {formatDuration(timeToDeliver)}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
                     
                     {/* Total Summary */}
                     <div className="pt-4 border-t-2 border-border">
