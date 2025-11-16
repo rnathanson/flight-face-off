@@ -216,7 +216,7 @@ export function FlightOpsConfigPanel() {
               <Input
                 id="max_crosswind"
                 type="number"
-                value={config.max_crosswind_kt || 15}
+                value={config.max_crosswind_kt ?? 15}
                 onChange={(e) => updateField('max_crosswind_kt', parseInt(e.target.value))}
               />
               <p className="text-xs text-muted-foreground">
