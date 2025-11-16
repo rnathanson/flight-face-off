@@ -27,7 +27,7 @@ const Index = () => {
             <div className="flex items-center gap-4">
               <img src={northwellLogo} alt="Northwell Health" className="h-10 md:h-12" />
               <h1 className="text-lg md:text-xl font-semibold text-foreground hidden md:block">
-                Heart Transplant Transportation Calculator
+                Aviation Transplant Logistics
               </h1>
             </div>
 
