@@ -145,8 +145,18 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     el.addEventListener('mouseleave', () => {
       el.style.transform = 'scale(1)';
     });
+
+    // Calculate offset based on segment position to prevent overlap
+    let offset: [number, number] = [0, 0];
+    if (segment.type === 'ground') {
+      if (index === 0) { // First ground segment (pickup)
+        offset = [-30, 20]; // Shift left and down
+      } else { // Second ground segment (delivery)
+        offset = [30, 20]; // Shift right and down
+      }
+    }
     
-    return new mapboxgl.Marker(el)
+    return new mapboxgl.Marker(el, { offset })
       .setLngLat(midpoint)
       .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`
         <div style="padding: 8px;">
@@ -833,20 +843,18 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 {tripResult.segments.map((segment, index) => (
                   <div 
                     key={index}
-                    className={cn(
-                      "p-4 rounded-lg border-2 transition-all",
-                      segment.type === 'flight' 
-                        ? "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800" 
-                        : "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"
-                    )}
+                    className="p-4 rounded-lg border border-border bg-background hover:bg-muted/50 transition-all"
+                    style={{
+                      borderLeft: `4px solid ${segment.type === 'flight' ? '#3b82f6' : '#10b981'}`
+                    }}
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
                           {segment.type === 'flight' ? (
-                            <Plane className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                            <Plane className="w-4 h-4 text-muted-foreground" />
                           ) : (
-                            <Car className="w-4 h-4 text-green-600 dark:text-green-400" />
+                            <Car className="w-4 h-4 text-muted-foreground" />
                           )}
                           <span className="font-semibold text-sm uppercase tracking-wide">
                             {segment.type === 'flight' ? 'Flight' : 'Ground Transport'}
