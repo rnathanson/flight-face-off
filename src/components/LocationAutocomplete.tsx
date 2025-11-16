@@ -63,13 +63,15 @@ export function LocationAutocomplete({
         lat: 0,
         lon: 0,
         displayName: '',
-        placeId: 0,
+        placeId: '0',
       });
     }
   };
 
   const handleSelectSuggestion = (suggestion: LocationSuggestion) => {
-    onChange(suggestion.displayName);
+    // Show place name in input if available, otherwise show address
+    const displayValue = suggestion.name || suggestion.address;
+    onChange(displayValue);
     onLocationSelect({
       lat: suggestion.lat,
       lon: suggestion.lon,
@@ -92,9 +94,9 @@ export function LocationAutocomplete({
           value={value}
           onChange={(e) => handleInputChange(e.target.value)}
           onFocus={() => !selectedLocation?.placeId && suggestions.length > 0 && setShowSuggestions(true)}
-          className={`h-12 text-lg ${selectedLocation && selectedLocation.placeId > 0 ? 'border-success border-2' : ''}`}
+          className={`h-12 text-lg ${selectedLocation && selectedLocation.placeId !== '0' ? 'border-success border-2' : ''}`}
         />
-        {selectedLocation && selectedLocation.placeId > 0 && (
+        {selectedLocation && selectedLocation.placeId !== '0' && (
           <Check className="absolute right-3 top-3 w-6 h-6 text-success" />
         )}
         
@@ -105,10 +107,21 @@ export function LocationAutocomplete({
                 <button
                   key={suggestion.placeId}
                   onClick={() => handleSelectSuggestion(suggestion)}
-                  className="w-full text-left p-4 hover:bg-muted transition-colors flex items-start gap-3"
+                  className="w-full text-left p-4 hover:bg-muted transition-colors"
                 >
-                  <MapPin className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
-                  <span className="text-sm">{suggestion.displayName}</span>
+                  <div className="flex items-start gap-3">
+                    <MapPin className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-1" />
+                    <div className="flex-1 min-w-0">
+                      {suggestion.name && (
+                        <div className="font-semibold text-base mb-1">
+                          {suggestion.name}
+                        </div>
+                      )}
+                      <div className={`text-sm ${suggestion.name ? 'text-muted-foreground' : ''}`}>
+                        {suggestion.address}
+                      </div>
+                    </div>
+                  </div>
                 </button>
               ))}
             </div>
@@ -122,7 +135,7 @@ export function LocationAutocomplete({
         )}
       </div>
       
-      {selectedLocation && selectedLocation.placeId > 0 && (
+      {selectedLocation && selectedLocation.placeId !== '0' && (
         <p className="text-xs text-success flex items-center gap-1">
           <Check className="w-3 h-3" />
           Location confirmed

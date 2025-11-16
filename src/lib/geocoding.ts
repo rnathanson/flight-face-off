@@ -1,19 +1,23 @@
 interface NominatimResult {
+  name?: string;
+  address: string;
+  display_name: string;
   lat: string;
   lon: string;
-  display_name: string;
-  place_id: number;
+  place_id: string;
 }
 
 export interface GeocodeResult {
   lat: number;
   lon: number;
   displayName: string;
-  placeId: number;
+  placeId: string;
 }
 
 export interface LocationSuggestion {
-  placeId: number;
+  placeId: string;
+  name?: string;
+  address: string;
   displayName: string;
   lat: number;
   lon: number;
@@ -44,6 +48,8 @@ export async function searchLocations(query: string, limit: number = 5): Promise
 
     return data.map(result => ({
       placeId: result.place_id,
+      name: result.name,
+      address: result.address,
       displayName: result.display_name,
       lat: parseFloat(result.lat),
       lon: parseFloat(result.lon),
