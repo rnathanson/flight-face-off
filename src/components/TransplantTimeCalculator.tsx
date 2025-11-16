@@ -50,6 +50,13 @@ interface TripResult {
     pickupAirport?: Airport;
     destinationAirport?: Airport;
   };
+  conditions?: {
+    weatherDelay: number;
+    maxHeadwind: number;
+    hasRealTimeTraffic: boolean;
+    routingQuality: 'faa-preferred' | 'great-circle' | 'mixed';
+    trafficLevel: 'light' | 'normal' | 'heavy';
+  };
 }
 
 interface TransplantTimeCalculatorProps {
@@ -716,105 +723,141 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             
             <div className="grid md:grid-cols-3 gap-4">
               <Card className="bg-destructive/10 border-destructive/30 border-2">
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-1 pt-3">
                   <div className="flex items-center gap-2 mb-1">
                     <AlertTriangle className="w-4 h-4 text-destructive" />
                     <CardTitle className="text-sm">Worst Case</CardTitle>
                   </div>
                   <div className="flex items-baseline gap-2">
                     <Clock className="w-3 h-3 text-destructive" />
-                    <span className="text-lg font-bold text-foreground">
+                    <span className="text-base font-bold text-foreground">
                       {Math.floor((tripResult.totalTime * 1.35) / 60)}h {Math.round((tripResult.totalTime * 1.35) % 60)}m
                     </span>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Confidence</span>
-                      <span className="font-semibold">60%</span>
-                    </div>
-                    <Progress value={60} className="h-1.5" />
-                  </div>
-                  <div className="space-y-1">
+                <CardContent className="space-y-1 pb-3">
+                  <div className="space-y-0.5">
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase">Key Factors</p>
-                    <ul className="space-y-1">
-                      {['Heavy traffic delays', 'Adverse weather conditions', 'Extended routing requirements'].map((factor, idx) => (
-                        <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
-                          <span className="mt-1 w-1 h-1 rounded-full text-destructive bg-current flex-shrink-0" />
-                          <span>{factor}</span>
-                        </li>
-                      ))}
+                    <ul className="space-y-0.5">
+                      {(() => {
+                        const factors = [];
+                        if (tripResult.conditions?.trafficLevel === 'heavy') {
+                          factors.push('Heavy traffic delays detected');
+                        } else if (tripResult.conditions?.trafficLevel === 'normal') {
+                          factors.push('Peak hour traffic expected');
+                        } else if (!tripResult.conditions?.hasRealTimeTraffic) {
+                          factors.push('Traffic data unavailable');
+                        }
+                        
+                        if (tripResult.conditions?.weatherDelay > 10 || tripResult.conditions?.maxHeadwind > 20) {
+                          factors.push(`Strong headwinds (${Math.round(tripResult.conditions.maxHeadwind)}kts)`);
+                        } else if (tripResult.conditions?.maxHeadwind > 10) {
+                          factors.push('Moderate headwinds');
+                        }
+                        
+                        if (tripResult.conditions?.routingQuality === 'great-circle') {
+                          factors.push('Non-standard routing required');
+                        }
+                        
+                        return factors.slice(0, 3).map((factor, idx) => (
+                          <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
+                            <span className="mt-1 w-1 h-1 rounded-full text-destructive bg-current flex-shrink-0" />
+                            <span>{factor}</span>
+                          </li>
+                        ));
+                      })()}
                     </ul>
                   </div>
                 </CardContent>
               </Card>
 
               <Card className="bg-green-50 dark:bg-green-950/20 border-green-600/30 border-2">
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-1 pt-3">
                   <div className="flex items-center gap-2 mb-1">
                     <CheckCircle className="w-4 h-4 text-green-600" />
                     <CardTitle className="text-sm">Likely Scenario</CardTitle>
                   </div>
                   <div className="flex items-baseline gap-2">
                     <Clock className="w-3 h-3 text-green-600" />
-                    <span className="text-lg font-bold text-foreground">
+                    <span className="text-base font-bold text-foreground">
                       {Math.floor(tripResult.totalTime / 60)}h {Math.round(tripResult.totalTime % 60)}m
                     </span>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Confidence</span>
-                      <span className="font-semibold">90%</span>
-                    </div>
-                    <Progress value={90} className="h-1.5" />
-                  </div>
-                  <div className="space-y-1">
+                <CardContent className="space-y-1 pb-3">
+                  <div className="space-y-0.5">
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase">Key Factors</p>
-                    <ul className="space-y-1">
-                      {['Normal traffic flow', 'Favorable weather', 'Standard routing'].map((factor, idx) => (
-                        <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
-                          <span className="mt-1 w-1 h-1 rounded-full text-green-600 bg-current flex-shrink-0" />
-                          <span>{factor}</span>
-                        </li>
-                      ))}
+                    <ul className="space-y-0.5">
+                      {(() => {
+                        const factors = [];
+                        if (tripResult.conditions?.hasRealTimeTraffic) {
+                          factors.push('Real-time traffic data included');
+                        }
+                        
+                        if (tripResult.conditions?.weatherDelay <= 5 && tripResult.conditions?.maxHeadwind <= 15) {
+                          factors.push('Favorable weather conditions');
+                        } else {
+                          factors.push('Weather factored into estimate');
+                        }
+                        
+                        if (tripResult.conditions?.routingQuality === 'faa-preferred') {
+                          factors.push('FAA preferred routing');
+                        } else {
+                          factors.push('Direct routing available');
+                        }
+                        
+                        return factors.slice(0, 3).map((factor, idx) => (
+                          <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
+                            <span className="mt-1 w-1 h-1 rounded-full text-green-600 bg-current flex-shrink-0" />
+                            <span>{factor}</span>
+                          </li>
+                        ));
+                      })()}
                     </ul>
                   </div>
                 </CardContent>
               </Card>
 
               <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-600/30 border-2">
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-1 pt-3">
                   <div className="flex items-center gap-2 mb-1">
                     <Zap className="w-4 h-4 text-blue-600" />
                     <CardTitle className="text-sm">Best Case</CardTitle>
                   </div>
                   <div className="flex items-baseline gap-2">
                     <Clock className="w-3 h-3 text-blue-600" />
-                    <span className="text-lg font-bold text-foreground">
+                    <span className="text-base font-bold text-foreground">
                       {Math.floor((tripResult.totalTime * 0.85) / 60)}h {Math.round((tripResult.totalTime * 0.85) % 60)}m
                     </span>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Confidence</span>
-                      <span className="font-semibold">75%</span>
-                    </div>
-                    <Progress value={75} className="h-1.5" />
-                  </div>
-                  <div className="space-y-1">
+                <CardContent className="space-y-1 pb-3">
+                  <div className="space-y-0.5">
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase">Key Factors</p>
-                    <ul className="space-y-1">
-                      {['Light traffic', 'Optimal weather', 'Direct routing'].map((factor, idx) => (
-                        <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
-                          <span className="mt-1 w-1 h-1 rounded-full text-blue-600 bg-current flex-shrink-0" />
-                          <span>{factor}</span>
-                        </li>
-                      ))}
+                    <ul className="space-y-0.5">
+                      {(() => {
+                        const factors = [];
+                        if (tripResult.conditions?.trafficLevel === 'light') {
+                          factors.push('Light traffic conditions');
+                        } else {
+                          factors.push('Optimistic traffic flow');
+                        }
+                        
+                        if (tripResult.conditions?.maxHeadwind <= 5) {
+                          factors.push('Minimal wind impact');
+                        } else {
+                          factors.push('Tailwind opportunities');
+                        }
+                        
+                        factors.push('Direct routing possible');
+                        
+                        return factors.slice(0, 3).map((factor, idx) => (
+                          <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
+                            <span className="mt-1 w-1 h-1 rounded-full text-blue-600 bg-current flex-shrink-0" />
+                            <span>{factor}</span>
+                          </li>
+                        ));
+                      })()}
                     </ul>
                   </div>
                 </CardContent>

@@ -138,14 +138,16 @@ serve(async (req) => {
       destinationAirport.code !== KFRG.code && destinationAirport.code !== pickupAirport.code ? fetchAndParseAirNav(destinationAirport.code, false) : Promise.resolve(null)
     ]);
 
-    const leg1FlightTime = pickupAirport.code === KFRG.code ? 0 : calculateFlightTime(
-      leg1FlightDistance,
-      config,
-      kfrgData,
-      pickupAirportData || kfrgData,
-      KFRG,
-      pickupAirport
-    );
+    const leg1FlightResult = pickupAirport.code === KFRG.code 
+      ? { minutes: 0, weatherDelay: 0, headwind: 0 } 
+      : calculateFlightTime(
+          leg1FlightDistance,
+          config,
+          kfrgData,
+          pickupAirportData || kfrgData,
+          KFRG,
+          pickupAirport
+        );
 
     // === LEG 2: Pickup Airport to Pickup Hospital (GROUND) ===
     const leg2Data = await calculateGroundSegmentEnhanced(
@@ -188,14 +190,16 @@ serve(async (req) => {
       destinationAirport.lng
     ));
 
-    const leg4FlightTime = pickupAirport.code === destinationAirport.code ? 0 : calculateFlightTime(
-      leg4FlightDistance,
-      config,
-      pickupAirportData || kfrgData,
-      destinationAirportData || kfrgData,
-      pickupAirport,
-      destinationAirport
-    );
+    const leg4FlightResult = pickupAirport.code === destinationAirport.code 
+      ? { minutes: 0, weatherDelay: 0, headwind: 0 }
+      : calculateFlightTime(
+          leg4FlightDistance,
+          config,
+          pickupAirportData || kfrgData,
+          destinationAirportData || kfrgData,
+          pickupAirport,
+          destinationAirport
+        );
 
     // === LEG 5: Destination Airport to Delivery Hospital (GROUND) ===
     const leg5Data = await calculateGroundSegmentEnhanced(
@@ -212,7 +216,7 @@ serve(async (req) => {
         type: 'flight' as const,
         from: `${KFRG.code} (Home Base)`,
         to: `${pickupAirport.code} (Pickup Airport)`,
-        duration: leg1FlightTime,
+        duration: leg1FlightResult.minutes,
         distance: leg1FlightDistance,
         route: leg1RouteSource
       }] : []),
@@ -238,7 +242,7 @@ serve(async (req) => {
         type: 'flight' as const,
         from: `${pickupAirport.code} (Pickup Airport)`,
         to: `${destinationAirport.code}${destinationAirport.code === KFRG.code ? ' (Home Base)' : ' (Destination Airport)'}`,
-        duration: leg4FlightTime,
+        duration: leg4FlightResult.minutes,
         distance: leg4FlightDistance,
         route: leg4RouteSource
       }] : []),
@@ -256,14 +260,32 @@ serve(async (req) => {
     const totalTime = segments.reduce((sum, seg) => sum + seg.duration, 0);
     const arrivalTime = new Date(departureTime.getTime() + totalTime * 60 * 1000);
 
+    // Calculate conditions for dynamic factors
+    const totalWeatherDelay = leg1FlightResult.weatherDelay + leg4FlightResult.weatherDelay;
+    const maxHeadwind = Math.max(leg1FlightResult.headwind, leg4FlightResult.headwind);
+    const hasRealTimeTraffic = leg2Data.hasTrafficData && leg3Data.hasTrafficData && leg5Data.hasTrafficData;
+    
+    // Determine routing quality
+    let routingQuality: 'faa-preferred' | 'great-circle' | 'mixed' = 'great-circle';
+    if (leg1RouteSource === 'faa-preferred' && leg4RouteSource === 'faa-preferred') {
+      routingQuality = 'faa-preferred';
+    } else if (leg1RouteSource === 'faa-preferred' || leg4RouteSource === 'faa-preferred') {
+      routingQuality = 'mixed';
+    }
+    
+    // Determine traffic level
+    let trafficLevel: 'light' | 'normal' | 'heavy' = 'normal';
+    if (trafficMultiplier < 1.2) trafficLevel = 'light';
+    else if (trafficMultiplier > 1.4) trafficLevel = 'heavy';
+
     // Generate advisories
-    const advisories = generateAdvisories(0, 0, trafficMultiplier);
+    const advisories = generateAdvisories(totalWeatherDelay, maxHeadwind, trafficMultiplier);
 
     // Confidence score
     let confidence = 85;
-    if (leg1RouteSource === 'faa-preferred' || leg4RouteSource === 'faa-preferred') confidence += 5;
+    if (routingQuality === 'faa-preferred') confidence += 5;
     if (kfrgData?.metar) confidence += 5;
-    if (leg2Data.source === 'osrm' && leg3Data.source === 'osrm' && leg5Data.source === 'osrm') confidence += 5;
+    if (hasRealTimeTraffic) confidence += 5;
 
     // Get airport addresses via reverse geocoding
     let pickupAirportAddress = '';
@@ -296,6 +318,13 @@ serve(async (req) => {
       totalTime,
       arrivalTime: arrivalTime.toISOString(),
       confidence,
+      conditions: {
+        weatherDelay: totalWeatherDelay,
+        maxHeadwind,
+        hasRealTimeTraffic,
+        routingQuality,
+        trafficLevel
+      },
       route: {
         homeBase: KFRG,
         pickupLocation,
@@ -359,8 +388,8 @@ function calculateFlightTime(
   arrivalData: any,
   departureAirport: any,
   arrivalAirport: any
-): number {
-  if (distanceNM === 0) return 0;
+): { minutes: number; weatherDelay: number; headwind: number } {
+  if (distanceNM === 0) return { minutes: 0, weatherDelay: 0, headwind: 0 };
 
   // Determine altitude
   let cruiseAltitudeFt: number;
@@ -439,7 +468,13 @@ function calculateFlightTime(
   const taxiTime = config.taxi_time_regional_airport_min;
   const bufferTime = config.takeoff_landing_buffer_min;
   
-  return Math.round(climbTimeMin + cruiseTimeMin + descentTimeMin + taxiTime + bufferTime + weatherDelay);
+  const totalMinutes = Math.round(climbTimeMin + cruiseTimeMin + descentTimeMin + taxiTime + bufferTime + weatherDelay);
+  
+  return {
+    minutes: totalMinutes,
+    weatherDelay,
+    headwind: Math.max(0, headwind) // Only positive values (actual headwinds)
+  };
 }
 
 // Polyline decoder function for Google Maps encoded polylines
