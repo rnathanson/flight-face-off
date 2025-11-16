@@ -157,6 +157,7 @@ export async function fetchWindsAloft(
     // Parse station data (starts after FT line)
     let windData: string | null = null;
     let foundStation: string | null = null;
+    let stationLines: string[] = [];
 
     for (let i = ftLineIndex + 1; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -165,6 +166,7 @@ export async function fetchWindsAloft(
       const parts = line.split(/\s+/);
       if (parts.length < 2) continue;
       
+      stationLines.push(line);
       const station = parts[0];
       
       // If we have a target station, look for exact match
@@ -183,13 +185,52 @@ export async function fetchWindsAloft(
       }
     }
 
+    // If target station not found in regional data and we haven't tried national yet, retry with region=us
+    if (targetStation && foundStation !== targetStation && !url.includes('region=us')) {
+      console.log(`Target station ${targetStation} not found in regional data, retrying with region=us`);
+      url = `https://aviationweather.gov/api/data/windtemp?region=us&level=${level}&fcst=${fcst}`;
+      
+      const nationalResponse = await fetch(url, {
+        headers: { 'Accept': 'text/plain' }
+      });
+      
+      if (nationalResponse.ok) {
+        const nationalText = await nationalResponse.text();
+        const nationalLines = nationalText.split('\n').filter(line => line.trim());
+        
+        // Find FT line in national data
+        const nationalFtLineIndex = nationalLines.findIndex(line => line.trim().startsWith('FT'));
+        if (nationalFtLineIndex !== -1) {
+          // Search for target station in national data
+          for (let i = nationalFtLineIndex + 1; i < nationalLines.length; i++) {
+            const line = nationalLines[i].trim();
+            if (!line || line.startsWith('FD') || line.startsWith('DATA')) continue;
+            
+            const parts = line.split(/\s+/);
+            if (parts.length < 2) continue;
+            
+            const station = parts[0];
+            
+            if (station === targetStation) {
+              foundStation = station;
+              windData = parts[altIndex + 1];
+              console.log(`Found target station ${targetStation} in national data with data: ${windData}`);
+              break;
+            }
+          }
+        }
+      } else {
+        console.warn(`National NOAA API request failed: ${nationalResponse.status}`);
+      }
+    }
+
     if (!windData || !foundStation) {
       console.warn(`No wind data found for altitude ${closestAlt}ft, target=${targetStation}`);
       return null;
     }
     
     if (targetStation && foundStation !== targetStation) {
-      console.log(`Target station ${targetStation} not found, using ${foundStation} as fallback`);
+      console.warn(`Target station ${targetStation} not found in regional or national data, using ${foundStation} as fallback`);
     }
 
     // Parse 6-digit wind code: DDSSTT

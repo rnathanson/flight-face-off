@@ -75,6 +75,8 @@ serve(async (req) => {
 
     if (data.status !== 'OK') {
       console.error('Google Directions error:', data.status);
+      console.error('Full Google API response:', JSON.stringify(data, null, 2));
+      console.error('Request URL (key redacted):', url.replace(GOOGLE_MAPS_KEY!, 'REDACTED'));
       throw new Error(`Google Directions error: ${data.status}`);
     }
 
