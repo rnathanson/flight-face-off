@@ -76,6 +76,8 @@ serve(async (req) => {
     // Determine pickup and destination airports
     let pickupAirport = KFRG;
     let destinationAirport = KFRG;
+    let pickupRejected: any[] = [];
+    let deliveryRejected: any[] = [];
 
     // Check if user specified a preferred pickup airport
     if (preferredPickupAirport) {
@@ -124,6 +126,12 @@ serve(async (req) => {
           }
         });
         const pickupAirports = pickupAirportsResponse.data?.qualified || [];
+        pickupRejected = pickupAirportsResponse.data?.rejected || [];
+
+        if (pickupAirports.length === 0 && pickupRejected.length > 0) {
+          console.log(`⚠️ All pickup airports rejected. Reasons:`, pickupRejected);
+        }
+
         if (pickupAirports.length > 0) {
           pickupAirport = pickupAirports[0];
         }
@@ -188,6 +196,12 @@ serve(async (req) => {
           }
         });
         const deliveryAirports = deliveryAirportsResponse.data?.qualified || [];
+        deliveryRejected = deliveryAirportsResponse.data?.rejected || [];
+
+        if (deliveryAirports.length === 0 && deliveryRejected.length > 0) {
+          console.log(`⚠️ All delivery airports rejected. Reasons:`, deliveryRejected);
+        }
+
         if (deliveryAirports.length > 0) {
           destinationAirport = deliveryAirports[0];
         }
@@ -593,7 +607,21 @@ serve(async (req) => {
           lng: destinationAirport.lng
         }
       },
-      advisories
+      advisories,
+      airportRejections: {
+        pickup: pickupRejected && pickupRejected.length > 0 ? {
+          location: 'pickup',
+          nearestAirport: pickupRejected[0].airport,
+          reasons: pickupRejected[0].reasons,
+          windData: pickupRejected[0].windData
+        } : null,
+        delivery: deliveryRejected && deliveryRejected.length > 0 ? {
+          location: 'delivery',
+          nearestAirport: deliveryRejected[0].airport,
+          reasons: deliveryRejected[0].reasons,
+          windData: deliveryRejected[0].windData
+        } : null
+      }
     };
 
     console.log(`Total trip time: ${totalTime} minutes (${Math.floor(totalTime / 60)}h ${totalTime % 60}m)`);
