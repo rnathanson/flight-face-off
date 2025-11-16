@@ -208,7 +208,12 @@ export const DemoTripPredictions = ({
           const bExp = b.organ_experience?.[organType as keyof typeof b.organ_experience];
           const aRate = (aExp && typeof aExp === 'object' && 'success_rate' in aExp) ? aExp.success_rate : 0;
           const bRate = (bExp && typeof bExp === 'object' && 'success_rate' in bExp) ? bExp.success_rate : 0;
-          return bRate - aRate;
+          const aMissions = (aExp && typeof aExp === 'object' && 'missions' in aExp) ? aExp.missions : 0;
+          const bMissions = (bExp && typeof bExp === 'object' && 'missions' in bExp) ? bExp.missions : 0;
+          
+          // Sort by success rate first, then by number of missions
+          if (bRate !== aRate) return bRate - aRate;
+          return bMissions - aMissions;
         });
         setLeadDoctorSuggestions(sorted);
       }
@@ -237,7 +242,12 @@ export const DemoTripPredictions = ({
           const bExp = b.organ_experience?.[organType as keyof typeof b.organ_experience];
           const aRate = (aExp && typeof aExp === 'object' && 'success_rate' in aExp) ? aExp.success_rate : 0;
           const bRate = (bExp && typeof bExp === 'object' && 'success_rate' in bExp) ? bExp.success_rate : 0;
-          return bRate - aRate;
+          const aMissions = (aExp && typeof aExp === 'object' && 'missions' in aExp) ? aExp.missions : 0;
+          const bMissions = (bExp && typeof bExp === 'object' && 'missions' in bExp) ? bExp.missions : 0;
+          
+          // Sort by success rate first, then by number of missions
+          if (bRate !== aRate) return bRate - aRate;
+          return bMissions - aMissions;
         });
         setSurgeonSuggestions(sorted);
       }
@@ -265,7 +275,12 @@ export const DemoTripPredictions = ({
           const bExp = b.organ_experience?.[organType as keyof typeof b.organ_experience];
           const aRate = (aExp && typeof aExp === 'object' && 'success_rate' in aExp) ? aExp.success_rate : 0;
           const bRate = (bExp && typeof bExp === 'object' && 'success_rate' in bExp) ? bExp.success_rate : 0;
-          return bRate - aRate;
+          const aMissions = (aExp && typeof aExp === 'object' && 'missions' in aExp) ? aExp.missions : 0;
+          const bMissions = (bExp && typeof bExp === 'object' && 'missions' in bExp) ? bExp.missions : 0;
+          
+          // Sort by success rate first, then by number of missions
+          if (bRate !== aRate) return bRate - aRate;
+          return bMissions - aMissions;
         });
         setCoordinatorSuggestions(sorted);
       }
