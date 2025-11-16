@@ -141,8 +141,8 @@ serve(async (req) => {
 
     // Leg 1 is outbound - use current METAR for both airports
     const leg1FlightResult = pickupAirport.code === KFRG.code 
-      ? { minutes: 0, weatherDelay: 0, headwind: 0, cruiseAltitude: 0, windsAloft: null }
-      : calculateFlightTime(
+      ? { minutes: 0, weatherDelay: 0, headwind: 0, cruiseAltitude: 0 }
+      : await calculateFlightTime(
           leg1FlightDistance,
           config,
           kfrgData,
@@ -195,8 +195,8 @@ serve(async (req) => {
 
     // Leg 4 is return flight - use TAF for arrival forecast if available
     const leg4FlightResult = pickupAirport.code === destinationAirport.code 
-      ? { minutes: 0, weatherDelay: 0, headwind: 0, cruiseAltitude: 0, windsAloft: null }
-      : calculateFlightTime(
+      ? { minutes: 0, weatherDelay: 0, headwind: 0, cruiseAltitude: 0 }
+      : await calculateFlightTime(
           leg4FlightDistance,
           config,
           pickupAirportData || kfrgData,
@@ -223,10 +223,7 @@ serve(async (req) => {
         to: `${pickupAirport.code} (Pickup Airport)`,
         duration: leg1FlightResult.minutes,
         distance: leg1FlightDistance,
-        route: leg1RouteSource,
-        cruiseAltitude: leg1FlightResult.cruiseAltitude,
-        headwind: leg1FlightResult.headwind,
-        windsAloft: leg1FlightResult.windsAloft
+        route: leg1RouteSource
       }] : []),
       {
         type: 'ground' as const,
@@ -252,10 +249,7 @@ serve(async (req) => {
         to: `${destinationAirport.code}${destinationAirport.code === KFRG.code ? ' (Home Base)' : ' (Destination Airport)'}`,
         duration: leg4FlightResult.minutes,
         distance: leg4FlightDistance,
-        route: leg4RouteSource,
-        cruiseAltitude: leg4FlightResult.cruiseAltitude,
-        headwind: leg4FlightResult.headwind,
-        windsAloft: leg4FlightResult.windsAloft
+        route: leg4RouteSource
       }] : []),
       {
         type: 'ground' as const,
@@ -407,7 +401,7 @@ function parseTAFWind(tafString: string): { direction: number | 'VRB'; speed: nu
   return null;
 }
 
-function calculateFlightTime(
+async function calculateFlightTime(
   distanceNM: number,
   config: any,
   departureData: any,
@@ -416,7 +410,7 @@ function calculateFlightTime(
   arrivalAirport: any,
   useArrivalTAF: boolean = false,
   forecastHours: number = 0
-): { minutes: number; weatherDelay: number; headwind: number; cruiseAltitude: number; windsAloft?: any } {
+): Promise<{ minutes: number; weatherDelay: number; headwind: number; cruiseAltitude: number }> {
   if (distanceNM === 0) return { minutes: 0, weatherDelay: 0, headwind: 0, cruiseAltitude: 0 };
 
   // Determine altitude based on distance
@@ -477,25 +471,18 @@ function calculateFlightTime(
   const midLat = (departureAirport.lat + arrivalAirport.lat) / 2;
   const midLng = (departureAirport.lng + arrivalAirport.lng) / 2;
 
-  // Fetch winds aloft at cruise altitude (synchronous fallback for now)
-  // In production, this would be async but for initial implementation we'll use fallback
+  // Fetch winds aloft at cruise altitude
   let cruiseWinds = null;
   try {
-    // Note: fetchWindsAloft is async, but for this implementation we'll use fallback logic
-    // A full implementation would need to make this function async
-    const windDirection = 270; // Typical westerly at altitude
-    const windSpeed = Math.min(20 + (cruiseAltitudeFt / 1000) * 3, 80); // Increases with altitude
-    cruiseWinds = {
-      direction: windDirection,
-      speed: windSpeed,
-      altitude: cruiseAltitudeFt,
-      station: 'ESTIMATED'
-    };
+    cruiseWinds = await fetchWindsAloft(midLat, midLng, cruiseAltitudeFt, forecastHours);
+    if (cruiseWinds) {
+      console.log(`Fetched winds aloft at ${cruiseAltitudeFt}ft: ${cruiseWinds.direction}° @ ${cruiseWinds.speed}kt from station ${cruiseWinds.station}`);
+    }
   } catch (error) {
-    console.warn('Failed to fetch winds aloft, using surface winds:', error);
+    console.warn('Failed to fetch winds aloft:', error);
   }
 
-  // Calculate headwind component using winds aloft for cruise
+  // Calculate headwind component using winds aloft for cruise or fallback to surface winds
   if (cruiseWinds) {
     // Use winds aloft for the main flight calculation
     headwind = calculateHeadwindComponent(
@@ -558,8 +545,7 @@ function calculateFlightTime(
     minutes: totalMinutes,
     weatherDelay,
     headwind: Math.max(0, headwind), // Only positive values (actual headwinds)
-    cruiseAltitude: cruiseAltitudeFt,
-    windsAloft: cruiseWinds
+    cruiseAltitude: cruiseAltitudeFt
   };
 }
 
