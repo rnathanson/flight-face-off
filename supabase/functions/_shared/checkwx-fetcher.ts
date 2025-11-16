@@ -172,37 +172,65 @@ function buildRawTAFFromDecoded(decoded: any): string {
     parts.push(`${day}${hour}${min}Z`);
   }
   
+  // Add valid period from decoded.timestamp
+  if (decoded.timestamp?.from && decoded.timestamp?.to) {
+    const from = new Date(decoded.timestamp.from);
+    const to = new Date(decoded.timestamp.to);
+    
+    const fromDay = String(from.getUTCDate()).padStart(2, '0');
+    const fromHour = String(from.getUTCHours()).padStart(2, '0');
+    const toDay = String(to.getUTCDate()).padStart(2, '0');
+    const toHour = String(to.getUTCHours()).padStart(2, '0');
+    
+    parts.push(`${fromDay}${fromHour}/${toDay}${toHour}`);
+    console.log(`✓ Built valid period: ${fromDay}${fromHour}/${toDay}${toHour}`);
+  }
+  
+  // Process ALL forecast periods (base + FM groups)
   if (decoded.forecast && decoded.forecast.length > 0) {
-    const firstPeriod = decoded.forecast[0];
-    
-    // Wind
-    if (firstPeriod.wind) {
-      const w = firstPeriod.wind;
-      const dir = w.variable ? 'VRB' : String(w.degrees || 0).padStart(3, '0');
-      const spd = String(w.speed_kts || 0).padStart(2, '0');
-      const gust = w.gust_kts ? `G${String(w.gust_kts).padStart(2, '0')}` : '';
-      parts.push(`${dir}${spd}${gust}KT`);
-    }
-    
-    // Visibility
-    if (firstPeriod.visibility) {
-      const vis = firstPeriod.visibility;
-      if (vis.miles_float > 6) {
-        parts.push('P6SM');
-      } else {
-        parts.push(`${vis.miles}SM`);
+    for (let i = 0; i < decoded.forecast.length; i++) {
+      const period = decoded.forecast[i];
+      
+      // For subsequent periods, add FM group timestamp
+      if (i > 0 && period.timestamp?.from) {
+        const fmTime = new Date(period.timestamp.from);
+        const day = String(fmTime.getUTCDate()).padStart(2, '0');
+        const hour = String(fmTime.getUTCHours()).padStart(2, '0');
+        const min = String(fmTime.getUTCMinutes()).padStart(2, '0');
+        parts.push(`FM${day}${hour}${min}`);
       }
-    }
-    
-    // Clouds
-    if (firstPeriod.clouds && firstPeriod.clouds.length > 0) {
-      for (const cloud of firstPeriod.clouds) {
-        const code = cloud.code || 'SKC';
-        const alt = cloud.base_feet_agl ? String(Math.round(cloud.base_feet_agl / 100)).padStart(3, '0') : '';
-        parts.push(alt ? `${code}${alt}` : code);
+      
+      // Wind
+      if (period.wind) {
+        const w = period.wind;
+        const dir = w.variable ? 'VRB' : String(w.degrees || 0).padStart(3, '0');
+        const spd = String(w.speed_kts || 0).padStart(2, '0');
+        const gust = w.gust_kts ? `G${String(w.gust_kts).padStart(2, '0')}` : '';
+        parts.push(`${dir}${spd}${gust}KT`);
+      }
+      
+      // Visibility
+      if (period.visibility) {
+        const vis = period.visibility;
+        if (vis.miles_float > 6) {
+          parts.push('P6SM');
+        } else {
+          parts.push(`${vis.miles}SM`);
+        }
+      }
+      
+      // Clouds
+      if (period.clouds && period.clouds.length > 0) {
+        for (const cloud of period.clouds) {
+          const code = cloud.code || 'SKC';
+          const alt = cloud.base_feet_agl ? String(Math.round(cloud.base_feet_agl / 100)).padStart(3, '0') : '';
+          parts.push(alt ? `${code}${alt}` : code);
+        }
       }
     }
   }
   
-  return parts.join(' ');
+  const rawTAF = parts.join(' ');
+  console.log(`✓ Built TAF from CheckWX: ${rawTAF.substring(0, 150)}...`);
+  return rawTAF;
 }
