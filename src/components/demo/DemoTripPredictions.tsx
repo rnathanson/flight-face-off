@@ -353,7 +353,7 @@ export const DemoTripPredictions = ({
     if (!selectedOrigin || !selectedDestination) {
       toast({
         title: "Missing Information",
-        description: "Please select both origin and destination hospitals",
+        description: "Please select both pick up and delivery hospitals",
         variant: "destructive"
       });
       return;
@@ -763,18 +763,18 @@ export const DemoTripPredictions = ({
 
           <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Origin Hospital</Label>
+              <Label>Pick up Hospital</Label>
               <LocationAutocomplete value={originHospital} onChange={setOriginHospital} onLocationSelect={result => {
               setSelectedOrigin(result);
               setOriginHospital(result.displayName);
-            }} placeholder="Search origin hospital..." label="Origin Hospital" />
+            }} placeholder="Search pick up hospital..." label="Pick up Hospital" />
             </div>
             <div className="space-y-2">
-              <Label>Destination Hospital</Label>
+              <Label>Delivery Hospital</Label>
               <LocationAutocomplete value={destinationHospital} onChange={setDestinationHospital} onLocationSelect={result => {
               setSelectedDestination(result);
               setDestinationHospital(result.displayName);
-            }} placeholder="Search destination hospital..." label="Destination Hospital" />
+            }} placeholder="Search delivery hospital..." label="Delivery Hospital" />
             </div>
           </div>
 
