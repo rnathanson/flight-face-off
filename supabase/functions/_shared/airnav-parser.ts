@@ -33,12 +33,44 @@ export interface AirNavAirportData {
   taf?: TAFData;
 }
 
+import { getCachedAirport, cacheAirport, cachedToAirnavFormat } from './airport-cache.ts';
+
 export async function fetchAndParseAirNav(
   airportCode: string,
-  weatherOnly: boolean = false
+  weatherOnly: boolean = false,
+  supabase?: any
 ): Promise<AirNavAirportData | null> {
+  // Check cache first (only for non-weather-only requests with supabase client)
+  if (!weatherOnly && supabase) {
+    const cached = await getCachedAirport(airportCode, supabase);
+    if (cached) {
+      const cachedData = cachedToAirnavFormat(cached);
+      
+      // Still fetch live weather even for cached airports
+      try {
+        const weatherResponse = await fetch(
+          `https://www.airnav.com/airport/${airportCode.toUpperCase()}`,
+          { signal: AbortSignal.timeout(10000) }
+        );
+        
+        if (weatherResponse.ok) {
+          const html = await weatherResponse.text();
+          const metarData = parseMETAR(html, airportCode);
+          const tafData = parseTAF(html, airportCode);
+          
+          if (metarData) cachedData.metar = metarData;
+          if (tafData) cachedData.taf = tafData;
+        }
+      } catch (error) {
+        console.warn(`Failed to fetch live weather for cached ${airportCode}:`, error);
+      }
+      
+      return cachedData;
+    }
+  }
+
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
     const response = await fetch(
@@ -170,6 +202,19 @@ export async function fetchAndParseAirNav(
     if (!result.has_jet_fuel && /Jet\s*A(?:-1)?/i.test(html)) {
       result.has_jet_fuel = true;
       console.log(`✓ Jet A fuel available at ${airportCode} (found in general text)`);
+    }
+
+    // Cache airport data (NOT weather) if supabase client provided
+    if (!weatherOnly && supabase && result.lat && result.lng) {
+      await cacheAirport(airportCode, {
+        name: result.name || airportCode,
+        lat: result.lat,
+        lng: result.lng,
+        elevation_ft: result.elevation_ft || 0,
+        has_jet_fuel: result.has_jet_fuel || false,
+        has_lighting: result.runways?.some(r => r.lighted) || false,
+        runways: result.runways || []
+      }, supabase);
     }
 
     return result as AirNavAirportData;

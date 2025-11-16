@@ -35,6 +35,45 @@ export type Database = {
         }
         Relationships: []
       }
+      airport_cache: {
+        Row: {
+          airport_code: string
+          cached_at: string | null
+          elevation_ft: number | null
+          expires_at: string | null
+          has_jet_fuel: boolean | null
+          has_lighting: boolean | null
+          lat: number
+          lng: number
+          name: string | null
+          runways: Json | null
+        }
+        Insert: {
+          airport_code: string
+          cached_at?: string | null
+          elevation_ft?: number | null
+          expires_at?: string | null
+          has_jet_fuel?: boolean | null
+          has_lighting?: boolean | null
+          lat: number
+          lng: number
+          name?: string | null
+          runways?: Json | null
+        }
+        Update: {
+          airport_code?: string
+          cached_at?: string | null
+          elevation_ft?: number | null
+          expires_at?: string | null
+          has_jet_fuel?: boolean | null
+          has_lighting?: boolean | null
+          lat?: number
+          lng?: number
+          name?: string | null
+          runways?: Json | null
+        }
+        Relationships: []
+      }
       airports: {
         Row: {
           airport_type: string | null

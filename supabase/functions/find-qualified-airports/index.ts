@@ -228,8 +228,8 @@ serve(async (req) => {
 
     console.log(`✓ Found ${nearbyAirports.length} airports via AirNav search`);
 
-    // PHASE 1: Check Runway Dimensions Only
-    console.log('\n🛫 PHASE 1: Checking runway dimensions...');
+    // PHASE 1: Check Runway Dimensions Only (Progressive Search)
+    console.log('\n🛫 PHASE 1: Checking runway dimensions (closest 5 first)...');
     
     interface RunwayQualifiedAirport {
       code: string;
@@ -244,47 +244,81 @@ serve(async (req) => {
     }
     
     const runwayQualifiedAirports: RunwayQualifiedAirport[] = [];
+    const acceptableSurfaces = config.acceptable_surfaces || ['ASPH', 'CONC'];
 
-    for (const airport of nearbyAirports.slice(0, 20)) {
-      console.log(`\n📍 Checking ${airport.code} (${airport.distance_nm.toFixed(1)}nm)...`);
-
-      const airnavData = await fetchAndParseAirNav(airport.code, false);
+    // Helper to check a batch of airports in parallel
+    const checkAirportBatch = async (airports: typeof nearbyAirports, batchNum: number) => {
+      console.log(`\n🔄 Batch ${batchNum}: Checking ${airports.length} airports in parallel...`);
       
-      if (!airnavData) {
-        console.log(`❌ No AirNav data`);
-        continue;
-      }
+      const results = await Promise.allSettled(
+        airports.map(async (airport) => {
+          try {
+            const airnavData = await fetchAndParseAirNav(airport.code, false, supabase);
+            
+            if (!airnavData) {
+              console.log(`❌ ${airport.code}: No AirNav data`);
+              return null;
+            }
 
-      if (requiresJetFuel && !airnavData.has_jet_fuel) {
-        console.log(`❌ No Jet A fuel`);
-        continue;
-      }
+            if (requiresJetFuel && !airnavData.has_jet_fuel) {
+              console.log(`❌ ${airport.code}: No Jet A fuel`);
+              return null;
+            }
 
-      const warnings: string[] = [];
-      const acceptableSurfaces = config.acceptable_surfaces || ['ASPH', 'CONC'];
-      const qualifyingRunways = airnavData.runways.filter(runway => 
-        runway.length_ft >= config.min_runway_length_ft &&
-        runway.width_ft >= config.min_runway_width_ft &&
-        (!config.requires_paved_surface || acceptableSurfaces.includes(runway.surface)) &&
-        (!requireDaylight || !config.requires_lighting || runway.lighted)
+            const qualifyingRunways = airnavData.runways.filter(runway => 
+              runway.length_ft >= config.min_runway_length_ft &&
+              runway.width_ft >= config.min_runway_width_ft &&
+              (!config.requires_paved_surface || acceptableSurfaces.includes(runway.surface)) &&
+              (!requireDaylight || !config.requires_lighting || runway.lighted)
+            );
+
+            if (qualifyingRunways.length > 0) {
+              console.log(`✅ ${airport.code}: Passes runway checks (${qualifyingRunways.length} qualifying runways)`);
+              return {
+                code: airport.code,
+                name: airnavData.name || airport.name || airport.code,
+                lat: airnavData.lat || 0,
+                lng: airnavData.lng || 0,
+                distance_nm: airport.distance_nm,
+                elevation_ft: airnavData.elevation_ft || 0,
+                airnavData,
+                qualifyingRunways,
+                warnings: [] as string[]
+              };
+            } else {
+              console.log(`❌ ${airport.code}: Fails runway checks`);
+              return null;
+            }
+          } catch (error) {
+            console.error(`Error checking ${airport.code}:`, error);
+            return null;
+          }
+        })
       );
 
-      if (qualifyingRunways.length > 0) {
-        console.log(`✅ Passes runway checks (${qualifyingRunways.length} qualifying runways)`);
-        runwayQualifiedAirports.push({
-          code: airport.code,
-          name: airnavData.name || airport.name || airport.code,
-          lat: airnavData.lat || 0,
-          lng: airnavData.lng || 0,
-          distance_nm: airport.distance_nm,
-          elevation_ft: airnavData.elevation_ft || 0,
-          airnavData,
-          qualifyingRunways,
-          warnings
-        });
-      } else {
-        console.log(`❌ Fails runway checks`);
-      }
+      // Collect successful results
+      const qualified = results
+        .filter(r => r.status === 'fulfilled' && r.value !== null)
+        .map(r => (r as PromiseFulfilledResult<RunwayQualifiedAirport | null>).value!)
+        .filter(Boolean);
+
+      return qualified;
+    };
+
+    // Check closest 5 airports first
+    const firstBatch = nearbyAirports.slice(0, 5);
+    const firstBatchResults = await checkAirportBatch(firstBatch, 1);
+    runwayQualifiedAirports.push(...firstBatchResults);
+
+    // Early exit if we found airports close enough
+    if (runwayQualifiedAirports.length > 0 && runwayQualifiedAirports[0].distance_nm <= 10) {
+      console.log(`⚡ Early exit: Found perfect match within 10nm (${runwayQualifiedAirports[0].code})`);
+    } else if (nearbyAirports.length > 5 && runwayQualifiedAirports.length < 3) {
+      // Only check more if we have fewer than 3 options
+      console.log(`📍 Expanding search to next 5 airports...`);
+      const secondBatch = nearbyAirports.slice(5, 10);
+      const secondBatchResults = await checkAirportBatch(secondBatch, 2);
+      runwayQualifiedAirports.push(...secondBatchResults);
     }
 
     console.log(`\n✅ PHASE 1: ${runwayQualifiedAirports.length} airports pass runway checks`);
