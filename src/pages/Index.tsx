@@ -28,9 +28,8 @@ const Index = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <img src={northwellLogo} alt="Northwell Health" className="h-10 md:h-12" />
-              <h1 className="text-lg md:text-xl font-semibold text-foreground hidden md:block flex items-center gap-2">
+              <h1 className="text-lg md:text-xl font-semibold text-foreground hidden md:block">
                 Aviation Transplant Trip Calculator
-                <Sparkles className="w-4 h-4 text-primary" />
               </h1>
             </div>
 
