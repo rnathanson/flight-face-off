@@ -60,6 +60,18 @@ export async function searchNearbyAirports(
 }
 
 /**
+ * Normalize airport code to ICAO format
+ * US airports: prepend 'K' to 3-letter codes (e.g., RDU -> KRDU)
+ */
+function normalizeAirportCode(code: string): string {
+  // If it's a 3-letter code with only letters, assume it's a US airport and prepend 'K'
+  if (code.length === 3 && /^[A-Z]{3}$/.test(code)) {
+    return 'K' + code;
+  }
+  return code;
+}
+
+/**
  * Parse AirNav search results HTML
  */
 function parseAirNavSearchResults(html: string): NearbyAirport[] {
@@ -74,7 +86,8 @@ function parseAirNavSearchResults(html: string): NearbyAirport[] {
     console.log(`Found ${rows.length} airport rows in HTML`);
     
     for (const row of rows) {
-      const code = row[1]; // Airport code from href="/airport/CODE"
+      const rawCode = row[1]; // Airport code from href="/airport/CODE"
+      const code = normalizeAirportCode(rawCode); // Normalize to ICAO format
       const rowHtml = row[0]; // Full row HTML
       
       // Extract airport name from the row (4th TD cell typically)
