@@ -571,36 +571,38 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               <Button
                 onClick={calculateTrip}
                 disabled={calculating || !selectedOrigin || !selectedDestination}
-                className="w-full"
+                className="w-full min-h-[100px]"
                 size="lg"
               >
                 {calculating ? (
-                  <div className="flex flex-col items-center gap-2 py-1">
+                  <div className="flex flex-col items-center gap-3 w-full py-2">
                     <div className="flex items-center gap-2">
-                      <Timer className="w-4 h-4 animate-spin" />
-                      <span className="font-semibold">Calculating Your Trip</span>
+                      <Timer className="w-5 h-5 animate-spin" />
+                      <span className="font-semibold text-base">Calculating Your Trip</span>
                     </div>
                     {loadingStage && (
-                      <>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          {loadingStage.includes('route') && <Plane className="w-3 h-3" />}
-                          {loadingStage.includes('weather') && <Zap className="w-3 h-3" />}
-                          {loadingStage.includes('traffic') && <Car className="w-3 h-3" />}
-                          {loadingStage.includes('ATC') && <Target className="w-3 h-3" />}
-                          {loadingStage.includes('timeline') && <Clock className="w-3 h-3" />}
+                      <div className="w-full space-y-2">
+                        <div className="flex items-center justify-center gap-2 text-sm opacity-90">
+                          {loadingStage.includes('route') && <Plane className="w-4 h-4" />}
+                          {loadingStage.includes('weather') && <Zap className="w-4 h-4" />}
+                          {loadingStage.includes('traffic') && <Car className="w-4 h-4" />}
+                          {loadingStage.includes('ATC') && <Target className="w-4 h-4" />}
+                          {loadingStage.includes('timeline') && <Clock className="w-4 h-4" />}
                           <span>{loadingStage}</span>
                         </div>
-                        <Progress 
-                          value={
-                            loadingStage.includes('route') ? 20 :
-                            loadingStage.includes('weather') ? 40 :
-                            loadingStage.includes('traffic') ? 60 :
-                            loadingStage.includes('ATC') ? 80 :
-                            100
-                          } 
-                          className="w-full h-1" 
-                        />
-                      </>
+                        <div className="w-full px-4">
+                          <Progress 
+                            value={
+                              loadingStage.includes('route') ? 20 :
+                              loadingStage.includes('weather') ? 40 :
+                              loadingStage.includes('traffic') ? 60 :
+                              loadingStage.includes('ATC') ? 80 :
+                              100
+                            } 
+                            className="w-full h-2" 
+                          />
+                        </div>
+                      </div>
                     )}
                   </div>
                 ) : (
@@ -812,6 +814,97 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-0.5 bg-green-500 flex-shrink-0"></div>
                     <span className="text-foreground">Ground Transport</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Leg-by-Leg Summary */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <Plane className="w-6 h-6 text-primary" />
+                Trip Breakdown
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {tripResult.segments.map((segment, index) => (
+                  <div 
+                    key={index}
+                    className={cn(
+                      "p-4 rounded-lg border-2 transition-all",
+                      segment.type === 'flight' 
+                        ? "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800" 
+                        : "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          {segment.type === 'flight' ? (
+                            <Plane className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          ) : (
+                            <Car className="w-4 h-4 text-green-600 dark:text-green-400" />
+                          )}
+                          <span className="font-semibold text-sm uppercase tracking-wide">
+                            {segment.type === 'flight' ? 'Flight' : 'Ground Transport'}
+                          </span>
+                          <Badge variant="outline" className="text-xs">
+                            Leg {index + 1}
+                          </Badge>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 text-base font-medium mb-1">
+                          <span className="text-foreground">{segment.from}</span>
+                          <span className="text-muted-foreground">→</span>
+                          <span className="text-foreground">{segment.to}</span>
+                        </div>
+                        
+                        {segment.traffic && (
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+                            <Target className="w-3 h-3" />
+                            <span>Route source: {segment.traffic}</span>
+                            {segment.hasTrafficData && (
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                Live traffic
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="text-right space-y-1">
+                        <div className="flex items-center gap-2 justify-end">
+                          <Clock className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-lg font-bold text-foreground">
+                            {formatDuration(segment.duration)}
+                          </span>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {segment.distance.toFixed(1)} {segment.type === 'flight' ? 'nm' : 'mi'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                {/* Total Summary */}
+                <div className="pt-4 border-t-2 border-border">
+                  <div className="flex items-center justify-between p-4 bg-primary/5 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-5 h-5 text-primary" />
+                      <span className="text-lg font-semibold">Total Trip Time</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-primary">
+                        {formatDuration(tripResult.totalTime)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Door to door
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
