@@ -9,7 +9,7 @@ import { LocationAutocomplete } from '@/components/LocationAutocomplete';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
-import { CalendarIcon, MapPin, Plane, Zap, Clock, Car, Timer, AlertTriangle, CheckCircle, Target, ChevronDown, Package } from 'lucide-react';
+import { CalendarIcon, MapPin, Plane, Zap, Clock, Car, Timer, AlertTriangle, CheckCircle, Target, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { GeocodeResult } from '@/lib/geocoding';
@@ -20,7 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface TripSegment {
-  type: 'ground' | 'flight' | 'ground_handling';
+  type: 'ground' | 'flight';
   from: string;
   to: string;
   duration: number;
@@ -29,7 +29,6 @@ interface TripSegment {
   polyline?: number[][];
   hasTrafficData?: boolean;
   route?: string;
-  description?: string;
 }
 
 interface Airport {
@@ -131,7 +130,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     return coords[middleIndex] || null;
   };
 
-  const createSegmentLabel = (segment: TripSegment, legNumber: number, midpoint: [number, number] | null) => {
+  const createSegmentLabel = (segment: TripSegment, index: number, midpoint: [number, number] | null) => {
     if (!map.current || !midpoint || midpoint.length !== 2 || 
         typeof midpoint[0] !== 'number' || typeof midpoint[1] !== 'number') {
       console.warn('Invalid midpoint for segment label:', midpoint);
@@ -163,7 +162,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       ">
         <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
           <span>${icon}</span>
-          <span>Leg ${legNumber}: ${typeLabel}</span>
+          <span>Leg ${index + 1}: ${typeLabel}</span>
         </div>
         <div style="color: #666; font-size: 11px;">
           ${formatDuration(segment.duration)} • ${segment.distance.toFixed(0)} ${unit}
@@ -182,9 +181,9 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     // Calculate offset based on segment position to prevent overlap
     let offset: [number, number] = [0, 0];
     if (segment.type === 'ground') {
-      if (legNumber <= 2) { // Early ground segments (pickup area)
+      if (index === 0) { // First ground segment (pickup)
         offset = [-30, 20]; // Shift left and down
-      } else { // Later ground segments (delivery area)
+      } else { // Second ground segment (delivery)
         offset = [30, 20]; // Shift right and down
       }
     }
@@ -193,7 +192,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       .setLngLat(midpoint)
       .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`
         <div style="padding: 8px;">
-          <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600;">Leg ${legNumber} Details</h3>
+          <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600;">Leg ${index + 1} Details</h3>
           <p style="margin: 4px 0;"><strong>Type:</strong> ${typeLabel}</p>
           <p style="margin: 4px 0;"><strong>Duration:</strong> ${formatDuration(segment.duration)}</p>
           <p style="margin: 4px 0;"><strong>Distance:</strong> ${segment.distance.toFixed(0)} ${unit === 'nm' ? 'nautical miles' : 'miles'}</p>
@@ -410,19 +409,21 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     }
 
     if (segments && segments.length >= 4 && pickupAirport && destAirport) {
-      // Find the first flight segment (KFRG to pickup airport)
-      const firstFlightSegment = segments.find(s => s.type === 'flight');
-      
-      if (firstFlightSegment) {
-        // Add first flight leg label (KFRG to pickup airport)
-        const firstFlightMidpoint = calculateMidpoint([
-          [KFRG.lng, KFRG.lat],
-          [pickupAirport.lng, pickupAirport.lat]
-        ]);
-        if (firstFlightMidpoint) {
-          const label = createSegmentLabel(firstFlightSegment, 1, firstFlightMidpoint);
-          if (label) label.addTo(map.current);
-        }
+      // Add first flight leg label (KFRG to pickup airport)
+      const firstFlightMidpoint = calculateMidpoint([
+        [KFRG.lng, KFRG.lat],
+        [pickupAirport.lng, pickupAirport.lat]
+      ]);
+      if (firstFlightMidpoint) {
+        const firstFlightSegment: TripSegment = {
+          type: 'flight',
+          from: 'KFRG',
+          to: pickupAirport.code,
+          duration: segments[0].duration,
+          distance: segments[0].distance
+        };
+        const label = createSegmentLabel(firstFlightSegment, 0, firstFlightMidpoint);
+        if (label) label.addTo(map.current);
       }
 
       map.current.addSource('route-animated', {
@@ -455,31 +456,26 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         }
       });
 
-      // Find the main flight segment (pickup airport to dest airport)
-      const mainFlightSegment = segments.filter(s => s.type === 'flight')[1];
-      
-      if (mainFlightSegment) {
-        // Add main flight leg label (pickup airport to dest airport)
-        const mainFlightMidpoint = calculateMidpoint([
-          [pickupAirport.lng, pickupAirport.lat],
-          [destAirport.lng, destAirport.lat]
-        ]);
-        if (mainFlightMidpoint) {
-          // Calculate the leg number for the main flight (should be leg 2 if there are 2 flights)
-          const flightCount = segments.filter((s, i) => s.type === 'flight' && segments.indexOf(mainFlightSegment) >= i).length;
-          const mainLabel = createSegmentLabel(mainFlightSegment, flightCount, mainFlightMidpoint);
-          if (mainLabel) mainLabel.addTo(map.current);
-        }
+      // Add main flight leg label (pickup airport to dest airport)
+      const mainFlightMidpoint = calculateMidpoint([
+        [pickupAirport.lng, pickupAirport.lat],
+        [destAirport.lng, destAirport.lat]
+      ]);
+      if (mainFlightMidpoint) {
+        const mainFlightSegment: TripSegment = {
+          type: 'flight',
+          from: pickupAirport.code,
+          to: destAirport.code,
+          duration: segments[3]?.duration || 0,
+          distance: segments[3]?.distance || 0
+        };
+        const mainLabel = createSegmentLabel(mainFlightSegment, 3, mainFlightMidpoint);
+        if (mainLabel) mainLabel.addTo(map.current);
       }
     }
 
     if (segments) {
       segments.forEach((segment, index) => {
-        // Skip ground_handling segments - they don't have routes/polylines
-        if (segment.type === 'ground_handling') {
-          return;
-        }
-        
         if (segment.type === 'ground' && segment.polyline) {
           console.log(`Rendering ground segment ${index}:`, {
             from: segment.from,
@@ -490,13 +486,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             hasTrafficData: segment.hasTrafficData
           });
           
-          // Calculate leg number (excluding ground_handling segments)
-          const legNumber = segments
-            .slice(0, index + 1)
-            .filter(s => s.type !== 'ground_handling')
-            .length;
-          
-          const sourceId = `route-ground-${legNumber}`;
+          const sourceId = `route-ground-${index + 1}`;
           
           map.current?.addSource(sourceId, {
             type: 'geojson',
@@ -527,7 +517,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
           // Add label for ground segment
           const midpoint = calculateMidpoint(segment.polyline as [number, number][]);
           if (midpoint) {
-            const label = createSegmentLabel(segment, legNumber, midpoint);
+            const label = createSegmentLabel(segment, index, midpoint);
             if (label) label.addTo(map.current);
           }
         }
@@ -856,14 +846,9 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               <CollapsibleContent>
                 <CardContent>
                   <div className="space-y-4">
-                    {tripResult.segments
-                      .filter(segment => segment.type !== 'ground_handling')
-                      .map((segment, index, filteredSegments) => {
+                    {tripResult.segments.map((segment, index) => {
                       const isPickupHospital = segment.to.toLowerCase().includes('pickup hospital');
                       const isDeliveryHospital = segment.to.toLowerCase().includes('delivery hospital');
-                      
-                      // Calculate leg number
-                      const legNumber = index + 1;
                       
                       // Calculate time to pickup for subtotal after pickup hospital segment
                       let timeToPickupSubtotal = null;
@@ -911,59 +896,43 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       return (
                         <React.Fragment key={index}>
                           <div 
-                            className="p-4 rounded-lg transition-all border border-border bg-background hover:bg-muted/50"
+                            className="p-4 rounded-lg border border-border bg-background hover:bg-muted/50 transition-all"
                             style={{
                               borderLeft: `4px solid ${segment.type === 'flight' ? '#3b82f6' : '#10b981'}`
                             }}
                           >
-                            {/* Segment Header */}
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex items-center gap-3">
-                                {segment.type === 'ground' ? (
-                                  <Car className="w-5 h-5 text-primary" />
-                                ) : (
-                                  <Plane className="w-5 h-5 text-green-600" />
-                                )}
-                                <div>
-                                  <Badge 
-                                    variant={segment.type === 'ground' ? 'default' : 'outline'}
-                                    className="mb-1"
-                                  >
-                                    {segment.type === 'ground' ? 'GROUND' : `FLIGHT - Leg ${legNumber}`}
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  {segment.type === 'flight' ? (
+                                    <Plane className="w-4 h-4 text-muted-foreground" />
+                                  ) : (
+                                    <Car className="w-4 h-4 text-muted-foreground" />
+                                  )}
+                                  <span className="font-semibold text-sm uppercase tracking-wide">
+                                    {segment.type === 'flight' ? 'Flight' : 'Ground Transport'}
+                                  </span>
+                                  <Badge variant="outline" className="text-xs">
+                                    Leg {index + 1}
                                   </Badge>
-                                  <div className="font-semibold text-base">
-                                    {segment.from} {segment.from && '→'} {segment.to}
-                                  </div>
+                                </div>
+                                
+                                <div className="flex items-center gap-2 text-base font-medium mb-1">
+                                  <span className="text-foreground">{segment.from}</span>
+                                  <span className="text-muted-foreground">→</span>
+                                  <span className="text-foreground">{segment.to}</span>
                                 </div>
                               </div>
                               
-                              {/* Details Section */}
-                              <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
-                                <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                                  {segment.hasTrafficData && segment.traffic && (
-                                    <Badge 
-                                      variant="outline" 
-                                      className={cn(
-                                        "capitalize",
-                                        segment.traffic === 'heavy' && "border-red-500 text-red-600",
-                                        segment.traffic === 'normal' && "border-yellow-500 text-yellow-600",
-                                        segment.traffic === 'light' && "border-green-500 text-green-600"
-                                      )}
-                                    >
-                                      {segment.traffic} traffic
-                                    </Badge>
-                                  )}
+                              <div className="text-right space-y-1">
+                                <div className="flex items-center gap-2 justify-end">
+                                  <Clock className="w-4 h-4 text-muted-foreground" />
+                                  <span className="text-lg font-bold text-foreground">
+                                    {formatDuration(segment.duration)}
+                                  </span>
                                 </div>
-                                <div className="text-right">
-                                  <div className="flex items-center gap-2 text-lg font-semibold">
-                                    <Clock className="w-4 h-4 text-muted-foreground" />
-                                    <span className="text-foreground">
-                                      {formatDuration(segment.duration)}
-                                    </span>
-                                  </div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {segment.distance.toFixed(1)} {segment.type === 'flight' ? 'nm' : 'mi'}
-                                  </div>
+                                <div className="text-sm text-muted-foreground">
+                                  {segment.distance.toFixed(1)} {segment.type === 'flight' ? 'nm' : 'mi'}
                                 </div>
                               </div>
                             </div>
@@ -975,7 +944,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                     })}
                     
                     {/* Total Summary */}
-                    <div className="pt-4 border-t-2 border-border space-y-3">
+                    <div className="pt-4 border-t-2 border-border">
                       <div className="flex items-center justify-between p-4 bg-primary/5 rounded-lg">
                         <div className="flex items-center gap-2">
                           <CheckCircle className="w-5 h-5 text-primary" />
@@ -990,22 +959,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                           </div>
                         </div>
                       </div>
-                      
-                      {/* Ground Handling Note */}
-                      {(() => {
-                        const groundHandlingTime = tripResult.segments
-                          .filter(s => s.type === 'ground_handling')
-                          .reduce((sum, s) => sum + s.duration, 0);
-                        
-                        if (groundHandlingTime > 0) {
-                          return (
-                            <div className="text-xs text-muted-foreground italic px-2">
-                              * {formatDuration(groundHandlingTime)} added for ground handling
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
                     </div>
                   </div>
                 </CardContent>
