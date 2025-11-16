@@ -84,8 +84,9 @@ serve(async (req) => {
     let deliveryAirportApprovalData: any = null;
 
     // Check if user specified a preferred pickup airport
+    let usingPreferredPickupAirport = false;
     if (preferredPickupAirport) {
-      console.log(`User specified preferred pickup airport: ${preferredPickupAirport}`);
+      console.log(`✈️  FORCED preferred pickup airport: ${preferredPickupAirport}`);
       const { data: airportData } = await supabase
         .from('airports')
         .select('*')
@@ -101,61 +102,61 @@ serve(async (req) => {
           elevation_ft: airportData.elevation_ft,
           best_runway: 'N/A'
         };
-        console.log(`Using preferred pickup airport: ${pickupAirport.code} (${pickupAirport.name})`);
+        usingPreferredPickupAirport = true;
+        console.log(`✓ Using FORCED pickup airport: ${pickupAirport.code} (${pickupAirport.name})`);
+        console.log(`⚡ Skipping find-qualified-airports call for preferred airport`);
       } else {
-        console.log(`Preferred pickup airport ${preferredPickupAirport} not found in database, using automatic selection`);
+        console.log(`⚠️  Preferred pickup airport ${preferredPickupAirport} not found in database, falling back to automatic selection`);
       }
     }
 
-    // If no preferred airport or not found, use automatic selection
-    if (!preferredPickupAirport || pickupAirport.code === KFRG.code) {
-      // If pickup is NOT on Long Island, find nearest qualified airport
-      if (!isPickupOnLongIsland) {
-        // Estimate flight time from KFRG to pickup location
-        const pickupFlightDistanceNM = calculateDistance(
-          KFRG.lat, KFRG.lng, 
-          pickupLocation.lat, pickupLocation.lng
-        );
-        const pickupFlightMinutes = Math.ceil((pickupFlightDistanceNM / config.cruise_speed_ktas) * 60) + 15; // +15min for climb/taxi
-        const pickupArrivalTimeUTC = new Date(departureTimeUTC.getTime() + pickupFlightMinutes * 60000);
+    // Only use automatic selection if no preferred airport was specified or found
+    if (!usingPreferredPickupAirport && !isPickupOnLongIsland) {
+      // Estimate flight time from KFRG to pickup location
+      const pickupFlightDistanceNM = calculateDistance(
+        KFRG.lat, KFRG.lng, 
+        pickupLocation.lat, pickupLocation.lng
+      );
+      const pickupFlightMinutes = Math.ceil((pickupFlightDistanceNM / config.cruise_speed_ktas) * 60) + 15; // +15min for climb/taxi
+      const pickupArrivalTimeUTC = new Date(departureTimeUTC.getTime() + pickupFlightMinutes * 60000);
 
-        console.log(`📍 Estimated arrival at pickup airport: ${pickupArrivalTimeUTC.toISOString()} (${pickupFlightMinutes}min flight)`);
+      console.log(`📍 Estimated arrival at pickup airport: ${pickupArrivalTimeUTC.toISOString()} (${pickupFlightMinutes}min flight)`);
 
-        const pickupAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
-          body: { 
-            location: pickupLocation, 
-            maxDistance: 50,
-            departureTimeUTC: departureTimeUTC.toISOString(),
-            estimatedArrivalTimeUTC: pickupArrivalTimeUTC.toISOString()
-          }
-        });
+      const pickupAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
+        body: { 
+          location: pickupLocation, 
+          maxDistance: 50,
+          departureTimeUTC: departureTimeUTC.toISOString(),
+          estimatedArrivalTimeUTC: pickupArrivalTimeUTC.toISOString()
+        }
+      });
+      
+      const airportSelection = pickupAirportsResponse.data;
+      
+      if (airportSelection?.selectedAirport) {
+        pickupAirport = airportSelection.selectedAirport;
+        pickupAirportApprovalData = airportSelection.selectedAirport;
         
-        const airportSelection = pickupAirportsResponse.data;
+        // Store alternate airport info for display
+        if (airportSelection.isAlternate && airportSelection.closestRejected) {
+          console.log(`ℹ️ Using alternate pickup airport ${pickupAirport.code} - closest rejected: ${airportSelection.closestRejected.code}`);
+          console.log(`Rejection reasons: ${airportSelection.closestRejected.rejectionReasons.join(', ')}`);
+        }
         
-        if (airportSelection?.selectedAirport) {
-          pickupAirport = airportSelection.selectedAirport;
-          pickupAirportApprovalData = airportSelection.selectedAirport;
-          
-          // Store alternate airport info for display
-          if (airportSelection.isAlternate && airportSelection.closestRejected) {
-            console.log(`ℹ️ Using alternate pickup airport ${pickupAirport.code} - closest rejected: ${airportSelection.closestRejected.code}`);
-            console.log(`Rejection reasons: ${airportSelection.closestRejected.rejectionReasons.join(', ')}`);
-          }
-          
-          // Check if approval is required
-          if (pickupAirportApprovalData.requiresChiefPilotApproval) {
-            requiresChiefPilotApproval = true;
-            if (pickupAirportApprovalData.violatedGuidelines) {
-              approvalReasons.push(...pickupAirportApprovalData.violatedGuidelines.map((g: string) => `pickup_${g}`));
-            }
+        // Check if approval is required
+        if (pickupAirportApprovalData.requiresChiefPilotApproval) {
+          requiresChiefPilotApproval = true;
+          if (pickupAirportApprovalData.violatedGuidelines) {
+            approvalReasons.push(...pickupAirportApprovalData.violatedGuidelines.map((g: string) => `pickup_${g}`));
           }
         }
       }
     }
 
     // Check if user specified a preferred destination airport
+    let usingPreferredDestinationAirport = false;
     if (preferredDestinationAirport) {
-      console.log(`User specified preferred destination airport: ${preferredDestinationAirport}`);
+      console.log(`✈️  FORCED preferred destination airport: ${preferredDestinationAirport}`);
       const { data: airportData } = await supabase
         .from('airports')
         .select('*')
@@ -171,16 +172,16 @@ serve(async (req) => {
           elevation_ft: airportData.elevation_ft,
           best_runway: 'N/A'
         };
-        console.log(`Using preferred destination airport: ${destinationAirport.code} (${destinationAirport.name})`);
+        usingPreferredDestinationAirport = true;
+        console.log(`✓ Using FORCED destination airport: ${destinationAirport.code} (${destinationAirport.name})`);
+        console.log(`⚡ Skipping find-qualified-airports call for preferred airport`);
       } else {
-        console.log(`Preferred destination airport ${preferredDestinationAirport} not found in database, using automatic selection`);
+        console.log(`⚠️  Preferred destination airport ${preferredDestinationAirport} not found in database, falling back to automatic selection`);
       }
     }
 
-    // If no preferred airport or not found, use automatic selection
-    if (!preferredDestinationAirport || destinationAirport.code === KFRG.code) {
-      // If delivery is NOT on Long Island, find nearest qualified airport  
-      // BUT if delivery IS on Long Island, destination airport should ALWAYS be KFRG
+    // Only use automatic selection if no preferred airport was specified or found
+    if (!usingPreferredDestinationAirport) {
       if (!isDeliveryOnLongIsland) {
         // After pickup, add ground time + patient loading
         const loadingMinutes = 30; // Estimate for patient loading/prep
