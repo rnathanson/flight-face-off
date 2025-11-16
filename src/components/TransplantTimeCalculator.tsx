@@ -131,7 +131,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     return coords[middleIndex] || null;
   };
 
-  const createSegmentLabel = (segment: TripSegment, index: number, midpoint: [number, number] | null) => {
+  const createSegmentLabel = (segment: TripSegment, legNumber: number, midpoint: [number, number] | null) => {
     if (!map.current || !midpoint || midpoint.length !== 2 || 
         typeof midpoint[0] !== 'number' || typeof midpoint[1] !== 'number') {
       console.warn('Invalid midpoint for segment label:', midpoint);
@@ -163,7 +163,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       ">
         <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
           <span>${icon}</span>
-          <span>Leg ${index + 1}: ${typeLabel}</span>
+          <span>Leg ${legNumber}: ${typeLabel}</span>
         </div>
         <div style="color: #666; font-size: 11px;">
           ${formatDuration(segment.duration)} • ${segment.distance.toFixed(0)} ${unit}
@@ -182,9 +182,9 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     // Calculate offset based on segment position to prevent overlap
     let offset: [number, number] = [0, 0];
     if (segment.type === 'ground') {
-      if (index === 0) { // First ground segment (pickup)
+      if (legNumber <= 2) { // Early ground segments (pickup area)
         offset = [-30, 20]; // Shift left and down
-      } else { // Second ground segment (delivery)
+      } else { // Later ground segments (delivery area)
         offset = [30, 20]; // Shift right and down
       }
     }
@@ -193,7 +193,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       .setLngLat(midpoint)
       .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`
         <div style="padding: 8px;">
-          <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600;">Leg ${index + 1} Details</h3>
+          <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600;">Leg ${legNumber} Details</h3>
           <p style="margin: 4px 0;"><strong>Type:</strong> ${typeLabel}</p>
           <p style="margin: 4px 0;"><strong>Duration:</strong> ${formatDuration(segment.duration)}</p>
           <p style="margin: 4px 0;"><strong>Distance:</strong> ${segment.distance.toFixed(0)} ${unit === 'nm' ? 'nautical miles' : 'miles'}</p>
@@ -477,6 +477,11 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
 
     if (segments) {
       segments.forEach((segment, index) => {
+        // Skip ground_handling segments - they don't have routes/polylines
+        if (segment.type === 'ground_handling') {
+          return;
+        }
+        
         if (segment.type === 'ground' && segment.polyline) {
           console.log(`Rendering ground segment ${index}:`, {
             from: segment.from,
@@ -487,7 +492,13 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             hasTrafficData: segment.hasTrafficData
           });
           
-          const sourceId = `route-ground-${index + 1}`;
+          // Calculate leg number (excluding ground_handling segments)
+          const legNumber = segments
+            .slice(0, index + 1)
+            .filter(s => s.type !== 'ground_handling')
+            .length;
+          
+          const sourceId = `route-ground-${legNumber}`;
           
           map.current?.addSource(sourceId, {
             type: 'geojson',
@@ -518,7 +529,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
           // Add label for ground segment
           const midpoint = calculateMidpoint(segment.polyline as [number, number][]);
           if (midpoint) {
-            const label = createSegmentLabel(segment, index, midpoint);
+            const label = createSegmentLabel(segment, legNumber, midpoint);
             if (label) label.addTo(map.current);
           }
         }
@@ -851,6 +862,12 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       const isPickupHospital = segment.to.toLowerCase().includes('pickup hospital');
                       const isDeliveryHospital = segment.to.toLowerCase().includes('delivery hospital');
                       
+                      // Calculate leg number (excluding ground_handling segments)
+                      const legNumber = tripResult.segments
+                        .slice(0, index + 1)
+                        .filter(s => s.type !== 'ground_handling')
+                        .length;
+                      
                       // Calculate time to pickup for subtotal after pickup hospital segment
                       let timeToPickupSubtotal = null;
                       if (isPickupHospital) {
@@ -914,7 +931,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                               <div className="flex items-center justify-between gap-4 text-sm">
                                 <div className="flex items-center gap-2 text-muted-foreground">
                                   <Package className="w-3.5 h-3.5" />
-                                  <span className="italic">{segment.description || 'Ground handling'}</span>
+                                  <span className="italic">Ground Handling</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <Clock className="w-3.5 h-3.5 text-muted-foreground" />
@@ -937,7 +954,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                                       {segment.type === 'flight' ? 'Flight' : 'Ground Transport'}
                                     </span>
                                     <Badge variant="outline" className="text-xs">
-                                      Leg {index + 1}
+                                      Leg {legNumber}
                                     </Badge>
                                   </div>
                                   

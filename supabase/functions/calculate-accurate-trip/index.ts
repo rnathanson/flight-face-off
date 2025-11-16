@@ -306,7 +306,7 @@ serve(async (req) => {
         to: `${pickupAirport.code} (Pickup Airport)`,
         duration: groundHandlingTime,
         distance: 0,
-        description: 'Patient loading & refueling'
+        description: 'Ground Handling'
       }] : []),
       {
         type: 'ground' as const,
@@ -340,7 +340,7 @@ serve(async (req) => {
         to: `${destinationAirport.code}${destinationAirport.code === KFRG.code ? ' (Home Base)' : ' (Destination Airport)'}`,
         duration: groundHandlingTime,
         distance: 0,
-        description: 'Patient unloading'
+        description: 'Ground Handling'
       }] : []),
       {
         type: 'ground' as const,
