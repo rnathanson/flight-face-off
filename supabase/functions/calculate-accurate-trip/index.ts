@@ -653,10 +653,7 @@ async function calculateFlightTime(
   
   console.log(`Flight time calc: cruise=${cruiseSpeed}kts, headwind=${headwind.toFixed(1)}kt, GS=${cruiseGroundSpeed.toFixed(1)}kt, dist=${cruiseDistanceNM.toFixed(1)}nm, time=${cruiseTimeMin.toFixed(1)}min`);
   
-  const taxiTime = config.taxi_time_regional_airport_min;
-  const bufferTime = config.takeoff_landing_buffer_min;
-  
-  const totalMinutes = Math.round(climbTimeMin + cruiseTimeMin + descentTimeMin + taxiTime + bufferTime + weatherDelay);
+  const totalMinutes = Math.round(climbTimeMin + cruiseTimeMin + descentTimeMin + weatherDelay);
   
   return {
     minutes: totalMinutes,
