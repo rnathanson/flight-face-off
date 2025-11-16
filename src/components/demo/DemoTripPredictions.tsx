@@ -13,7 +13,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { TripData } from '@/types/trip';
 import { cn } from '@/lib/utils';
-
 interface Airport {
   code: string;
   name: string;
@@ -21,7 +20,6 @@ interface Airport {
   lng: number;
   distance_nm?: number;
 }
-
 interface TripCalculation {
   origin: GeocodeResult;
   destination: GeocodeResult;
@@ -29,7 +27,6 @@ interface TripCalculation {
   destAirport: Airport;
   baseTime: number;
 }
-
 interface MedicalPersonnel {
   id: string;
   full_name: string;
@@ -37,10 +34,12 @@ interface MedicalPersonnel {
   specialty?: string;
   total_missions: number;
   success_rate: number;
-  organ_experience?: Record<string, { missions: number; success_rate: number }>;
+  organ_experience?: Record<string, {
+    missions: number;
+    success_rate: number;
+  }>;
   hospital_partnerships?: Record<string, number>;
 }
-
 interface CrewMember {
   id: string;
   full_name: string;
@@ -48,17 +47,18 @@ interface CrewMember {
   is_chief_pilot: boolean;
   total_missions: number;
   success_rate: number;
-  organ_experience?: Record<string, { missions: number; success_rate: number }>;
+  organ_experience?: Record<string, {
+    missions: number;
+    success_rate: number;
+  }>;
   airport_experience?: Record<string, number>;
 }
-
 interface MissionType {
   id: string;
   organ_type: string;
   min_viability_hours: number;
   max_viability_hours: number;
 }
-
 interface LivePrediction {
   overallPrediction: number;
   confidence: 'low' | 'medium' | 'high';
@@ -88,7 +88,6 @@ interface LivePrediction {
     reasoning: string;
   };
 }
-
 interface SuccessAnalysis {
   overallSuccess: number;
   crewScore: number;
@@ -111,19 +110,19 @@ interface SuccessAnalysis {
   coordinator?: MedicalPersonnel;
   missionType: MissionType;
 }
-
 interface DemoTripPredictionsProps {
   initialTripData?: TripData | null;
 }
-
-export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProps) => {
+export const DemoTripPredictions = ({
+  initialTripData
+}: DemoTripPredictionsProps) => {
   const [originHospital, setOriginHospital] = useState('');
   const [destinationHospital, setDestinationHospital] = useState('');
   const [selectedOrigin, setSelectedOrigin] = useState<GeocodeResult | null>(null);
   const [selectedDestination, setSelectedDestination] = useState<GeocodeResult | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [tripCalc, setTripCalc] = useState<TripCalculation | null>(null);
-  
+
   // New state for organ selection and team
   const [organType, setOrganType] = useState<string>('');
   const [missionTypes, setMissionTypes] = useState<MissionType[]>([]);
@@ -146,24 +145,22 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
   const [loadingCase, setLoadingCase] = useState(false);
   const [livePrediction, setLivePrediction] = useState<LivePrediction | null>(null);
   const [calculatingLive, setCalculatingLive] = useState(false);
-  
-  const { toast } = useToast();
+  const {
+    toast
+  } = useToast();
 
   // Fetch mission types and available crew on mount
   useEffect(() => {
     const fetchData = async () => {
-      const { data: missionData } = await supabase
-        .from('mission_types')
-        .select('*')
-        .order('organ_type');
+      const {
+        data: missionData
+      } = await supabase.from('mission_types').select('*').order('organ_type');
       if (missionData) {
         setMissionTypes(missionData);
       }
-
-      const { data: crewData } = await supabase
-        .from('crew_members')
-        .select('*')
-        .order('full_name');
+      const {
+        data: crewData
+      } = await supabase.from('crew_members').select('*').order('full_name');
       if (crewData) {
         setAvailableCrew(crewData as unknown as CrewMember[]);
         // Don't pre-select crew - let user choose based on organ-specific stats
@@ -178,53 +175,60 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
       setLeadDoctorSuggestions([]);
       return;
     }
-
     const timer = setTimeout(async () => {
-      const { data } = await supabase.functions.invoke('search-medical-personnel', {
-        body: { searchTerm: leadDoctorSearch, role: 'lead_doctor' }
+      const {
+        data
+      } = await supabase.functions.invoke('search-medical-personnel', {
+        body: {
+          searchTerm: leadDoctorSearch,
+          role: 'lead_doctor'
+        }
       });
       if (data?.results) {
         setLeadDoctorSuggestions(data.results);
       }
     }, 300);
-
     return () => clearTimeout(timer);
   }, [leadDoctorSearch]);
-
   useEffect(() => {
     const currentInput = surgeonInputs[activeSurgeonInput];
     if (!currentInput || currentInput.length < 2) {
       setSurgeonSuggestions([]);
       return;
     }
-
     const timer = setTimeout(async () => {
-      const { data } = await supabase.functions.invoke('search-medical-personnel', {
-        body: { searchTerm: currentInput, role: 'surgeon' }
+      const {
+        data
+      } = await supabase.functions.invoke('search-medical-personnel', {
+        body: {
+          searchTerm: currentInput,
+          role: 'surgeon'
+        }
       });
       if (data?.results) {
         setSurgeonSuggestions(data.results);
       }
     }, 300);
-
     return () => clearTimeout(timer);
   }, [surgeonInputs, activeSurgeonInput]);
-
   useEffect(() => {
     if (coordinatorSearch.length < 2) {
       setCoordinatorSuggestions([]);
       return;
     }
-
     const timer = setTimeout(async () => {
-      const { data } = await supabase.functions.invoke('search-medical-personnel', {
-        body: { searchTerm: coordinatorSearch, role: 'coordinator' }
+      const {
+        data
+      } = await supabase.functions.invoke('search-medical-personnel', {
+        body: {
+          searchTerm: coordinatorSearch,
+          role: 'coordinator'
+        }
       });
       if (data?.results) {
         setCoordinatorSuggestions(data.results);
       }
     }, 300);
-
     return () => clearTimeout(timer);
   }, [coordinatorSearch]);
 
@@ -234,7 +238,10 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
       if (organType || selectedCrew.length > 0 || selectedLeadDoctor) {
         setCalculatingLive(true);
         try {
-          const { data, error } = await supabase.functions.invoke('calculate-live-prediction', {
+          const {
+            data,
+            error
+          } = await supabase.functions.invoke('calculate-live-prediction', {
             body: {
               organType: organType || undefined,
               crewMemberIds: selectedCrew.map(c => c.id),
@@ -245,10 +252,9 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
               destAirportCode: tripCalc?.destAirport?.code,
               distance: tripCalc?.originAirport?.distance_nm,
               originHospital: originHospital || undefined,
-              destHospital: destinationHospital || undefined,
+              destHospital: destinationHospital || undefined
             }
           });
-          
           if (data && !error) {
             setLivePrediction(data);
           }
@@ -261,19 +267,22 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
         setLivePrediction(null);
       }
     }, 500);
-
     return () => clearTimeout(timer);
   }, [organType, selectedCrew, selectedLeadDoctor, surgicalTeam, selectedCoordinator, tripCalc, originHospital, destinationHospital]);
-
   const findNearestAirport = async (lat: number, lng: number): Promise<Airport> => {
-    const { data, error } = await supabase.functions.invoke('find-nearest-airport', {
-      body: { lat, lng, maxDistance: 100 }
+    const {
+      data,
+      error
+    } = await supabase.functions.invoke('find-nearest-airport', {
+      body: {
+        lat,
+        lng,
+        maxDistance: 100
+      }
     });
-
     if (error || !data) {
       throw new Error('Failed to find nearest airport');
     }
-
     return {
       code: data.airport,
       name: data.name,
@@ -282,80 +291,65 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
       distance_nm: data.distance_nm
     };
   };
-
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
     const R = 3440.065;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
-
   const calculateFlightTime = (distanceNM: number): number => {
     const cruiseSpeed = 440;
-    const flightTimeMinutes = (distanceNM / cruiseSpeed) * 60;
+    const flightTimeMinutes = distanceNM / cruiseSpeed * 60;
     const taxiTime = 20;
     return Math.round(flightTimeMinutes + taxiTime);
   };
-
   const handleCalculate = async () => {
     if (!selectedOrigin || !selectedDestination) {
       toast({
         title: "Missing Information",
         description: "Please select both origin and destination hospitals",
-        variant: "destructive",
+        variant: "destructive"
       });
       return;
     }
-
     if (!organType) {
       toast({
         title: "Missing Information",
         description: "Please select an organ type",
-        variant: "destructive",
+        variant: "destructive"
       });
       return;
     }
-
     if (!selectedLeadDoctor) {
       toast({
         title: "Missing Information",
         description: "Please select a lead doctor",
-        variant: "destructive",
+        variant: "destructive"
       });
       return;
     }
-
     setCalculating(true);
     setSuccessAnalysis(null);
-
     try {
       const originAirport = await findNearestAirport(selectedOrigin.lat, selectedOrigin.lon);
       const destAirport = await findNearestAirport(selectedDestination.lat, selectedDestination.lon);
-
-      const flightDistance = calculateDistance(
-        originAirport.lat,
-        originAirport.lng,
-        destAirport.lat,
-        destAirport.lng
-      );
+      const flightDistance = calculateDistance(originAirport.lat, originAirport.lng, destAirport.lat, destAirport.lng);
       const flightTime = calculateFlightTime(flightDistance);
       const originGroundTime = Math.round((originAirport.distance_nm || 10) * 2.5);
       const destGroundTime = Math.round((destAirport.distance_nm || 10) * 2.5);
       const baseTime = originGroundTime + flightTime + destGroundTime;
-
       setTripCalc({
         origin: selectedOrigin,
         destination: selectedDestination,
         originAirport,
         destAirport,
-        baseTime,
+        baseTime
       });
-
-      const { data: analysis } = await supabase.functions.invoke('calculate-mission-success', {
+      const {
+        data: analysis
+      } = await supabase.functions.invoke('calculate-mission-success', {
         body: {
           crewMemberIds: selectedCrew.map(c => c.id),
           leadDoctorId: selectedLeadDoctor.id,
@@ -364,30 +358,27 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
           organType,
           estimatedTimeMinutes: baseTime,
           originHospital: selectedOrigin.displayName,
-          destinationHospital: selectedDestination.displayName,
+          destinationHospital: selectedDestination.displayName
         }
       });
-
       if (analysis) {
         setSuccessAnalysis(analysis);
       }
-
       toast({
         title: "Mission Analysis Complete",
-        description: "AI predictions generated successfully",
+        description: "AI predictions generated successfully"
       });
     } catch (error) {
       console.error('Error calculating trip:', error);
       toast({
         title: "Calculation Error",
         description: "Failed to calculate trip details",
-        variant: "destructive",
+        variant: "destructive"
       });
     } finally {
       setCalculating(false);
     }
   };
-
   const addSurgeon = (surgeon: MedicalPersonnel, inputIndex: number) => {
     if (!surgicalTeam.find(s => s.id === surgeon.id)) {
       setSurgicalTeam([...surgicalTeam, surgeon]);
@@ -398,42 +389,37 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
       setSurgeonSuggestions([]);
     }
   };
-
   const addCustomSurgeon = (inputIndex: number) => {
     const trimmedName = surgeonInputs[inputIndex].trim();
     if (trimmedName.length < 2 || trimmedName.length > 100) {
       toast({
         title: "Invalid Name",
         description: "Surgeon name must be between 2 and 100 characters",
-        variant: "destructive",
+        variant: "destructive"
       });
       return;
     }
-
     const customSurgeon: MedicalPersonnel = {
       id: `custom-${Date.now()}`,
       full_name: trimmedName,
       role: 'surgeon',
       specialty: 'General Surgery',
       total_missions: 0,
-      success_rate: 90,
+      success_rate: 90
     };
-
     setSurgicalTeam([...surgicalTeam, customSurgeon]);
     const newInputs = [...surgeonInputs];
     newInputs[inputIndex] = '';
     setSurgeonInputs(newInputs);
     toast({
       title: "Surgeon Added",
-      description: `${trimmedName} has been added to the surgical team`,
+      description: `${trimmedName} has been added to the surgical team`
     });
   };
-
   const addSurgeonInput = () => {
     setSurgeonInputs([...surgeonInputs, '']);
     setActiveSurgeonInput(surgeonInputs.length);
   };
-
   const removeSurgeonInput = (index: number) => {
     if (surgeonInputs.length > 1) {
       const newInputs = surgeonInputs.filter((_, i) => i !== index);
@@ -443,18 +429,15 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
       }
     }
   };
-
   const updateSurgeonInput = (index: number, value: string) => {
     const newInputs = [...surgeonInputs];
     newInputs[index] = value;
     setSurgeonInputs(newInputs);
     setActiveSurgeonInput(index);
   };
-
   const removeSurgeon = (id: string) => {
     setSurgicalTeam(surgicalTeam.filter(s => s.id !== id));
   };
-
   const toggleCrewSelection = (crew: CrewMember) => {
     if (selectedCrew.find(c => c.id === crew.id)) {
       setSelectedCrew(selectedCrew.filter(c => c.id !== crew.id));
@@ -464,24 +447,22 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
       toast({
         title: "Maximum Crew Size",
         description: "You can only select 2 pilots per mission",
-        variant: "destructive",
+        variant: "destructive"
       });
     }
   };
-
   const lookupCaseNumber = () => {
     const trimmedCase = caseNumber.trim();
     if (trimmedCase.length < 3 || trimmedCase.length > 20) {
       toast({
         title: "Invalid Case Number",
         description: "Case number must be between 3 and 20 characters",
-        variant: "destructive",
+        variant: "destructive"
       });
       return;
     }
-
     setLoadingCase(true);
-    
+
     // Simulate CRM lookup with fake data
     setTimeout(() => {
       const mockData = {
@@ -495,141 +476,99 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
         destinationHospital: 'Johns Hopkins Hospital',
         leadPhysician: 'Dr. Sarah Chen',
         coordinatorNotes: 'Patient is stable. Time-sensitive case. Insurance pre-authorized for air transport.',
-        previousTransports: Math.floor(Math.random() * 3),
+        previousTransports: Math.floor(Math.random() * 3)
       };
-      
       setCaseData(mockData);
       setOrganType(mockData.organType);
       setLoadingCase(false);
-      
       toast({
         title: "Case Retrieved",
-        description: `Case ${trimmedCase} loaded successfully from CRM`,
+        description: `Case ${trimmedCase} loaded successfully from CRM`
       });
     }, 1200);
   };
-
   const selectedMissionType = missionTypes.find(mt => mt.organ_type === organType);
-
-  return (
-    <div className="space-y-6">
+  return <div className="space-y-6">
       {/* Live Prediction Display */}
-      {livePrediction && (
-        <Card className="shadow-card animate-fade-in border-primary/20">
+      {livePrediction && <Card className="shadow-card animate-fade-in border-primary/20">
           <CardHeader className="pb-4">
             <CardTitle className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Target className="w-5 h-5 text-primary" />
                 AI Predictive Success Rate
               </div>
-              {calculatingLive && (
-                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-              )}
+              {calculatingLive && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Main Prediction Score */}
             <div className="text-center space-y-3">
               <div className="text-6xl font-bold" style={{
-                color: livePrediction.overallPrediction >= 85 ? 'hsl(var(--success))' :
-                       livePrediction.overallPrediction >= 70 ? 'hsl(var(--warning))' :
-                       'hsl(var(--destructive))'
-              }}>
+            color: livePrediction.overallPrediction >= 85 ? 'hsl(var(--success))' : livePrediction.overallPrediction >= 70 ? 'hsl(var(--warning))' : 'hsl(var(--destructive))'
+          }}>
                 {livePrediction.overallPrediction}%
               </div>
               <div className="space-y-2">
-                <Progress 
-                  value={livePrediction.overallPrediction} 
-                  className="h-3"
-                />
+                <Progress value={livePrediction.overallPrediction} className="h-3" />
                 <div className="flex items-center justify-center gap-2 text-sm">
-                  <Badge variant={
-                    livePrediction.confidence === 'high' ? 'default' :
-                    livePrediction.confidence === 'medium' ? 'secondary' :
-                    'outline'
-                  }>
-                    {livePrediction.confidence === 'high' ? 'High Confidence' :
-                     livePrediction.confidence === 'medium' ? 'Medium Confidence' :
-                     'Low Confidence'}
+                  <Badge variant={livePrediction.confidence === 'high' ? 'default' : livePrediction.confidence === 'medium' ? 'secondary' : 'outline'}>
+                    {livePrediction.confidence === 'high' ? 'High Confidence' : livePrediction.confidence === 'medium' ? 'Medium Confidence' : 'Low Confidence'}
                   </Badge>
                   <span className="text-muted-foreground">
-                    {livePrediction.confidence === 'high' ? 'Full team & logistics data' :
-                     livePrediction.confidence === 'medium' ? 'Team selected' :
-                     'Add more details for better prediction'}
+                    {livePrediction.confidence === 'high' ? 'Full team & logistics data' : livePrediction.confidence === 'medium' ? 'Team selected' : 'Add more details for better prediction'}
                   </span>
                 </div>
               </div>
             </div>
 
             {/* Breakdown Scores */}
-            {(livePrediction.breakdown.crewScore > 0 || livePrediction.breakdown.medicalTeamScore > 0) && (
-              <div className="grid grid-cols-2 gap-4">
-                {livePrediction.breakdown.crewScore > 0 && (
-                  <div className="space-y-2">
+            {(livePrediction.breakdown.crewScore > 0 || livePrediction.breakdown.medicalTeamScore > 0) && <div className="grid grid-cols-2 gap-4">
+                {livePrediction.breakdown.crewScore > 0 && <div className="space-y-2">
                     <Label className="text-xs text-muted-foreground">Flight Crew</Label>
                     <div className="flex items-center justify-between">
                       <Progress value={livePrediction.breakdown.crewScore} className="flex-1 h-2" />
                       <span className="ml-2 text-sm font-semibold">{livePrediction.breakdown.crewScore}%</span>
                     </div>
-                  </div>
-                )}
-                {livePrediction.breakdown.medicalTeamScore > 0 && (
-                  <div className="space-y-2">
+                  </div>}
+                {livePrediction.breakdown.medicalTeamScore > 0 && <div className="space-y-2">
                     <Label className="text-xs text-muted-foreground">Medical Team</Label>
                     <div className="flex items-center justify-between">
                       <Progress value={livePrediction.breakdown.medicalTeamScore} className="flex-1 h-2" />
                       <span className="ml-2 text-sm font-semibold">{livePrediction.breakdown.medicalTeamScore}%</span>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
+                  </div>}
+              </div>}
 
             {/* Organ-Specific Insights */}
-            {livePrediction.organSpecificInsights.crewSummary && (
-              <div className="space-y-3 p-4 bg-primary/5 rounded-lg border border-primary/10">
+            {livePrediction.organSpecificInsights.crewSummary && <div className="space-y-3 p-4 bg-primary/5 rounded-lg border border-primary/10">
                 <h4 className="font-semibold text-sm flex items-center gap-2">
                   <Heart className="w-4 h-4 text-primary" />
                   {organType && `${organType.charAt(0).toUpperCase() + organType.slice(1)} Mission Experience`}
                 </h4>
-                {livePrediction.organSpecificInsights.crewSummary && (
-                  <p className="text-sm text-muted-foreground">
+                {livePrediction.organSpecificInsights.crewSummary && <p className="text-sm text-muted-foreground">
                     <strong>Flight Crew:</strong> {livePrediction.organSpecificInsights.crewSummary}
-                  </p>
-                )}
-                {livePrediction.organSpecificInsights.leadDoctor && (
-                  <p className="text-sm text-muted-foreground">
+                  </p>}
+                {livePrediction.organSpecificInsights.leadDoctor && <p className="text-sm text-muted-foreground">
                     <strong>Lead Doctor:</strong> {livePrediction.organSpecificInsights.leadDoctor}
-                  </p>
-                )}
-              </div>
-            )}
+                  </p>}
+              </div>}
 
             {/* Logistics Insights */}
-            {(livePrediction.logisticsInsights.airportFamiliarity || 
-              livePrediction.logisticsInsights.routeComplexity) && (
-              <div className="space-y-3 p-4 bg-accent/5 rounded-lg border border-accent/10">
+            {(livePrediction.logisticsInsights.airportFamiliarity || livePrediction.logisticsInsights.routeComplexity) && <div className="space-y-3 p-4 bg-accent/5 rounded-lg border border-accent/10">
                 <h4 className="font-semibold text-sm flex items-center gap-2">
                   <Plane className="w-4 h-4 text-accent" />
                   Route Intelligence
                 </h4>
-                {livePrediction.logisticsInsights.airportFamiliarity && (
-                  <p className="text-sm text-muted-foreground">
+                {livePrediction.logisticsInsights.airportFamiliarity && <p className="text-sm text-muted-foreground">
                     <strong>Airport Familiarity:</strong> {livePrediction.logisticsInsights.airportFamiliarity}
-                  </p>
-                )}
-                {livePrediction.logisticsInsights.routeComplexity && (
-                  <p className="text-sm text-muted-foreground">
+                  </p>}
+                {livePrediction.logisticsInsights.routeComplexity && <p className="text-sm text-muted-foreground">
                     <strong>Route Analysis:</strong> {livePrediction.logisticsInsights.routeComplexity}
-                  </p>
-                )}
-              </div>
-            )}
+                  </p>}
+              </div>}
 
             {/* Optimal Team Suggestion */}
-            {livePrediction.optimalTeamSuggestion.crew.length > 0 && 
-             livePrediction.optimalTeamSuggestion.leadDoctor && (
-              <div className="space-y-3 p-4 bg-success/5 rounded-lg border border-success/10">
+            {livePrediction.optimalTeamSuggestion.crew.length > 0 && livePrediction.optimalTeamSuggestion.leadDoctor && <div className="space-y-3 p-4 bg-success/5 rounded-lg border border-success/10">
                 <h4 className="font-semibold text-sm flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-success" />
                   Recommended Optimal Team
@@ -638,38 +577,30 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
                   <div>
                     <strong className="text-muted-foreground">Flight Crew:</strong>
                     <div className="mt-1 space-y-1">
-                      {livePrediction.optimalTeamSuggestion.crew.map(c => (
-                        <div key={c.id} className="flex items-center justify-between text-xs">
+                      {livePrediction.optimalTeamSuggestion.crew.map(c => <div key={c.id} className="flex items-center justify-between text-xs">
                           <span>• {c.full_name}</span>
-                          {c.organ_experience && organType && (
-                            <Badge variant="outline" className="text-xs">
+                          {c.organ_experience && organType && <Badge variant="outline" className="text-xs">
                               {c.organ_experience[organType]?.success_rate || 0}% success
-                            </Badge>
-                          )}
-                        </div>
-                      ))}
+                            </Badge>}
+                        </div>)}
                     </div>
                   </div>
                   <div>
                     <strong className="text-muted-foreground">Lead Doctor:</strong>
                     <div className="mt-1 flex items-center justify-between text-xs">
                       <span>• {livePrediction.optimalTeamSuggestion.leadDoctor.full_name}</span>
-                      {livePrediction.optimalTeamSuggestion.leadDoctor.organ_experience && organType && (
-                        <Badge variant="outline" className="text-xs">
+                      {livePrediction.optimalTeamSuggestion.leadDoctor.organ_experience && organType && <Badge variant="outline" className="text-xs">
                           {livePrediction.optimalTeamSuggestion.leadDoctor.organ_experience[organType]?.success_rate || 0}% success
-                        </Badge>
-                      )}
+                        </Badge>}
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground italic mt-2">
                     {livePrediction.optimalTeamSuggestion.reasoning}
                   </p>
                 </div>
-              </div>
-            )}
+              </div>}
           </CardContent>
-        </Card>
-      )}
+        </Card>}
 
       <Card className="shadow-card animate-fade-in">
         <CardHeader>
@@ -692,8 +623,7 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
                   <SelectValue placeholder="Select organ type..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {missionTypes.map((mt) => (
-                    <SelectItem key={mt.id} value={mt.organ_type}>
+                  {missionTypes.map(mt => <SelectItem key={mt.id} value={mt.organ_type}>
                       <div className="flex items-center gap-2">
                         <Heart className="w-4 h-4" />
                         <span className="capitalize">{mt.organ_type}</span>
@@ -701,54 +631,34 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
                           ({mt.min_viability_hours}-{mt.max_viability_hours}h viability)
                         </span>
                       </div>
-                    </SelectItem>
-                  ))}
+                    </SelectItem>)}
                 </SelectContent>
               </Select>
-              {selectedMissionType && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+              {selectedMissionType && <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
                   <Heart className="w-4 h-4" />
                   <span>
                     Viability Window: {selectedMissionType.min_viability_hours}-{selectedMissionType.max_viability_hours} hours
                   </span>
-                </div>
-              )}
+                </div>}
             </div>
 
             {/* Case Number Lookup - Right */}
             <div className="space-y-2">
               <Label>Case Number (Optional - CRM)</Label>
               <div className="flex gap-2">
-                <Input
-                  value={caseNumber}
-                  onChange={(e) => setCaseNumber(e.target.value.toUpperCase())}
-                  placeholder="e.g., TXP-2024-001"
-                  maxLength={20}
-                  onKeyDown={(e) => e.key === 'Enter' && lookupCaseNumber()}
-                  className="max-w-xs"
-                />
-                <Button 
-                  onClick={lookupCaseNumber}
-                  disabled={loadingCase || caseNumber.length < 3}
-                  variant="secondary"
-                  size="sm"
-                >
-                  {loadingCase ? (
-                    <>
+                <Input value={caseNumber} onChange={e => setCaseNumber(e.target.value.toUpperCase())} placeholder="e.g., TXP-2024-001" maxLength={20} onKeyDown={e => e.key === 'Enter' && lookupCaseNumber()} className="max-w-xs" />
+                <Button onClick={lookupCaseNumber} disabled={loadingCase || caseNumber.length < 3} variant="secondary" size="sm">
+                  {loadingCase ? <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Lookup
-                    </>
-                  ) : (
-                    'Lookup'
-                  )}
+                    </> : 'Lookup'}
                 </Button>
               </div>
             </div>
           </div>
 
           {/* Case Data Display - Full Width Below */}
-          {caseData && (
-            <div className="p-4 bg-accent/10 rounded-md border border-accent/20 space-y-2 animate-fade-in">
+          {caseData && <div className="p-4 bg-accent/10 rounded-md border border-accent/20 space-y-2 animate-fade-in">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="font-semibold text-sm flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-success" />
@@ -780,94 +690,53 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
                 <span className="text-muted-foreground text-xs">Coordinator Notes:</span>
                 <p className="text-sm mt-1">{caseData.coordinatorNotes}</p>
               </div>
-            </div>
-          )}
+            </div>}
 
           <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Origin Hospital</Label>
-              <LocationAutocomplete
-                value={originHospital}
-                onChange={setOriginHospital}
-                onLocationSelect={(result) => {
-                  setSelectedOrigin(result);
-                  setOriginHospital(result.displayName);
-                }}
-                placeholder="Search origin hospital..."
-                label="Origin Hospital"
-              />
+              <LocationAutocomplete value={originHospital} onChange={setOriginHospital} onLocationSelect={result => {
+              setSelectedOrigin(result);
+              setOriginHospital(result.displayName);
+            }} placeholder="Search origin hospital..." label="Origin Hospital" />
             </div>
             <div className="space-y-2">
               <Label>Destination Hospital</Label>
-              <LocationAutocomplete
-                value={destinationHospital}
-                onChange={setDestinationHospital}
-                onLocationSelect={(result) => {
-                  setSelectedDestination(result);
-                  setDestinationHospital(result.displayName);
-                }}
-                placeholder="Search destination hospital..."
-                label="Destination Hospital"
-              />
+              <LocationAutocomplete value={destinationHospital} onChange={setDestinationHospital} onLocationSelect={result => {
+              setSelectedDestination(result);
+              setDestinationHospital(result.displayName);
+            }} placeholder="Search destination hospital..." label="Destination Hospital" />
             </div>
           </div>
 
           {/* Flight Crew Selection */}
           <div className="space-y-2">
             <Label>Flight Crew (Select 2 Pilots)</Label>
-            {!organType && (
-              <div className="p-3 bg-accent/10 rounded-md border border-accent/30 flex items-center gap-2 mb-2">
-                <AlertTriangle className="w-4 h-4 text-warning" />
-                <p className="text-sm text-muted-foreground">
-                  Select an organ type above to see specialized team recommendations
-                </p>
-              </div>
-            )}
+            {!organType}
             <div className="grid md:grid-cols-2 gap-2">
-              {availableCrew.map((crew) => {
-                const isSelected = selectedCrew.find(c => c.id === crew.id);
-                return (
-                  <button
-                    key={crew.id}
-                    onClick={() => toggleCrewSelection(crew)}
-                    className={cn(
-                      "p-3 rounded-md border-2 text-left transition-all hover:scale-[1.02]",
-                      isSelected 
-                        ? "border-primary bg-primary/10" 
-                        : "border-border bg-card hover:border-primary/50"
-                    )}
-                  >
+              {availableCrew.map(crew => {
+              const isSelected = selectedCrew.find(c => c.id === crew.id);
+              return <button key={crew.id} onClick={() => toggleCrewSelection(crew)} className={cn("p-3 rounded-md border-2 text-left transition-all hover:scale-[1.02]", isSelected ? "border-primary bg-primary/10" : "border-border bg-card hover:border-primary/50")}>
                     <div className="flex items-center gap-2">
-                      {isSelected ? (
-                        <CheckCircle className="w-4 h-4 text-primary flex-shrink-0" />
-                      ) : (
-                        <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                      )}
+                      {isSelected ? <CheckCircle className="w-4 h-4 text-primary flex-shrink-0" /> : <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">
                           {crew.full_name}
                           {crew.is_chief_pilot && " 🛡️"}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {organType && crew.organ_experience?.[organType] ? (
-                            <>
+                          {organType && crew.organ_experience?.[organType] ? <>
                               {organType.charAt(0).toUpperCase() + organType.slice(1)}: {crew.organ_experience[organType].missions} missions • {crew.organ_experience[organType].success_rate}% success
-                            </>
-                          ) : (
-                            <span className="text-muted-foreground/50">Select organ type to view stats</span>
-                          )}
+                            </> : <span className="text-muted-foreground/50">Select organ type to view stats</span>}
                         </p>
                       </div>
                     </div>
-                  </button>
-                );
-              })}
+                  </button>;
+            })}
             </div>
-            {selectedCrew.length > 0 && (
-              <p className="text-xs text-muted-foreground">
+            {selectedCrew.length > 0 && <p className="text-xs text-muted-foreground">
                 {selectedCrew.length}/2 pilots selected
-              </p>
-            )}
+              </p>}
           </div>
 
           {/* Medical Team - 2 Column Layout */}
@@ -876,149 +745,82 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
             <div className="space-y-2">
               <Label>Lead Doctor</Label>
               <div className="relative">
-                <Input
-                  value={selectedLeadDoctor ? selectedLeadDoctor.full_name : leadDoctorSearch}
-                  onChange={(e) => {
-                    setLeadDoctorSearch(e.target.value);
-                    if (selectedLeadDoctor) setSelectedLeadDoctor(null);
-                  }}
-                  placeholder="Search for lead doctor..."
-                />
-                {leadDoctorSuggestions.length > 0 && !selectedLeadDoctor && (
-                  <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-auto">
-                    {leadDoctorSuggestions.map((doc) => (
-                      <button
-                        key={doc.id}
-                        onClick={() => {
-                          setSelectedLeadDoctor(doc);
-                          setLeadDoctorSearch('');
-                          setLeadDoctorSuggestions([]);
-                        }}
-                        className="w-full p-3 text-left hover:bg-accent/50 transition-colors"
-                      >
+                <Input value={selectedLeadDoctor ? selectedLeadDoctor.full_name : leadDoctorSearch} onChange={e => {
+                setLeadDoctorSearch(e.target.value);
+                if (selectedLeadDoctor) setSelectedLeadDoctor(null);
+              }} placeholder="Search for lead doctor..." />
+                {leadDoctorSuggestions.length > 0 && !selectedLeadDoctor && <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-auto">
+                    {leadDoctorSuggestions.map(doc => <button key={doc.id} onClick={() => {
+                  setSelectedLeadDoctor(doc);
+                  setLeadDoctorSearch('');
+                  setLeadDoctorSuggestions([]);
+                }} className="w-full p-3 text-left hover:bg-accent/50 transition-colors">
                         <p className="font-medium text-sm">{doc.full_name}</p>
                         <p className="text-xs text-muted-foreground">
                           {doc.specialty && <span className="mr-1">{doc.specialty}</span>}
-                          {organType && doc.organ_experience?.[organType] ? (
-                            <>
+                          {organType && doc.organ_experience?.[organType] ? <>
                               • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {doc.organ_experience[organType].missions} cases • {doc.organ_experience[organType].success_rate}% success
-                            </>
-                          ) : (
-                            <span className="text-muted-foreground/50">• Select organ type to view experience</span>
-                          )}
+                            </> : <span className="text-muted-foreground/50">• Select organ type to view experience</span>}
                         </p>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                      </button>)}
+                  </div>}
               </div>
-              {selectedLeadDoctor && (
-                <div className="p-3 bg-primary/10 rounded-md">
+              {selectedLeadDoctor && <div className="p-3 bg-primary/10 rounded-md">
                   <div className="flex items-center gap-2">
                     <User className="w-4 h-4 text-primary" />
                     <div className="flex-1">
                       <p className="font-medium text-sm">{selectedLeadDoctor.full_name}</p>
                       <p className="text-xs text-muted-foreground">
                         {selectedLeadDoctor.specialty && <span className="mr-1">{selectedLeadDoctor.specialty}</span>}
-                        {organType && selectedLeadDoctor.organ_experience?.[organType] ? (
-                          <>
+                        {organType && selectedLeadDoctor.organ_experience?.[organType] ? <>
                             • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {selectedLeadDoctor.organ_experience[organType].missions} cases • {selectedLeadDoctor.organ_experience[organType].success_rate}% success
-                          </>
-                        ) : (
-                          <span className="text-muted-foreground/50">• Select organ type to view experience</span>
-                        )}
+                          </> : <span className="text-muted-foreground/50">• Select organ type to view experience</span>}
                       </p>
                     </div>
                   </div>
-                </div>
-              )}
+                </div>}
             </div>
 
             {/* Surgical Team */}
             <div className="space-y-2">
               <Label>Surgical Team (Optional)</Label>
               <div className="space-y-2">
-                {surgeonInputs.map((input, index) => (
-                  <div key={index} className="relative flex gap-2">
+                {surgeonInputs.map((input, index) => <div key={index} className="relative flex gap-2">
                     <div className="flex-1 relative">
-                      <Input
-                        value={input}
-                        onChange={(e) => updateSurgeonInput(index, e.target.value)}
-                        onFocus={() => setActiveSurgeonInput(index)}
-                        placeholder="Search or add surgeon name..."
-                        maxLength={100}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && input.trim().length >= 2) {
-                            addCustomSurgeon(index);
-                          }
-                        }}
-                      />
-                      {surgeonSuggestions.length > 0 && activeSurgeonInput === index && input.length >= 2 && (
-                        <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-auto">
-                          {surgeonSuggestions.map((surgeon) => (
-                            <button
-                              key={surgeon.id}
-                              onClick={() => addSurgeon(surgeon, index)}
-                              className="w-full p-3 text-left hover:bg-accent/50 transition-colors"
-                              disabled={surgicalTeam.some(s => s.id === surgeon.id)}
-                            >
+                      <Input value={input} onChange={e => updateSurgeonInput(index, e.target.value)} onFocus={() => setActiveSurgeonInput(index)} placeholder="Search or add surgeon name..." maxLength={100} onKeyDown={e => {
+                    if (e.key === 'Enter' && input.trim().length >= 2) {
+                      addCustomSurgeon(index);
+                    }
+                  }} />
+                      {surgeonSuggestions.length > 0 && activeSurgeonInput === index && input.length >= 2 && <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-auto">
+                          {surgeonSuggestions.map(surgeon => <button key={surgeon.id} onClick={() => addSurgeon(surgeon, index)} className="w-full p-3 text-left hover:bg-accent/50 transition-colors" disabled={surgicalTeam.some(s => s.id === surgeon.id)}>
                               <p className="font-medium text-sm">{surgeon.full_name}</p>
                               <p className="text-xs text-muted-foreground">
                                 {surgeon.specialty && <span className="mr-1">{surgeon.specialty}</span>}
-                                {organType && surgeon.organ_experience?.[organType] ? (
-                                  <>
+                                {organType && surgeon.organ_experience?.[organType] ? <>
                                     • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {surgeon.organ_experience[organType].missions} cases • {surgeon.organ_experience[organType].success_rate}% success
-                                  </>
-                                ) : (
-                                  <span className="text-muted-foreground/50">• Select organ type to view experience</span>
-                                )}
+                                  </> : <span className="text-muted-foreground/50">• Select organ type to view experience</span>}
                               </p>
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                            </button>)}
+                        </div>}
                     </div>
-                    {index === surgeonInputs.length - 1 ? (
-                      <Button 
-                        onClick={addSurgeonInput}
-                        variant="outline"
-                        size="icon"
-                        className="flex-shrink-0"
-                      >
+                    {index === surgeonInputs.length - 1 ? <Button onClick={addSurgeonInput} variant="outline" size="icon" className="flex-shrink-0">
                         <Users className="w-4 h-4" />
-                      </Button>
-                    ) : (
-                      <Button 
-                        onClick={() => removeSurgeonInput(index)}
-                        variant="ghost"
-                        size="icon"
-                        className="flex-shrink-0"
-                      >
+                      </Button> : <Button onClick={() => removeSurgeonInput(index)} variant="ghost" size="icon" className="flex-shrink-0">
                         <X className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
+                      </Button>}
+                  </div>)}
               </div>
               
-              {surgicalTeam.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {surgicalTeam.map((surgeon) => (
-                    <Badge key={surgeon.id} variant="secondary" className="gap-2">
+              {surgicalTeam.length > 0 && <div className="flex flex-wrap gap-2 mt-2">
+                  {surgicalTeam.map(surgeon => <Badge key={surgeon.id} variant="secondary" className="gap-2">
                       {surgeon.full_name}
-                      {surgeon.id.startsWith('custom-') && (
-                        <span className="text-xs text-muted-foreground">(New)</span>
-                      )}
-                      <button
-                        onClick={() => removeSurgeon(surgeon.id)}
-                        className="hover:text-destructive"
-                      >
+                      {surgeon.id.startsWith('custom-') && <span className="text-xs text-muted-foreground">(New)</span>}
+                      <button onClick={() => removeSurgeon(surgeon.id)} className="hover:text-destructive">
                         <X className="w-3 h-3" />
                       </button>
-                    </Badge>
-                  ))}
-                </div>
-              )}
+                    </Badge>)}
+                </div>}
             </div>
           </div>
 
@@ -1026,85 +828,53 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
           <div className="space-y-2">
             <Label>Transplant Coordinator (Optional)</Label>
             <div className="relative">
-              <Input
-                value={selectedCoordinator ? selectedCoordinator.full_name : coordinatorSearch}
-                onChange={(e) => {
-                  setCoordinatorSearch(e.target.value);
-                  if (selectedCoordinator) setSelectedCoordinator(null);
-                }}
-                placeholder="Search for coordinator..."
-              />
-              {coordinatorSuggestions.length > 0 && !selectedCoordinator && (
-                <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-auto">
-                  {coordinatorSuggestions.map((coord) => (
-                    <button
-                      key={coord.id}
-                      onClick={() => {
-                        setSelectedCoordinator(coord);
-                        setCoordinatorSearch('');
-                        setCoordinatorSuggestions([]);
-                      }}
-                      className="w-full p-3 text-left hover:bg-accent/50 transition-colors"
-                    >
+              <Input value={selectedCoordinator ? selectedCoordinator.full_name : coordinatorSearch} onChange={e => {
+              setCoordinatorSearch(e.target.value);
+              if (selectedCoordinator) setSelectedCoordinator(null);
+            }} placeholder="Search for coordinator..." />
+              {coordinatorSuggestions.length > 0 && !selectedCoordinator && <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-auto">
+                  {coordinatorSuggestions.map(coord => <button key={coord.id} onClick={() => {
+                setSelectedCoordinator(coord);
+                setCoordinatorSearch('');
+                setCoordinatorSuggestions([]);
+              }} className="w-full p-3 text-left hover:bg-accent/50 transition-colors">
                       <p className="font-medium text-sm">{coord.full_name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {organType && coord.organ_experience?.[organType] ? (
-                          <>
+                        {organType && coord.organ_experience?.[organType] ? <>
                             {organType.charAt(0).toUpperCase() + organType.slice(1)}: {coord.organ_experience[organType].missions} cases • {coord.organ_experience[organType].success_rate}% success
-                          </>
-                        ) : (
-                          <span className="text-muted-foreground/50">Select organ type to view experience</span>
-                        )}
+                          </> : <span className="text-muted-foreground/50">Select organ type to view experience</span>}
                       </p>
-                    </button>
-                  ))}
-                </div>
-              )}
+                    </button>)}
+                </div>}
             </div>
-            {selectedCoordinator && (
-              <div className="p-3 bg-secondary/10 rounded-md">
+            {selectedCoordinator && <div className="p-3 bg-secondary/10 rounded-md">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-secondary" />
                   <div className="flex-1">
                     <p className="font-medium text-sm">{selectedCoordinator.full_name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {organType && selectedCoordinator.organ_experience?.[organType] ? (
-                        <>
+                      {organType && selectedCoordinator.organ_experience?.[organType] ? <>
                           {organType.charAt(0).toUpperCase() + organType.slice(1)}: {selectedCoordinator.organ_experience[organType].missions} cases • {selectedCoordinator.organ_experience[organType].success_rate}% success
-                        </>
-                      ) : (
-                        <span className="text-muted-foreground/50">Select organ type to view experience</span>
-                      )}
+                        </> : <span className="text-muted-foreground/50">Select organ type to view experience</span>}
                     </p>
                   </div>
                 </div>
-              </div>
-            )}
+              </div>}
           </div>
 
-          <Button 
-            onClick={handleCalculate} 
-            disabled={calculating || !selectedOrigin || !selectedDestination || !organType || !selectedLeadDoctor || selectedCrew.length !== 2}
-            className="w-full"
-            size="lg"
-          >
-            {calculating ? (
-              <>
+          <Button onClick={handleCalculate} disabled={calculating || !selectedOrigin || !selectedDestination || !organType || !selectedLeadDoctor || selectedCrew.length !== 2} className="w-full" size="lg">
+            {calculating ? <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Generating AI Predictions...
-              </>
-            ) : (
-              <>
+              </> : <>
                 <Target className="mr-2 h-4 w-4" />
                 Generate AI Mission Analysis
-              </>
-            )}
+              </>}
           </Button>
         </CardContent>
       </Card>
 
-      {successAnalysis && tripCalc && (
-        <div className="space-y-4 animate-fade-in">
+      {successAnalysis && tripCalc && <div className="space-y-4 animate-fade-in">
           <Card className="shadow-elevated bg-gradient-to-br from-card to-accent/5">
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
@@ -1157,15 +927,9 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
                   </Badge>
                 </div>
                 <div className="relative h-3 bg-muted rounded-full overflow-hidden">
-                  <div 
-                    className={cn(
-                      "h-full transition-all duration-500",
-                      successAnalysis.viabilityStatus === 'safe' && "bg-success",
-                      successAnalysis.viabilityStatus === 'warning' && "bg-warning",
-                      successAnalysis.viabilityStatus === 'critical' && "bg-destructive"
-                    )}
-                    style={{ width: `${Math.min(successAnalysis.viabilityUsedPercent, 100)}%` }}
-                  />
+                  <div className={cn("h-full transition-all duration-500", successAnalysis.viabilityStatus === 'safe' && "bg-success", successAnalysis.viabilityStatus === 'warning' && "bg-warning", successAnalysis.viabilityStatus === 'critical' && "bg-destructive")} style={{
+                width: `${Math.min(successAnalysis.viabilityUsedPercent, 100)}%`
+              }} />
                 </div>
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>Procurement</span>
@@ -1177,8 +941,7 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
           </Card>
 
           <div className="grid md:grid-cols-2 gap-4">
-            {successAnalysis.insights.map((insight, idx) => (
-              <Card key={idx} className="shadow-card animate-scale-in">
+            {successAnalysis.insights.map((insight, idx) => <Card key={idx} className="shadow-card animate-scale-in">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     {insight.type === 'crew' && <Plane className="w-4 h-4 text-primary" />}
@@ -1191,32 +954,23 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
                 <CardContent>
                   <p className="text-sm text-muted-foreground">{insight.message}</p>
                 </CardContent>
-              </Card>
-            ))}
+              </Card>)}
           </div>
 
-          {successAnalysis.suggestions.length > 0 && (
-            <Card className="shadow-card animate-fade-in">
+          {successAnalysis.suggestions.length > 0 && <Card className="shadow-card animate-fade-in">
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  {successAnalysis.viabilityStatus === 'critical' ? (
-                    <AlertTriangle className="w-5 h-5 text-destructive" />
-                  ) : (
-                    <CheckCircle className="w-5 h-5 text-success" />
-                  )}
+                  {successAnalysis.viabilityStatus === 'critical' ? <AlertTriangle className="w-5 h-5 text-destructive" /> : <CheckCircle className="w-5 h-5 text-success" />}
                   AI Recommendations
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {successAnalysis.suggestions.map((suggestion, idx) => (
-                  <div key={idx} className="flex items-start gap-2 p-3 bg-muted/50 rounded-md">
+                {successAnalysis.suggestions.map((suggestion, idx) => <div key={idx} className="flex items-start gap-2 p-3 bg-muted/50 rounded-md">
                     <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2" />
                     <p className="text-sm">{suggestion}</p>
-                  </div>
-                ))}
+                  </div>)}
               </CardContent>
-            </Card>
-          )}
+            </Card>}
 
           <Card className="shadow-card">
             <CardHeader>
@@ -1249,19 +1003,15 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
               </div>
             </CardContent>
           </Card>
-        </div>
-      )}
+        </div>}
 
-      {!tripCalc && !calculating && (
-        <Card className="shadow-card">
+      {!tripCalc && !calculating && <Card className="shadow-card">
           <CardContent className="py-12 text-center">
             <Target className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">
               Enter trip details and select your medical team to generate AI-powered mission analysis
             </p>
           </CardContent>
-        </Card>
-      )}
-    </div>
-  );
+        </Card>}
+    </div>;
 };
