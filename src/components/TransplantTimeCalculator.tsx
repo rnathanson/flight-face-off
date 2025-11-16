@@ -633,20 +633,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Pick Up Hospital</div>
                   <div className="font-semibold text-lg">{originHospital}</div>
-                  {selectedOrigin?.address && (
-                    <div className="text-xs text-muted-foreground">
-                      {selectedOrigin.address}
-                    </div>
-                  )}
                 </div>
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Delivery Hospital</div>
                   <div className="font-semibold text-lg">{destinationHospital}</div>
-                  {selectedDestination?.address && (
-                    <div className="text-xs text-muted-foreground">
-                      {selectedDestination.address}
-                    </div>
-                  )}
                 </div>
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Departure</div>
