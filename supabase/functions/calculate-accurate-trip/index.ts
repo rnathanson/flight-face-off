@@ -20,13 +20,21 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const { 
-      originLocation, 
-      destinationLocation,
+      pickupLocation,  // Changed from originLocation
+      deliveryLocation,  // Changed from destinationLocation
       departureDateTime,
       passengers = 4
     } = await req.json();
 
-    console.log('Calculating accurate trip...');
+    console.log('Calculating three-leg accurate trip from KFRG home base...');
+
+    // KFRG home base coordinates
+    const KFRG = {
+      code: 'KFRG',
+      name: 'Republic Airport',
+      lat: 40.7289,
+      lng: -73.4134
+    };
 
     // Get flight ops config
     const { data: config } = await supabase
@@ -34,37 +42,83 @@ serve(async (req) => {
       .select('*')
       .single();
 
-    // Step 1: Find qualified airports
-    const findAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
-      body: { location: originLocation, maxDistance: 50 }
-    });
-
-    const originAirports = findAirportsResponse.data?.qualified || [];
+    // Calculate distance from KFRG to determine if on Long Island (50nm threshold)
+    const pickupDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, pickupLocation.lat, pickupLocation.lon);
+    const deliveryDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, deliveryLocation.lat, deliveryLocation.lon);
     
-    const destAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
-      body: { location: destinationLocation, maxDistance: 50 }
-    });
+    const isPickupOnLongIsland = pickupDistanceFromKFRG <= 50;
+    const isDeliveryOnLongIsland = deliveryDistanceFromKFRG <= 50;
 
-    const destAirports = destAirportsResponse.data?.qualified || [];
+    console.log(`Pickup ${isPickupOnLongIsland ? 'IS' : 'IS NOT'} on Long Island (${pickupDistanceFromKFRG.toFixed(1)}nm from KFRG)`);
+    console.log(`Delivery ${isDeliveryOnLongIsland ? 'IS' : 'IS NOT'} on Long Island (${deliveryDistanceFromKFRG.toFixed(1)}nm from KFRG)`);
 
-    if (originAirports.length === 0 || destAirports.length === 0) {
-      throw new Error('No qualified airports found within range');
+    // Determine departure and arrival airports
+    let departureAirport = KFRG;
+    let arrivalAirport = KFRG;
+
+    // If pickup is NOT on Long Island, find nearest qualified airport
+    if (!isPickupOnLongIsland) {
+      const pickupAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
+        body: { location: pickupLocation, maxDistance: 50 }
+      });
+      const pickupAirports = pickupAirportsResponse.data?.qualified || [];
+      if (pickupAirports.length > 0) {
+        departureAirport = pickupAirports[0];
+      }
     }
 
-    const originAirport = originAirports[0];
-    const destAirport = destAirports[0];
+    // If delivery is NOT on Long Island, find nearest qualified airport
+    if (!isDeliveryOnLongIsland) {
+      const deliveryAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
+        body: { location: deliveryLocation, maxDistance: 50 }
+      });
+      const deliveryAirports = deliveryAirportsResponse.data?.qualified || [];
+      if (deliveryAirports.length > 0) {
+        arrivalAirport = deliveryAirports[0];
+      }
+    }
 
-    console.log(`Using airports: ${originAirport.code} -> ${destAirport.code}`);
+    console.log(`Three-leg trip: KFRG -> ${departureAirport.code} -> ${arrivalAirport.code}`);
 
-    // Step 2: Try to get FAA preferred route
-    let routeString = await getFAARoute(originAirport.code, destAirport.code, supabase);
+    // Step 2: Calculate Leg 1 - KFRG to Pickup Hospital (ground only)
+    const departureTime = new Date(departureDateTime);
+    const departureHour = departureTime.getHours();
+    const dayOfWeek = departureTime.getDay();
+    const isRushHour = (departureHour >= 7 && departureHour <= 9) || (departureHour >= 16 && departureHour <= 19);
+    const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+    
+    let trafficMultiplier = 1.0;
+    if (isRushHour && isWeekday) {
+      trafficMultiplier = 1.4;
+    } else if (departureHour >= 6 && departureHour <= 20) {
+      trafficMultiplier = 1.15;
+    }
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      trafficMultiplier *= 0.9;
+    }
+
+    const leg1Data = await calculateGroundSegmentEnhanced(
+      { lat: KFRG.lat, lng: KFRG.lng },
+      pickupLocation,
+      trafficMultiplier
+    );
+
+    // Step 3: Calculate Leg 2 - Pickup Hospital to Departure Airport (ground only)
+    const leg2Data = await calculateGroundSegmentEnhanced(
+      pickupLocation,
+      { lat: departureAirport.lat, lng: departureAirport.lng },
+      trafficMultiplier
+    );
+
+    // Step 4: Try to get FAA preferred route for flight
+    let routeString = await getFAARoute(departureAirport.code, arrivalAirport.code, supabase);
     let routeDistanceNM = null;
     let routeSource = 'great-circle';
 
     if (routeString) {
       console.log(`Found FAA preferred route: ${routeString}`);
       try {
-        const parsedRoute = await parseRoute(routeString, originAirport, destAirport, supabase);
+        const parsedRoute = await parseRoute(routeString, departureAirport, arrivalAirport, supabase);
         routeDistanceNM = parsedRoute.totalDistanceNM;
         routeSource = 'faa-preferred';
       } catch (error) {
@@ -73,10 +127,10 @@ serve(async (req) => {
       }
     }
 
-    // Step 3: Get detailed airport data and weather
-    const [originData, destData] = await Promise.all([
-      fetchAndParseAirNav(originAirport.code, false),
-      fetchAndParseAirNav(destAirport.code, false)
+    // Step 5: Get detailed airport data and weather
+    const [departureData, arrivalData] = await Promise.all([
+      fetchAndParseAirNav(departureAirport.code, false),
+      fetchAndParseAirNav(arrivalAirport.code, false)
     ]);
 
     // Step 4: Calculate ground segments with enhanced OSRM and traffic
