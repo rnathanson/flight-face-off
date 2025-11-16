@@ -138,15 +138,17 @@ serve(async (req) => {
       destinationAirport.code !== KFRG.code && destinationAirport.code !== pickupAirport.code ? fetchAndParseAirNav(destinationAirport.code, false) : Promise.resolve(null)
     ]);
 
+    // Leg 1 is outbound - use current METAR for both airports
     const leg1FlightResult = pickupAirport.code === KFRG.code 
-      ? { minutes: 0, weatherDelay: 0, headwind: 0 } 
+      ? { minutes: 0, weatherDelay: 0, headwind: 0 }
       : calculateFlightTime(
           leg1FlightDistance,
           config,
           kfrgData,
           pickupAirportData || kfrgData,
           KFRG,
-          pickupAirport
+          pickupAirport,
+          false // Use METAR for arrival
         );
 
     // === LEG 2: Pickup Airport to Pickup Hospital (GROUND) ===
@@ -190,6 +192,7 @@ serve(async (req) => {
       destinationAirport.lng
     ));
 
+    // Leg 4 is return flight - use TAF for arrival forecast if available
     const leg4FlightResult = pickupAirport.code === destinationAirport.code 
       ? { minutes: 0, weatherDelay: 0, headwind: 0 }
       : calculateFlightTime(
@@ -198,7 +201,8 @@ serve(async (req) => {
           pickupAirportData || kfrgData,
           destinationAirportData || kfrgData,
           pickupAirport,
-          destinationAirport
+          destinationAirport,
+          true // Use TAF for arrival (forecasted conditions)
         );
 
     // === LEG 5: Destination Airport to Delivery Hospital (GROUND) ===
@@ -381,17 +385,33 @@ serve(async (req) => {
   }
 });
 
+function parseTAFWind(tafString: string): { direction: number | 'VRB'; speed: number } | null {
+  if (!tafString) return null;
+  
+  // TAF format: wind is similar to METAR (e.g., "28015G22KT" or "VRB05KT")
+  // Extract the first wind group after the timestamp
+  const windMatch = tafString.match(/(VRB|\d{3})(\d{2,3})(?:G(\d{2,3}))?KT/);
+  if (windMatch) {
+    return {
+      direction: windMatch[1] === 'VRB' ? 'VRB' : parseInt(windMatch[1], 10),
+      speed: parseInt(windMatch[2], 10)
+    };
+  }
+  return null;
+}
+
 function calculateFlightTime(
   distanceNM: number,
   config: any,
   departureData: any,
   arrivalData: any,
   departureAirport: any,
-  arrivalAirport: any
+  arrivalAirport: any,
+  useArrivalTAF: boolean = false
 ): { minutes: number; weatherDelay: number; headwind: number } {
   if (distanceNM === 0) return { minutes: 0, weatherDelay: 0, headwind: 0 };
 
-  // Determine altitude
+  // Determine altitude based on distance
   let cruiseAltitudeFt: number;
   if (distanceNM < 100) {
     cruiseAltitudeFt = config.altitude_rules.under_100nm.max_ft;
@@ -401,11 +421,12 @@ function calculateFlightTime(
     cruiseAltitudeFt = config.altitude_rules.over_350nm.max_ft;
   }
 
-  // Parse weather
+  // Parse departure weather (always use METAR)
   let headwind = 0;
   let weatherDelay = 0;
   let departureMetar = null;
   let arrivalMetar = null;
+  let arrivalWind = null;
 
   if (departureData?.metar) {
     departureMetar = parseMETAR(departureData.metar.raw);
@@ -414,14 +435,29 @@ function calculateFlightTime(
     }
   }
 
-  if (arrivalData?.metar) {
+  // For arrival: use TAF if requested (return flight), otherwise METAR
+  if (useArrivalTAF && arrivalData?.taf) {
+    // Parse wind from TAF for forecasted conditions
+    const tafWind = parseTAFWind(arrivalData.taf.raw);
+    if (tafWind) {
+      arrivalWind = tafWind;
+    }
+    // Still check METAR for weather delay estimate if no TAF weather parsing
+    if (arrivalData?.metar) {
+      arrivalMetar = parseMETAR(arrivalData.metar.raw);
+      if (arrivalMetar) {
+        weatherDelay += getWeatherDelayMinutes(arrivalMetar) * 0.7; // Reduce impact since it's forecast
+      }
+    }
+  } else if (arrivalData?.metar) {
     arrivalMetar = parseMETAR(arrivalData.metar.raw);
     if (arrivalMetar) {
       weatherDelay += getWeatherDelayMinutes(arrivalMetar);
+      arrivalWind = arrivalMetar.wind;
     }
   }
 
-  // Calculate course
+  // Calculate course for headwind component
   const course = calculateCourse(
     departureAirport.lat,
     departureAirport.lng,
@@ -429,10 +465,10 @@ function calculateFlightTime(
     arrivalAirport.lng
   );
 
-  // Average wind if both available
-  if (departureMetar && arrivalMetar) {
+  // Calculate headwind component for this specific flight direction
+  if (departureMetar && arrivalWind) {
     const depWindDir = typeof departureMetar.wind.direction === 'number' ? departureMetar.wind.direction : 0;
-    const arrWindDir = typeof arrivalMetar.wind.direction === 'number' ? arrivalMetar.wind.direction : 0;
+    const arrWindDir = typeof arrivalWind.direction === 'number' ? arrivalWind.direction : 0;
     
     const depHeadwind = calculateHeadwindComponent(
       depWindDir,
@@ -441,7 +477,7 @@ function calculateFlightTime(
     );
     const arrHeadwind = calculateHeadwindComponent(
       arrWindDir,
-      arrivalMetar.wind.speed,
+      arrivalWind.speed,
       course
     );
     headwind = (depHeadwind + arrHeadwind) / 2;
@@ -452,9 +488,16 @@ function calculateFlightTime(
       departureMetar.wind.speed,
       course
     );
+  } else if (arrivalWind) {
+    const arrWindDir = typeof arrivalWind.direction === 'number' ? arrivalWind.direction : 0;
+    headwind = calculateHeadwindComponent(
+      arrWindDir,
+      arrivalWind.speed,
+      course
+    );
   }
 
-  // Calculate flight time
+  // Calculate flight time with proper altitude-based performance
   const climbTimeMin = cruiseAltitudeFt / config.climb_rate_fpm;
   const descentTimeMin = cruiseAltitudeFt / config.descent_rate_fpm;
   

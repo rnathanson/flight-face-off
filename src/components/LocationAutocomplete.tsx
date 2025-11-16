@@ -54,7 +54,7 @@ export function LocationAutocomplete({
 
     const searchTimeout = setTimeout(async () => {
       setIsSearching(true);
-      const results = await searchLocations(value, 5);
+      const results = await searchLocations(value, 15);
       setSuggestions(results);
       setShowSuggestions(results.length > 0);
       setIsSearching(false);
@@ -120,7 +120,7 @@ export function LocationAutocomplete({
         )}
         
         {showSuggestions && suggestions.length > 0 && (
-          <Card className="absolute z-50 w-full mt-2 max-h-80 overflow-auto shadow-elevated">
+          <Card className="absolute z-50 w-full mt-2 max-h-[32rem] overflow-auto shadow-elevated">
             <div className="divide-y">
               {suggestions.map((suggestion) => (
                 <button
