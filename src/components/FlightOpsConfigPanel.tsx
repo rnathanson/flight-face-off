@@ -249,6 +249,18 @@ export function FlightOpsConfigPanel() {
                 Time for one taxi operation (×2 per flight leg: taxi-out + taxi-in)
               </p>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="ground_handling_time">Ground Handling Time (minutes)</Label>
+              <Input
+                id="ground_handling_time"
+                type="number"
+                value={config.ground_handling_time_min}
+                onChange={(e) => updateField('ground_handling_time_min', parseInt(e.target.value))}
+              />
+              <p className="text-sm text-muted-foreground">
+                Patient loading/unloading, refueling, and ground operations
+              </p>
+            </div>
           </div>
 
           <Separator />

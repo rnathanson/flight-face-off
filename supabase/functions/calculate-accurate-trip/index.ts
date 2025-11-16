@@ -289,6 +289,8 @@ serve(async (req) => {
     );
 
     // Build segments
+    const groundHandlingTime = config.ground_handling_time_min || 15;
+    
     const segments = [
       ...(pickupAirport.code !== KFRG.code ? [{
         type: 'flight' as const,
@@ -297,6 +299,14 @@ serve(async (req) => {
         duration: leg1FlightResult.minutes,
         distance: leg1FlightDistance,
         route: leg1RouteSource
+      }] : []),
+      ...(pickupAirport.code !== KFRG.code ? [{
+        type: 'ground_handling' as const,
+        from: `${pickupAirport.code} (Pickup Airport)`,
+        to: `${pickupAirport.code} (Pickup Airport)`,
+        duration: groundHandlingTime,
+        distance: 0,
+        description: 'Patient loading & refueling'
       }] : []),
       {
         type: 'ground' as const,
@@ -324,6 +334,14 @@ serve(async (req) => {
         distance: leg4FlightDistance,
         route: leg4RouteSource
       }] : []),
+      ...(pickupAirport.code !== destinationAirport.code ? [{
+        type: 'ground_handling' as const,
+        from: `${destinationAirport.code}${destinationAirport.code === KFRG.code ? ' (Home Base)' : ' (Destination Airport)'}`,
+        to: `${destinationAirport.code}${destinationAirport.code === KFRG.code ? ' (Home Base)' : ' (Destination Airport)'}`,
+        duration: groundHandlingTime,
+        distance: 0,
+        description: 'Patient unloading'
+      }] : []),
       {
         type: 'ground' as const,
         from: `${destinationAirport.code}${destinationAirport.code === KFRG.code ? ' (Home Base)' : ' (Destination Airport)'}`,
@@ -334,6 +352,8 @@ serve(async (req) => {
         polyline: leg5Data.polyline
       }
     ];
+
+    console.log(`🏥 Ground handling: ${groundHandlingTime}min added at pickup${pickupAirport.code !== destinationAirport.code ? ` and destination airports` : ' airport'}`);
 
     const totalTime = segments.reduce((sum, seg) => sum + seg.duration, 0);
     const arrivalTime = new Date(departureTime.getTime() + totalTime * 60 * 1000);
