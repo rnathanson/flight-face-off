@@ -539,19 +539,47 @@ async function calculateFlightTime(
     arrivalAirport.lng
   );
 
-  // Calculate midpoint for winds aloft lookup
-  const midLat = (departureAirport.lat + arrivalAirport.lat) / 2;
-  const midLng = (departureAirport.lng + arrivalAirport.lng) / 2;
+  // Calculate climb/descent distances for wind sampling
+  const climbRateFpm = config.climb_rate_fpm || 3000;
+  const descentRateFpm = config.descent_rate_fpm || 2000;
+  const speedBelowFL100 = config.speed_below_fl100_kias || 250;
+  
+  const climbPhaseMin = cruiseAltitudeFt / climbRateFpm;
+  const descentPhaseMin = cruiseAltitudeFt / descentRateFpm;
+  const climbPhaseNM = (speedBelowFL100 * 0.8 * climbPhaseMin) / 60;
+  const descentPhaseNM = (speedBelowFL100 * 0.9 * descentPhaseMin) / 60;
 
-  // Fetch winds aloft at cruise altitude
+  // Build waypoint array for multi-point wind sampling
+  let windSampleWaypoints: Array<{lat: number, lng: number, code?: string}>;
+
+  if (routeWaypoints && routeWaypoints.length >= 2) {
+    windSampleWaypoints = routeWaypoints;
+    console.log(`Using ${routeWaypoints.length} route waypoints for wind sampling`);
+  } else {
+    windSampleWaypoints = [
+      { lat: departureAirport.lat, lng: departureAirport.lng, code: departureAirport.code },
+      { lat: arrivalAirport.lat, lng: arrivalAirport.lng, code: arrivalAirport.code }
+    ];
+    console.log('Using departure/arrival endpoints for wind sampling');
+  }
+
+  // Fetch averaged winds along route using multi-point sampling
   let cruiseWinds = null;
   try {
-    cruiseWinds = await fetchWindsAloft(midLat, midLng, cruiseAltitudeFt, forecastHours, nearestAirport);
+    cruiseWinds = await fetchAverageWindsAlongRoute(
+      windSampleWaypoints,
+      cruiseAltitudeFt,
+      distanceNM,
+      climbPhaseNM,
+      descentPhaseNM
+    );
+    
     if (cruiseWinds) {
-      console.log(`Fetched winds aloft at ${cruiseAltitudeFt}ft: ${cruiseWinds.direction}° @ ${cruiseWinds.speed}kt from station ${cruiseWinds.station}`);
+      console.log(`✓ Averaged winds from ${cruiseWinds.sampleCount} points using stations: ${cruiseWinds.stations?.join(', ')}`);
+      console.log(`  Result: ${cruiseWinds.direction}° @ ${cruiseWinds.speed}kt`);
     }
   } catch (error) {
-    console.warn('Failed to fetch winds aloft:', error);
+    console.warn('Failed to fetch route-averaged winds, calculation will use fallback:', error);
   }
 
   // Calculate headwind component using winds aloft for cruise or fallback to surface winds

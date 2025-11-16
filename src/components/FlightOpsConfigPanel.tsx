@@ -20,16 +20,22 @@ export function FlightOpsConfigPanel() {
 
   const loadConfig = async () => {
     try {
+      console.log('Loading flight ops config...');
       const { data, error } = await supabase
         .from('flight_ops_config')
         .select('*')
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error loading config:', error);
+        throw error;
+      }
+      
+      console.log('Config loaded successfully:', data);
       setConfig(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading config:', error);
-      toast.error('Failed to load configuration');
+      toast.error(`Failed to load configuration: ${error.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
