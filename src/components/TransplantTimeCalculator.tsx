@@ -952,6 +952,25 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       const isPickupHospital = segment.to.toLowerCase().includes('pickup hospital');
                       const isDeliveryHospital = segment.to.toLowerCase().includes('delivery hospital');
                       
+                      // Calculate cumulative time up to this segment's arrival
+                      const cumulativeMinutes = tripResult.segments
+                        .slice(0, index + 1)
+                        .reduce((sum, seg) => sum + seg.duration, 0);
+                      
+                      // Calculate arrival time for this segment
+                      const segmentArrivalTime = new Date(
+                        departureDate.getFullYear(), 
+                        departureDate.getMonth(), 
+                        departureDate.getDate(), 
+                        parseInt(departureTime.split(':')[0]), 
+                        parseInt(departureTime.split(':')[1])
+                      ).getTime() + cumulativeMinutes * 60000;
+                      
+                      const arrivalDate = new Date(segmentArrivalTime);
+                      const isSameDay = arrivalDate.getDate() === departureDate.getDate() && 
+                                       arrivalDate.getMonth() === departureDate.getMonth() &&
+                                       arrivalDate.getFullYear() === departureDate.getFullYear();
+                      
                       // Calculate time to pickup for subtotal after pickup hospital segment
                       let timeToPickupSubtotal = null;
                       if (isPickupHospital) {
@@ -1023,6 +1042,13 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                                   <span className="text-foreground">{segment.from}</span>
                                   <span className="text-muted-foreground">→</span>
                                   <span className="text-foreground">{segment.to}</span>
+                                </div>
+                                
+                                <div className="text-xs text-muted-foreground mt-2">
+                                  Arrives: {format(arrivalDate, 'h:mm a')}
+                                  {!isSameDay && (
+                                    <span className="ml-1">({format(arrivalDate, 'MMM d')})</span>
+                                  )}
                                 </div>
                               </div>
                               
