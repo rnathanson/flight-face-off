@@ -825,34 +825,31 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
           {/* Chief Pilot Approval Modal */}
           <Dialog open={showApprovalModal} onOpenChange={setShowApprovalModal}>
             <DialogContent className="sm:max-w-md">
-              <div className="flex flex-col items-center justify-center text-center space-y-6 py-8">
-                {/* Icon with gradient background circle */}
+              <div className="flex flex-col items-center gap-6 py-8">
+                {/* Warning Icon (matching loading spinner style) */}
                 <div className="relative">
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary/60 to-[#86efac] rounded-full blur-2xl opacity-30 animate-pulse" />
-                  <div className="relative bg-gradient-to-br from-primary/10 to-[#86efac]/10 border-4 border-primary/20 rounded-full p-6">
-                    <AlertTriangle className="w-16 h-16 text-primary" strokeWidth={2.5} />
+                  <div className="w-16 h-16 border-4 border-primary/20 rounded-full flex items-center justify-center">
+                    <AlertTriangle className="w-8 h-8 text-primary" strokeWidth={2.5} />
                   </div>
                 </div>
-
+                
                 {/* Title and Description */}
-                <div className="space-y-2">
-                  <h2 className="text-2xl font-bold text-foreground">
-                    Review Required
-                  </h2>
-                  <p className="text-muted-foreground">
+                <div className="text-center space-y-2">
+                  <h3 className="text-lg font-semibold">Review Required</h3>
+                  <p className="text-sm text-muted-foreground">
                     This trip is outside of normal guidelines
                   </p>
                 </div>
 
-                {/* Progress/Status Bar */}
-                <div className="w-full h-2 bg-gradient-to-r from-primary via-primary/80 to-[#86efac] rounded-full" />
+                {/* Progress Bar (static, full) */}
+                <Progress value={100} className="w-full max-w-xs" />
 
                 {/* Buttons */}
-                <div className="flex gap-3 w-full pt-2">
+                <div className="flex gap-3 w-full max-w-xs">
                   <Button 
                     variant="outline" 
                     onClick={() => setShowApprovalModal(false)}
-                    className="flex-1 h-11"
+                    className="flex-1"
                   >
                     Dismiss
                   </Button>
@@ -864,7 +861,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       });
                       setShowApprovalModal(false);
                     }}
-                    className="flex-1 h-11 bg-primary hover:bg-primary/90"
+                    className="flex-1"
                   >
                     Submit for Review
                   </Button>
