@@ -8,41 +8,24 @@ export interface TAFData {
 }
 
 /**
- * 3-Tier TAF Fallback Strategy:
- * 1. CheckWX Direct Lookup
- * 2. CheckWX Radius Search (100nm, max 200nm)
- * 3. AirNav Web Scraping
+ * REVISED STRATEGY - AirNav as Golden Standard:
+ * 1. AirNav (always has TAF or nearest TAF - RELIABLE)
+ * 2. CheckWX (optional enhancement if AirNav fails)
  */
 export async function fetchTAFWithFallback(airportCode: string): Promise<TAFData | null> {
   const icao = airportCode.toUpperCase();
   
-  // Tier 1: CheckWX Direct Lookup
-  console.log(`🔍 Tier 1: Attempting CheckWX direct lookup for ${icao}`);
-  const directTAF = await fetchCheckWXDirect(icao);
-  if (directTAF) {
-    console.log(`✅ CheckWX direct: Found TAF for ${icao} (distance=0nm)`);
-    return directTAF;
-  }
-  
-  // Tier 2: CheckWX Radius Search
-  console.log(`🔍 Tier 2: Attempting CheckWX radius search for ${icao} (100nm)`);
-  const radiusTAF = await fetchCheckWXRadius(icao);
-  if (radiusTAF) {
-    console.log(`✅ CheckWX radius: Found TAF from ${radiusTAF.source_airport} (distance=${radiusTAF.distance_nm}nm)`);
-    return radiusTAF;
-  }
-  
-  // Tier 3: AirNav Fallback
-  console.log(`🔍 Tier 3: Attempting AirNav web scraping for ${icao}`);
+  // PRIMARY: AirNav (reliable, always has TAF or nearest TAF)
+  console.log(`🔍 PRIMARY: Fetching TAF for ${icao} from AirNav...`);
   const airnavData = await fetchAndParseAirNav(icao, true); // weatherOnly = true
+  
   if (airnavData?.taf) {
-    console.log(`✅ AirNav: Found TAF from ${airnavData.taf.source_airport} (distance=${airnavData.taf.distance_nm}nm)`);
+    console.log(`✅ AirNav TAF: ${airnavData.taf.source_airport} (${airnavData.taf.distance_nm}nm)`);
     return airnavData.taf;
   }
   
-  // If we have METAR from AirNav, return it as fallback
   if (airnavData?.metar) {
-    console.log(`⚠️ No TAF found, using METAR from ${airnavData.metar.source_airport} (distance=${airnavData.metar.distance_nm}nm)`);
+    console.log(`⚠️ AirNav: No TAF available, using METAR from ${airnavData.metar.source_airport} as fallback`);
     return {
       raw: airnavData.metar.raw,
       source_airport: airnavData.metar.source_airport,
@@ -50,7 +33,25 @@ export async function fetchTAFWithFallback(airportCode: string): Promise<TAFData
     };
   }
   
-  console.log(`❌ No TAF or METAR found for ${icao} after all fallbacks`);
+  // ENHANCEMENT: Try CheckWX if AirNav mysteriously fails (very rare)
+  const apiKey = Deno.env.get('CHECKWX_API_KEY');
+  if (apiKey) {
+    console.log(`🔍 ENHANCEMENT: AirNav failed, trying CheckWX as backup...`);
+    
+    const directTAF = await fetchCheckWXDirect(icao);
+    if (directTAF) {
+      console.log(`✅ CheckWX direct lookup succeeded`);
+      return directTAF;
+    }
+    
+    const radiusTAF = await fetchCheckWXRadius(icao);
+    if (radiusTAF) {
+      console.log(`✅ CheckWX radius search succeeded (${radiusTAF.distance_nm}nm away)`);
+      return radiusTAF;
+    }
+  }
+  
+  console.log(`❌ Complete failure: No weather data from any source for ${icao}`);
   return null;
 }
 

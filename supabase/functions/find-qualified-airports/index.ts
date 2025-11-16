@@ -339,14 +339,52 @@ serve(async (req) => {
 
       // Parse TAF periods and select relevant one based on arrival time
       const tafPeriods = parseTAFPeriods(tafData.raw);
+      
+      if (tafPeriods.length === 0) {
+        console.log(`❌ TAF parsing returned 0 periods for ${airport.code}`);
+        qualifications.weather_ok = false;
+        qualifications.passed = false;
+        warnings.push('TAF parsing failed - no forecast periods found');
+        rejectedAirports.push({
+          code: airport.code,
+          name: airnavData.name || airport.name,
+          lat: airnavData.lat || airport.lat,
+          lng: airnavData.lng || airport.lng,
+          distance_nm: airport.distance_nm,
+          elevation_ft: airnavData.elevation_ft || 0,
+          qualifications,
+          warnings
+        });
+        continue;
+      }
+      
       const estimatedFlightMinutes = 60; // Rough estimate for arrival time
       const arrivalTime = new Date(Date.now() + estimatedFlightMinutes * 60000);
       const relevantPeriod = findRelevantTafPeriod(tafPeriods, arrivalTime);
+      
+      if (!relevantPeriod) {
+        console.log(`❌ No relevant TAF period found for ${airport.code} at arrival time ${arrivalTime.toISOString()}`);
+        qualifications.weather_ok = false;
+        qualifications.passed = false;
+        warnings.push(`No TAF forecast period valid for arrival time`);
+        rejectedAirports.push({
+          code: airport.code,
+          name: airnavData.name || airport.name,
+          lat: airnavData.lat || airport.lat,
+          lng: airnavData.lng || airport.lng,
+          distance_nm: airport.distance_nm,
+          elevation_ft: airnavData.elevation_ft || 0,
+          qualifications,
+          warnings
+        });
+        continue;
+      }
+      
+      console.log(`✓ Using TAF period valid from ${relevantPeriod.validFrom.toISOString()} to ${relevantPeriod.validTo.toISOString()}`);
 
       let windAnalysis: RunwayWindAnalysis | null = null;
 
-      if (relevantPeriod) {
-        // Check IFR conditions from TAF period
+      // Check IFR conditions from TAF period
         if (relevantPeriod.ceiling && relevantPeriod.ceiling < config.minimum_ceiling_ft) {
           console.log(`❌ Forecast ceiling ${relevantPeriod.ceiling}ft < ${config.minimum_ceiling_ft}ft minimum`);
           
@@ -379,12 +417,9 @@ serve(async (req) => {
         }
 
         // Check wind limits
-        console.log(`\n🛬 Wind checking for ${airport.code}:`, {
-          hasQualifyingRunways: qualifyingRunways.length > 0,
-          runwayCount: qualifyingRunways.length,
-          maxWindLimit: config.max_wind_kt,
-          maxCrosswindLimit: config.max_crosswind_kt
-        });
+        console.log(`🌬️ Wind checking for ${airport.code}...`);
+        console.log(`📋 TAF period raw text: ${relevantPeriod.raw}`);
+        console.log(`Wind limits: max ${config.max_wind_kt}kt total, max ${config.max_crosswind_kt}kt crosswind`);
 
         if (qualifyingRunways.length > 0 && relevantPeriod.wind) {
           const windData = {
@@ -393,7 +428,7 @@ serve(async (req) => {
             gust: relevantPeriod.wind.gust
           };
           
-          console.log(`Wind from TAF period for ${airport.code}:`, windData);
+          console.log(`📊 Extracted wind: ${windData.direction === -1 ? 'Variable' : windData.direction + '°'} at ${windData.speed}kt${windData.gust ? ` gusting ${windData.gust}kt` : ''}`);
 
           windAnalysis = analyzeBestRunway(windData, qualifyingRunways);
           
@@ -436,9 +471,6 @@ serve(async (req) => {
         } else {
           console.log(`⚠️ No wind data in TAF period for ${airport.code}`);
         }
-      } else {
-        console.log(`⚠️ No relevant TAF period found for ${airport.code}`);
-      }
 
       const qualifiedAirport: QualifiedAirport = {
         code: airport.code,

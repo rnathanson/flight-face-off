@@ -66,11 +66,12 @@ export function parseTAFPeriods(tafRaw: string): TAFPeriod[] {
   // Sort periods by validFrom
   periods.sort((a, b) => a.validFrom.getTime() - b.validFrom.getTime());
   
-  console.log(`📅 Parsed ${periods.length} TAF periods:`, periods.map(p => ({
-    from: p.validFrom.toISOString(),
-    to: p.validTo.toISOString(),
-    wind: p.wind
-  })));
+  console.log(`📅 Parsed ${periods.length} TAF periods`);
+  if (periods.length > 0) {
+    periods.forEach((p, i) => {
+      console.log(`  Period ${i + 1}: ${p.validFrom.toISOString()} to ${p.validTo.toISOString()} - Wind: ${p.wind?.direction}° at ${p.wind?.speed}kt`);
+    });
+  }
   
   return periods;
 }
