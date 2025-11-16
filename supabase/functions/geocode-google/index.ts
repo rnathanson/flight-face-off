@@ -108,16 +108,44 @@ serve(async (req) => {
       const addressFirstPart = result.formatted_address?.split(',')[0].trim();
       const hasPlaceName = result.name && result.name !== addressFirstPart;
       
-      // If we have a business/place name, use it. Otherwise use the address first part
-      const placeName = hasPlaceName 
+      let placeName = hasPlaceName 
         ? result.name
         : addressFirstPart || prediction.description.split(',')[0];
+      
+      // If we only have an address (no named place), try to find a business at this location
+      if (!hasPlaceName) {
+        try {
+          const lat = result.geometry.location.lat;
+          const lng = result.geometry.location.lng;
+          const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=50&key=${GOOGLE_MAPS_KEY}`;
+          
+          const nearbyResponse = await fetch(nearbyUrl);
+          const nearbyData = await nearbyResponse.json();
+          
+          if (nearbyData.status === 'OK' && nearbyData.results && nearbyData.results.length > 0) {
+            // Look for a hospital or prominent business at this exact location
+            const nearbyPlace = nearbyData.results.find((place: any) => 
+              place.types?.includes('hospital') || 
+              place.types?.includes('health') ||
+              place.types?.includes('doctor')
+            ) || nearbyData.results[0];
+            
+            if (nearbyPlace && nearbyPlace.name && nearbyPlace.name !== addressFirstPart) {
+              placeName = nearbyPlace.name;
+              console.log(`Found nearby place: ${placeName} at ${addressFirstPart}`);
+            }
+          }
+        } catch (error) {
+          console.warn('Nearby search failed:', error);
+          // Continue with address-based name
+        }
+      }
       
       // Always provide both name and full address for comprehensive display
       return {
         name: placeName,
         address: result.formatted_address,
-        display_name: result.formatted_address, // Use full address as display_name for clarity
+        display_name: result.formatted_address,
         lat: result.geometry.location.lat.toString(),
         lon: result.geometry.location.lng.toString(),
         place_id: prediction.place_id,
