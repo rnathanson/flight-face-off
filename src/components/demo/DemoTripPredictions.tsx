@@ -166,9 +166,7 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
         .order('full_name');
       if (crewData) {
         setAvailableCrew(crewData as unknown as CrewMember[]);
-        // Pre-select top 2 by success rate
-        const topCrew = [...(crewData as unknown as CrewMember[])].sort((a, b) => b.success_rate - a.success_rate).slice(0, 2);
-        setSelectedCrew(topCrew);
+        // Don't pre-select crew - let user choose based on organ-specific stats
       }
     };
     fetchData();
@@ -684,68 +682,106 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Case Number Lookup */}
-          <div className="space-y-2">
-            <Label>Case Number (Optional - CRM Integration)</Label>
-            <div className="flex gap-2">
-              <Input
-                value={caseNumber}
-                onChange={(e) => setCaseNumber(e.target.value.toUpperCase())}
-                placeholder="Enter case number (e.g., TXP-2024-001)"
-                maxLength={20}
-                onKeyDown={(e) => e.key === 'Enter' && lookupCaseNumber()}
-              />
-              <Button 
-                onClick={lookupCaseNumber}
-                disabled={loadingCase || caseNumber.length < 3}
-                variant="secondary"
-              >
-                {loadingCase ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Loading...
-                  </>
-                ) : (
-                  'Lookup'
-                )}
-              </Button>
+          {/* Organ Type and Case Number Row */}
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Organ Type Selection - Left */}
+            <div className="space-y-2">
+              <Label>Organ Type / Mission Profile</Label>
+              <Select value={organType} onValueChange={setOrganType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select organ type..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {missionTypes.map((mt) => (
+                    <SelectItem key={mt.id} value={mt.organ_type}>
+                      <div className="flex items-center gap-2">
+                        <Heart className="w-4 h-4" />
+                        <span className="capitalize">{mt.organ_type}</span>
+                        <span className="text-muted-foreground text-xs">
+                          ({mt.min_viability_hours}-{mt.max_viability_hours}h viability)
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedMissionType && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+                  <Heart className="w-4 h-4" />
+                  <span>
+                    Viability Window: {selectedMissionType.min_viability_hours}-{selectedMissionType.max_viability_hours} hours
+                  </span>
+                </div>
+              )}
             </div>
-            {caseData && (
-              <div className="mt-3 p-4 bg-accent/10 rounded-md border border-accent/20 space-y-2 animate-fade-in">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-semibold text-sm flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-success" />
-                    Case Details Retrieved
-                  </h4>
-                  <Badge variant={caseData.priority === 'Critical' ? 'destructive' : caseData.priority === 'Urgent' ? 'secondary' : 'default'}>
-                    {caseData.priority}
-                  </Badge>
+
+            {/* Case Number Lookup - Right */}
+            <div className="space-y-2">
+              <Label>Case Number (Optional - CRM)</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={caseNumber}
+                  onChange={(e) => setCaseNumber(e.target.value.toUpperCase())}
+                  placeholder="e.g., TXP-2024-001"
+                  maxLength={20}
+                  onKeyDown={(e) => e.key === 'Enter' && lookupCaseNumber()}
+                  className="max-w-xs"
+                />
+                <Button 
+                  onClick={lookupCaseNumber}
+                  disabled={loadingCase || caseNumber.length < 3}
+                  variant="secondary"
+                  size="sm"
+                >
+                  {loadingCase ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Lookup
+                    </>
+                  ) : (
+                    'Lookup'
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Case Data Display - Full Width Below */}
+          {caseData && (
+            <div className="p-4 bg-accent/10 rounded-md border border-accent/20 space-y-2 animate-fade-in">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-success" />
+                  Case Details Retrieved
+                </h4>
+                <Badge variant={caseData.priority === 'Critical' ? 'destructive' : caseData.priority === 'Urgent' ? 'secondary' : 'default'}>
+                  {caseData.priority}
+                </Badge>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Patient ID:</span>
+                  <p className="font-medium">{caseData.patientId}</p>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Patient ID:</span>
-                    <p className="font-medium">{caseData.patientId}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Organ Type:</span>
-                    <p className="font-medium capitalize">{caseData.organType}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Insurance:</span>
-                    <p className="font-medium">{caseData.insurance}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Policy #:</span>
-                    <p className="font-medium">{caseData.policyNumber}</p>
-                  </div>
+                <div>
+                  <span className="text-muted-foreground">Organ Type:</span>
+                  <p className="font-medium capitalize">{caseData.organType}</p>
                 </div>
-                <div className="pt-2 border-t border-accent/20">
-                  <span className="text-muted-foreground text-xs">Coordinator Notes:</span>
-                  <p className="text-sm mt-1">{caseData.coordinatorNotes}</p>
+                <div>
+                  <span className="text-muted-foreground">Insurance:</span>
+                  <p className="font-medium">{caseData.insurance}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Policy #:</span>
+                  <p className="font-medium">{caseData.policyNumber}</p>
                 </div>
               </div>
-            )}
-          </div>
+              <div className="pt-2 border-t border-accent/20">
+                <span className="text-muted-foreground text-xs">Coordinator Notes:</span>
+                <p className="text-sm mt-1">{caseData.coordinatorNotes}</p>
+              </div>
+            </div>
+          )}
 
           <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -776,39 +812,17 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Organ Type / Mission Profile</Label>
-            <Select value={organType} onValueChange={setOrganType}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select organ type..." />
-              </SelectTrigger>
-              <SelectContent>
-                {missionTypes.map((mt) => (
-                  <SelectItem key={mt.id} value={mt.organ_type}>
-                    <div className="flex items-center gap-2">
-                      <Heart className="w-4 h-4" />
-                      <span className="capitalize">{mt.organ_type}</span>
-                      <span className="text-muted-foreground text-xs">
-                        ({mt.min_viability_hours}-{mt.max_viability_hours}h viability)
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedMissionType && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-                <Heart className="w-4 h-4" />
-                <span>
-                  Viability Window: {selectedMissionType.min_viability_hours}-{selectedMissionType.max_viability_hours} hours
-                </span>
-              </div>
-            )}
-          </div>
-
           {/* Flight Crew Selection */}
           <div className="space-y-2">
             <Label>Flight Crew (Select 2 Pilots)</Label>
+            {!organType && (
+              <div className="p-3 bg-accent/10 rounded-md border border-accent/30 flex items-center gap-2 mb-2">
+                <AlertTriangle className="w-4 h-4 text-warning" />
+                <p className="text-sm text-muted-foreground">
+                  Select an organ type above to see specialized team recommendations
+                </p>
+              </div>
+            )}
             <div className="grid md:grid-cols-2 gap-2">
               {availableCrew.map((crew) => {
                 const isSelected = selectedCrew.find(c => c.id === crew.id);
@@ -840,9 +854,7 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
                               {organType.charAt(0).toUpperCase() + organType.slice(1)}: {crew.organ_experience[organType].missions} missions • {crew.organ_experience[organType].success_rate}% success
                             </>
                           ) : (
-                            <>
-                              {crew.total_missions} missions • {crew.success_rate}% success
-                            </>
+                            <span className="text-muted-foreground/50">Select organ type to view stats</span>
                           )}
                         </p>
                       </div>
@@ -886,14 +898,13 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
                       >
                         <p className="font-medium text-sm">{doc.full_name}</p>
                         <p className="text-xs text-muted-foreground">
+                          {doc.specialty && <span className="mr-1">{doc.specialty}</span>}
                           {organType && doc.organ_experience?.[organType] ? (
                             <>
-                              {doc.specialty} • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {doc.organ_experience[organType].missions} cases • {doc.organ_experience[organType].success_rate}% success
+                              • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {doc.organ_experience[organType].missions} cases • {doc.organ_experience[organType].success_rate}% success
                             </>
                           ) : (
-                            <>
-                              {doc.specialty} • {doc.total_missions} missions • {doc.success_rate}% success
-                            </>
+                            <span className="text-muted-foreground/50">• Select organ type to view experience</span>
                           )}
                         </p>
                       </button>
@@ -908,14 +919,13 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
                     <div className="flex-1">
                       <p className="font-medium text-sm">{selectedLeadDoctor.full_name}</p>
                       <p className="text-xs text-muted-foreground">
+                        {selectedLeadDoctor.specialty && <span className="mr-1">{selectedLeadDoctor.specialty}</span>}
                         {organType && selectedLeadDoctor.organ_experience?.[organType] ? (
                           <>
-                            {selectedLeadDoctor.specialty} • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {selectedLeadDoctor.organ_experience[organType].missions} cases • {selectedLeadDoctor.organ_experience[organType].success_rate}% success
+                            • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {selectedLeadDoctor.organ_experience[organType].missions} cases • {selectedLeadDoctor.organ_experience[organType].success_rate}% success
                           </>
                         ) : (
-                          <>
-                            {selectedLeadDoctor.specialty} • {selectedLeadDoctor.total_missions} missions • {selectedLeadDoctor.success_rate}% success
-                          </>
+                          <span className="text-muted-foreground/50">• Select organ type to view experience</span>
                         )}
                       </p>
                     </div>
@@ -954,14 +964,13 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
                             >
                               <p className="font-medium text-sm">{surgeon.full_name}</p>
                               <p className="text-xs text-muted-foreground">
+                                {surgeon.specialty && <span className="mr-1">{surgeon.specialty}</span>}
                                 {organType && surgeon.organ_experience?.[organType] ? (
                                   <>
-                                    {surgeon.specialty} • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {surgeon.organ_experience[organType].missions} cases • {surgeon.organ_experience[organType].success_rate}% success
+                                    • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {surgeon.organ_experience[organType].missions} cases • {surgeon.organ_experience[organType].success_rate}% success
                                   </>
                                 ) : (
-                                  <>
-                                    {surgeon.specialty} • {surgeon.total_missions} missions
-                                  </>
+                                  <span className="text-muted-foreground/50">• Select organ type to view experience</span>
                                 )}
                               </p>
                             </button>
@@ -1039,7 +1048,13 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
                     >
                       <p className="font-medium text-sm">{coord.full_name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {coord.total_missions} missions • {coord.success_rate}% coordination success
+                        {organType && coord.organ_experience?.[organType] ? (
+                          <>
+                            {organType.charAt(0).toUpperCase() + organType.slice(1)}: {coord.organ_experience[organType].missions} cases • {coord.organ_experience[organType].success_rate}% success
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground/50">Select organ type to view experience</span>
+                        )}
                       </p>
                     </button>
                   ))}
@@ -1053,7 +1068,13 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
                   <div className="flex-1">
                     <p className="font-medium text-sm">{selectedCoordinator.full_name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {selectedCoordinator.total_missions} missions • {selectedCoordinator.success_rate}% success
+                      {organType && selectedCoordinator.organ_experience?.[organType] ? (
+                        <>
+                          {organType.charAt(0).toUpperCase() + organType.slice(1)}: {selectedCoordinator.organ_experience[organType].missions} cases • {selectedCoordinator.organ_experience[organType].success_rate}% success
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground/50">Select organ type to view experience</span>
+                      )}
                     </p>
                   </div>
                 </div>
