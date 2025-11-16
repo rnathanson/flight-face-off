@@ -129,7 +129,7 @@ export function LocationAutocomplete({
                       <div className="font-semibold text-base mb-0.5">
                         {suggestion.name || suggestion.address}
                       </div>
-                      {suggestion.name && (
+                      {suggestion.name && suggestion.name !== suggestion.address && (
                         <div className="text-xs text-muted-foreground">
                           {suggestion.address}
                         </div>

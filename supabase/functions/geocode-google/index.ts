@@ -104,20 +104,16 @@ serve(async (req) => {
 
       const result = detailsData.result;
       
-      // Determine if this is a meaningful place name or just an address
-      const isEstablishment = result.types?.some(type => 
-        ['hospital', 'health', 'establishment', 'point_of_interest', 'doctor', 'pharmacy', 'medical_center'].some(medical => type.includes(medical))
-      );
-      
-      // Use the structured name if it's a real place, otherwise use the description which might have the place name
-      const placeName = isEstablishment && result.name !== result.formatted_address?.split(',')[0] 
-        ? result.name 
-        : prediction.description.split(',')[0];
+      // Use Google's place name unless it's just the street address
+      const addressFirstPart = result.formatted_address?.split(',')[0].trim();
+      const placeName = result.name && result.name !== addressFirstPart
+        ? result.name
+        : addressFirstPart || prediction.description.split(',')[0];
       
       return {
         name: placeName,
         address: result.formatted_address,
-        display_name: `${placeName}\n${result.formatted_address}`,
+        display_name: placeName,
         lat: result.geometry.location.lat.toString(),
         lon: result.geometry.location.lng.toString(),
         place_id: prediction.place_id,
