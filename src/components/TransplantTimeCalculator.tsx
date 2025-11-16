@@ -116,12 +116,23 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         const { data, error } = await supabase.functions.invoke('get-mapbox-token');
         if (error) throw error;
         setMapboxToken(data.token);
+        console.log('Mapbox token loaded successfully');
       } catch (error) {
         console.error('Error fetching Mapbox token:', error);
       }
     };
     fetchToken();
   }, []);
+
+  // Resize map when modal closes
+  useEffect(() => {
+    if (!showApprovalModal && map.current) {
+      console.log('Modal closed, resizing map');
+      setTimeout(() => {
+        map.current?.resize();
+      }, 100);
+    }
+  }, [showApprovalModal]);
 
   const formatDuration = (minutes: number): string => {
     const hours = Math.floor(minutes / 60);
@@ -280,13 +291,21 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         setShowApprovalModal(true);
       }
       
+      // Initialize map after a delay to ensure container is rendered
+      // If modal is shown, wait for it to potentially be dismissed
       setTimeout(() => {
-        if (mapboxToken && mapContainer.current && !map.current) {
-          initializeMap(result, data.segments);
-        } else if (map.current && mapboxToken) {
-          updateMap(result, data.segments);
+        if (mapboxToken && mapContainer.current) {
+          if (!map.current) {
+            console.log('Initializing new map');
+            initializeMap(result, data.segments);
+          } else {
+            console.log('Updating existing map');
+            // Force resize in case container dimensions changed
+            map.current.resize();
+            updateMap(result, data.segments);
+          }
         }
-      }, 100);
+      }, result.chiefPilotApproval?.required ? 500 : 100);
       
       toast({
         title: 'Trip Calculated',
@@ -306,31 +325,48 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
   };
 
   const initializeMap = (result: TripResult, segments?: TripSegment[]) => {
-    if (!mapContainer.current || !mapboxToken) return;
+    if (!mapContainer.current || !mapboxToken) {
+      console.log('Cannot initialize map:', { hasContainer: !!mapContainer.current, hasToken: !!mapboxToken });
+      return;
+    }
 
-    mapboxgl.accessToken = mapboxToken;
+    try {
+      mapboxgl.accessToken = mapboxToken;
 
-    const origin = result.route?.pickupLocation;
-    const destination = result.route?.deliveryLocation;
-    
-    if (!origin || !destination) return;
-    
-    const centerLng = (origin.lon + destination.lon) / 2;
-    const centerLat = (origin.lat + destination.lat) / 2;
+      const origin = result.route?.pickupLocation;
+      const destination = result.route?.deliveryLocation;
+      
+      if (!origin || !destination) {
+        console.log('Missing origin or destination for map');
+        return;
+      }
+      
+      const centerLng = (origin.lon + destination.lon) / 2;
+      const centerLat = (origin.lat + destination.lat) / 2;
 
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/light-v11',
-      center: [centerLng, centerLat],
-      zoom: 6,
-      attributionControl: false,
-    });
+      console.log('Initializing map with center:', { centerLng, centerLat });
 
-    map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+      map.current = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: 'mapbox://styles/mapbox/light-v11',
+        center: [centerLng, centerLat],
+        zoom: 6,
+        attributionControl: false,
+      });
 
-    map.current.on('load', () => {
-      updateMap(result, segments);
-    });
+      map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+      map.current.on('load', () => {
+        console.log('Map loaded successfully');
+        updateMap(result, segments);
+      });
+
+      map.current.on('error', (e) => {
+        console.error('Mapbox error:', e);
+      });
+    } catch (error) {
+      console.error('Error initializing map:', error);
+    }
   };
 
   const updateMap = (result: TripResult, segments?: TripSegment[]) => {
