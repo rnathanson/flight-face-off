@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { LocationAutocomplete } from '@/components/LocationAutocomplete';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -72,43 +72,11 @@ interface TripResult {
       leg4: WindsAloftData | null;
     };
   };
-  airportRejections?: {
-    pickup?: {
-      location: string;
-      nearestAirport: {
-        code: string;
-        name: string;
-      };
-      reasons: string[];
-      windData: {
-        runway: string;
-        totalWind: number;
-        crosswind: number;
-        headwind: number;
-        maxWindLimit: number;
-        maxCrosswindLimit: number;
-        exceedsWindLimit: boolean;
-        exceedsCrosswindLimit: boolean;
-      };
-    } | null;
-    delivery?: {
-      location: string;
-      nearestAirport: {
-        code: string;
-        name: string;
-      };
-      reasons: string[];
-      windData: {
-        runway: string;
-        totalWind: number;
-        crosswind: number;
-        headwind: number;
-        maxWindLimit: number;
-        maxCrosswindLimit: number;
-        exceedsWindLimit: boolean;
-        exceedsCrosswindLimit: boolean;
-      };
-    } | null;
+  chiefPilotApproval?: {
+    required: boolean;
+    reasons: string[];
+    pickupAirport: { code: string; name: string; requiresApproval: boolean } | null;
+    deliveryAirport: { code: string; name: string; requiresApproval: boolean } | null;
   };
 }
 
@@ -288,7 +256,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         throw error;
       }
 
-      console.log('Airport rejections:', data.airportRejections);
+      console.log('Chief Pilot Approval:', data.chiefPilotApproval);
 
       const result: TripResult = {
         segments: data.segments,
@@ -301,10 +269,15 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
           destinationAirport: data.route.destinationAirport,
         },
         conditions: data.conditions,
-        airportRejections: data.airportRejections || null
+        chiefPilotApproval: data.chiefPilotApproval || null
       };
 
       setTripResult(result);
+      
+      // Show approval modal if required
+      if (result.chiefPilotApproval?.required) {
+        setShowApprovalModal(true);
+      }
       
       setTimeout(() => {
         if (mapboxToken && mapContainer.current && !map.current) {
@@ -812,60 +785,36 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             </CardContent>
           </Card>
 
-          {/* Wind Rejection Warnings */}
-          {tripResult.airportRejections?.pickup?.nearestAirport && tripResult.airportRejections?.pickup?.windData && (
-            <Alert variant="destructive" className="mt-4">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Pickup Airport Rejected Due to Wind Limits</AlertTitle>
-              <AlertDescription>
-                <div className="space-y-1 mt-2">
-                  <div className="font-semibold">
-                    {tripResult.airportRejections.pickup.nearestAirport.code} - {tripResult.airportRejections.pickup.nearestAirport.name}
-                  </div>
-                  <div className="text-sm space-y-0.5">
-                    <div>Best Runway: {tripResult.airportRejections.pickup.windData.runway}</div>
-                    <div>Total Wind: {tripResult.airportRejections.pickup.windData.totalWind}kt (Crosswind: {tripResult.airportRejections.pickup.windData.crosswind}kt, Headwind: {tripResult.airportRejections.pickup.windData.headwind}kt)</div>
-                    <div className="font-semibold text-destructive">
-                      {tripResult.airportRejections.pickup.windData.exceedsWindLimit && 
-                        `Exceeds wind limit: ${tripResult.airportRejections.pickup.windData.maxWindLimit}kt`}
-                      {tripResult.airportRejections.pickup.windData.exceedsCrosswindLimit && 
-                        ` • Exceeds crosswind limit: ${tripResult.airportRejections.pickup.windData.maxCrosswindLimit}kt`}
-                    </div>
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-2">
-                    Ground transportation is being used instead.
-                  </div>
-                </div>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {tripResult.airportRejections?.delivery?.nearestAirport && tripResult.airportRejections?.delivery?.windData && (
-            <Alert variant="destructive" className="mt-4">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Delivery Airport Rejected Due to Wind Limits</AlertTitle>
-              <AlertDescription>
-                <div className="space-y-1 mt-2">
-                  <div className="font-semibold">
-                    {tripResult.airportRejections.delivery.nearestAirport.code} - {tripResult.airportRejections.delivery.nearestAirport.name}
-                  </div>
-                  <div className="text-sm space-y-0.5">
-                    <div>Best Runway: {tripResult.airportRejections.delivery.windData.runway}</div>
-                    <div>Total Wind: {tripResult.airportRejections.delivery.windData.totalWind}kt (Crosswind: {tripResult.airportRejections.delivery.windData.crosswind}kt, Headwind: {tripResult.airportRejections.delivery.windData.headwind}kt)</div>
-                    <div className="font-semibold text-destructive">
-                      {tripResult.airportRejections.delivery.windData.exceedsWindLimit && 
-                        `Exceeds wind limit: ${tripResult.airportRejections.delivery.windData.maxWindLimit}kt`}
-                      {tripResult.airportRejections.delivery.windData.exceedsCrosswindLimit && 
-                        ` • Exceeds crosswind limit: ${tripResult.airportRejections.delivery.windData.maxCrosswindLimit}kt`}
-                    </div>
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-2">
-                    Ground transportation is being used instead.
-                  </div>
-                </div>
-              </AlertDescription>
-            </Alert>
-          )}
+          {/* Chief Pilot Approval Modal */}
+          <Dialog open={showApprovalModal} onOpenChange={setShowApprovalModal}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Chief Pilot Approval Required</DialogTitle>
+              </DialogHeader>
+              <DialogDescription className="py-4">
+                This trip has conditions that fall outside standard operational guidelines and requires additional review by the Chief Pilot before dispatch.
+              </DialogDescription>
+              <div className="py-2">
+                <p className="text-sm text-muted-foreground">
+                  The flight plan has been calculated and is available for review below. Please submit this trip for Chief Pilot approval to proceed.
+                </p>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setShowApprovalModal(false)}>
+                  Dismiss
+                </Button>
+                <Button onClick={() => {
+                  toast({
+                    title: "Submitted for Review",
+                    description: "This trip has been sent to the Chief Pilot for approval.",
+                  });
+                  setShowApprovalModal(false);
+                }}>
+                  Submit for Review
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
 
 
           <div className="border-t pt-4 mt-4">

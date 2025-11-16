@@ -52,6 +52,8 @@ interface QualifiedAirport {
     headwind: number;
     totalWind: number;
   };
+  requiresChiefPilotApproval: boolean;
+  violatedGuidelines: string[];
 }
 
 // Extract wind from METAR/TAF string
@@ -268,7 +270,6 @@ serve(async (req) => {
 
     // Qualify each airport
     const qualifiedAirports: QualifiedAirport[] = [];
-    const rejectedAirports: QualifiedAirport[] = [];
 
     for (const airport of nearbyAirports.slice(0, 10)) { // Check top 10 closest
       console.log(`Qualifying airport ${airport.code}...`);
@@ -337,7 +338,7 @@ serve(async (req) => {
         qualifications.weather_ok = false;
         qualifications.passed = false;
         warnings.push('Unable to obtain TAF or METAR - cannot verify weather limits');
-        rejectedAirports.push({
+        qualifiedAirports.push({
           code: airport.code,
           name: airnavData.name || airport.name,
           lat: airnavData.lat || airport.lat,
@@ -345,7 +346,9 @@ serve(async (req) => {
           distance_nm: airport.distance_nm,
           elevation_ft: airnavData.elevation_ft || 0,
           qualifications,
-          warnings
+          warnings,
+          requiresChiefPilotApproval: true,
+          violatedGuidelines: ['weather']
         });
         continue;
       }
@@ -360,7 +363,7 @@ serve(async (req) => {
         qualifications.weather_ok = false;
         qualifications.passed = false;
         warnings.push('TAF parsing failed - no forecast periods found');
-        rejectedAirports.push({
+        qualifiedAirports.push({
           code: airport.code,
           name: airnavData.name || airport.name,
           lat: airnavData.lat || airport.lat,
@@ -368,7 +371,9 @@ serve(async (req) => {
           distance_nm: airport.distance_nm,
           elevation_ft: airnavData.elevation_ft || 0,
           qualifications,
-          warnings
+          warnings,
+          requiresChiefPilotApproval: true,
+          violatedGuidelines: ['weather']
         });
         continue;
       }
@@ -381,7 +386,7 @@ serve(async (req) => {
         qualifications.weather_ok = false;
         qualifications.passed = false;
         warnings.push(`No TAF forecast period valid for arrival time`);
-        rejectedAirports.push({
+        qualifiedAirports.push({
           code: airport.code,
           name: airnavData.name || airport.name,
           lat: airnavData.lat || airport.lat,
@@ -389,7 +394,9 @@ serve(async (req) => {
           distance_nm: airport.distance_nm,
           elevation_ft: airnavData.elevation_ft || 0,
           qualifications,
-          warnings
+          warnings,
+          requiresChiefPilotApproval: true,
+          violatedGuidelines: ['weather']
         });
         continue;
       }
@@ -486,6 +493,15 @@ serve(async (req) => {
           console.log(`⚠️ No wind data in TAF period for ${airport.code}`);
         }
 
+      // Build violated guidelines list
+      const violatedGuidelines: string[] = [];
+      if (!qualifications.runway_ok) violatedGuidelines.push('runway');
+      if (!qualifications.surface_ok) violatedGuidelines.push('surface');
+      if (!qualifications.lighting_ok) violatedGuidelines.push('lighting');
+      if (!qualifications.weather_ok) violatedGuidelines.push('weather');
+      if (!qualifications.approach_ok) violatedGuidelines.push('approach');
+      if (!qualifications.wind_ok) violatedGuidelines.push('wind');
+
       const qualifiedAirport: QualifiedAirport = {
         code: airport.code,
         name: airnavData.name || airport.name,
@@ -501,22 +517,23 @@ serve(async (req) => {
           crosswind: windAnalysis.crosswind,
           headwind: windAnalysis.headwind,
           totalWind: windAnalysis.totalWind
-        } : undefined
+        } : undefined,
+        requiresChiefPilotApproval: !qualifications.passed,
+        violatedGuidelines
       };
 
-      if (qualifications.passed) {
-        qualifiedAirports.push(qualifiedAirport);
-      } else {
-        rejectedAirports.push(qualifiedAirport);
-      }
+      // Push all airports to a single array (no longer splitting by passed/rejected)
+      qualifiedAirports.push(qualifiedAirport);
     }
 
-    console.log(`Qualified: ${qualifiedAirports.length}, Rejected: ${rejectedAirports.length}`);
+    // Sort all airports by distance
+    qualifiedAirports.sort((a, b) => a.distance_nm - b.distance_nm);
+
+    console.log(`Found ${qualifiedAirports.length} airports total. ${qualifiedAirports.filter(a => a.requiresChiefPilotApproval).length} require Chief Pilot approval.`);
 
     return new Response(
       JSON.stringify({
-        qualified: qualifiedAirports,
-        rejected: rejectedAirports,
+        airports: qualifiedAirports,
         config_used: {
           min_runway_length_ft: config.min_runway_length_ft,
           min_runway_width_ft: config.min_runway_width_ft,

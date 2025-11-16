@@ -76,8 +76,12 @@ serve(async (req) => {
     // Determine pickup and destination airports
     let pickupAirport = KFRG;
     let destinationAirport = KFRG;
-    let pickupRejected: any[] = [];
-    let deliveryRejected: any[] = [];
+    
+    // Track approval requirements
+    let requiresChiefPilotApproval = false;
+    let approvalReasons: string[] = [];
+    let pickupAirportApprovalData: any = null;
+    let deliveryAirportApprovalData: any = null;
 
     // Check if user specified a preferred pickup airport
     if (preferredPickupAirport) {
@@ -125,15 +129,19 @@ serve(async (req) => {
             estimatedArrivalTimeUTC: pickupArrivalTimeUTC.toISOString()
           }
         });
-        const pickupAirports = pickupAirportsResponse.data?.qualified || [];
-        pickupRejected = pickupAirportsResponse.data?.rejected || [];
-
-        if (pickupAirports.length === 0 && pickupRejected.length > 0) {
-          console.log(`⚠️ All pickup airports rejected. Reasons:`, pickupRejected);
-        }
+        const pickupAirports = pickupAirportsResponse.data?.airports || [];
 
         if (pickupAirports.length > 0) {
-          pickupAirport = pickupAirports[0];
+          pickupAirport = pickupAirports[0]; // Always use nearest airport
+          pickupAirportApprovalData = pickupAirports[0]; // Store full data for approval tracking
+          
+          // Check if approval is required
+          if (pickupAirportApprovalData.requiresChiefPilotApproval) {
+            requiresChiefPilotApproval = true;
+            if (pickupAirportApprovalData.violatedGuidelines) {
+              approvalReasons.push(...pickupAirportApprovalData.violatedGuidelines.map((g: string) => `pickup_${g}`));
+            }
+          }
         }
       }
     }
@@ -195,15 +203,19 @@ serve(async (req) => {
             estimatedArrivalTimeUTC: deliveryArrivalTimeUTC.toISOString()
           }
         });
-        const deliveryAirports = deliveryAirportsResponse.data?.qualified || [];
-        deliveryRejected = deliveryAirportsResponse.data?.rejected || [];
-
-        if (deliveryAirports.length === 0 && deliveryRejected.length > 0) {
-          console.log(`⚠️ All delivery airports rejected. Reasons:`, deliveryRejected);
-        }
+        const deliveryAirports = deliveryAirportsResponse.data?.airports || [];
 
         if (deliveryAirports.length > 0) {
-          destinationAirport = deliveryAirports[0];
+          destinationAirport = deliveryAirports[0]; // Always use nearest airport
+          deliveryAirportApprovalData = deliveryAirports[0]; // Store full data for approval tracking
+          
+          // Check if approval is required
+          if (deliveryAirportApprovalData.requiresChiefPilotApproval) {
+            requiresChiefPilotApproval = true;
+            if (deliveryAirportApprovalData.violatedGuidelines) {
+              approvalReasons.push(...deliveryAirportApprovalData.violatedGuidelines.map((g: string) => `delivery_${g}`));
+            }
+          }
         }
       } else {
         // Delivery IS on Long Island, so destination airport is KFRG
@@ -608,46 +620,18 @@ serve(async (req) => {
         }
       },
       advisories,
-      airportRejections: {
-        pickup: pickupRejected && pickupRejected.length > 0 ? {
-          location: 'pickup',
-          nearestAirport: {
-            code: pickupRejected[0].code,
-            name: pickupRejected[0].name,
-            lat: pickupRejected[0].lat,
-            lng: pickupRejected[0].lng
-          },
-          reasons: pickupRejected[0].qualifications,
-          windData: pickupRejected[0].windAnalysis ? {
-            runway: pickupRejected[0].windAnalysis.runway,
-            totalWind: pickupRejected[0].windAnalysis.totalWind,
-            crosswind: pickupRejected[0].windAnalysis.crosswind,
-            headwind: pickupRejected[0].windAnalysis.headwind,
-            exceedsWindLimit: !pickupRejected[0].qualifications.wind_ok,
-            exceedsCrosswindLimit: !pickupRejected[0].qualifications.wind_ok,
-            maxWindLimit: config.max_wind_kt || 0,
-            maxCrosswindLimit: config.max_crosswind_kt || 0
-          } : undefined
+      chiefPilotApproval: {
+        required: requiresChiefPilotApproval,
+        reasons: approvalReasons,
+        pickupAirport: pickupAirportApprovalData ? {
+          code: pickupAirportApprovalData.code,
+          name: pickupAirportApprovalData.name,
+          requiresApproval: pickupAirportApprovalData.requiresChiefPilotApproval
         } : null,
-        delivery: deliveryRejected && deliveryRejected.length > 0 ? {
-          location: 'delivery',
-          nearestAirport: {
-            code: deliveryRejected[0].code,
-            name: deliveryRejected[0].name,
-            lat: deliveryRejected[0].lat,
-            lng: deliveryRejected[0].lng
-          },
-          reasons: deliveryRejected[0].qualifications,
-          windData: deliveryRejected[0].windAnalysis ? {
-            runway: deliveryRejected[0].windAnalysis.runway,
-            totalWind: deliveryRejected[0].windAnalysis.totalWind,
-            crosswind: deliveryRejected[0].windAnalysis.crosswind,
-            headwind: deliveryRejected[0].windAnalysis.headwind,
-            exceedsWindLimit: !deliveryRejected[0].qualifications.wind_ok,
-            exceedsCrosswindLimit: !deliveryRejected[0].qualifications.wind_ok,
-            maxWindLimit: config.max_wind_kt || 0,
-            maxCrosswindLimit: config.max_crosswind_kt || 0
-          } : undefined
+        deliveryAirport: deliveryAirportApprovalData ? {
+          code: deliveryAirportApprovalData.code,
+          name: deliveryAirportApprovalData.name,
+          requiresApproval: deliveryAirportApprovalData.requiresChiefPilotApproval
         } : null
       }
     };
