@@ -28,6 +28,7 @@ export interface AirNavAirportData {
   has_paved: boolean;
   has_ils: boolean;
   has_rnav: boolean;
+  has_jet_fuel: boolean;
   metar?: METARData;
   taf?: TAFData;
 }
@@ -64,7 +65,8 @@ export async function fetchAndParseAirNav(
       runways: [],
       has_paved: false,
       has_ils: false,
-      has_rnav: false
+      has_rnav: false,
+      has_jet_fuel: false
     };
 
     // Parse airport name from title
@@ -152,6 +154,23 @@ export async function fetchAndParseAirNav(
     // Check for approach systems
     result.has_ils = /ILS/i.test(html);
     result.has_rnav = /RNAV|GPS/i.test(html);
+
+    // Check for Jet A fuel availability
+    // Look for fuel section and check for Jet A or Jet A-1
+    const fuelMatch = html.match(/(?:Fuel\s*Available|Fuel\s*Types?|Aviation\s*Fuel)[:\s]*([^<]*)/i);
+    if (fuelMatch) {
+      const fuelText = fuelMatch[1];
+      if (/Jet\s*A(?:-1)?/i.test(fuelText)) {
+        result.has_jet_fuel = true;
+        console.log(`✓ Jet A fuel available at ${airportCode}`);
+      }
+    }
+    
+    // Alternative: Look in the facilities section
+    if (!result.has_jet_fuel && /Jet\s*A(?:-1)?/i.test(html)) {
+      result.has_jet_fuel = true;
+      console.log(`✓ Jet A fuel available at ${airportCode} (found in general text)`);
+    }
 
     return result as AirNavAirportData;
   } catch (error) {

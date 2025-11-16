@@ -40,6 +40,7 @@ export type Database = {
           airport_type: string | null
           elevation_ft: number | null
           has_instrument_approach: boolean | null
+          has_jet_fuel: boolean | null
           has_lighting: boolean | null
           iata_code: string | null
           icao_code: string
@@ -53,6 +54,7 @@ export type Database = {
           airport_type?: string | null
           elevation_ft?: number | null
           has_instrument_approach?: boolean | null
+          has_jet_fuel?: boolean | null
           has_lighting?: boolean | null
           iata_code?: string | null
           icao_code: string
@@ -66,6 +68,7 @@ export type Database = {
           airport_type?: string | null
           elevation_ft?: number | null
           has_instrument_approach?: boolean | null
+          has_jet_fuel?: boolean | null
           has_lighting?: boolean | null
           iata_code?: string | null
           icao_code?: string
@@ -274,23 +277,29 @@ export type Database = {
           acceptable_approaches: string[]
           acceptable_surfaces: string[]
           altitude_rules: Json
+          avg_passenger_weight_lbs: number | null
           climb_rate_fpm: number
           created_at: string | null
           cruise_speed_ktas: number
           descent_rate_fpm: number
+          empty_weight_lbs: number | null
           fuel_burn_cruise_lbs_per_hr: number
           fuel_capacity_lbs: number
+          fuel_weight_per_gallon: number | null
           ground_handling_time_min: number
           id: string
           ifr_requires_instrument_approach: boolean
           max_crosswind_kt: number | null
+          max_landing_weight_lbs: number | null
           max_range_nm: number
+          max_takeoff_weight_lbs: number | null
           max_wind_kt: number | null
           min_runway_length_ft: number
           min_runway_width_ft: number
           minimum_ceiling_ft: number
           minimum_visibility_sm: number
           organ_viability_hours: Json
+          refueling_time_minutes: number | null
           requires_lighting: boolean
           requires_paved_surface: boolean
           reserve_fuel_minutes: number
@@ -307,23 +316,29 @@ export type Database = {
           acceptable_approaches?: string[]
           acceptable_surfaces?: string[]
           altitude_rules?: Json
+          avg_passenger_weight_lbs?: number | null
           climb_rate_fpm?: number
           created_at?: string | null
           cruise_speed_ktas?: number
           descent_rate_fpm?: number
+          empty_weight_lbs?: number | null
           fuel_burn_cruise_lbs_per_hr?: number
           fuel_capacity_lbs?: number
+          fuel_weight_per_gallon?: number | null
           ground_handling_time_min?: number
           id?: string
           ifr_requires_instrument_approach?: boolean
           max_crosswind_kt?: number | null
+          max_landing_weight_lbs?: number | null
           max_range_nm?: number
+          max_takeoff_weight_lbs?: number | null
           max_wind_kt?: number | null
           min_runway_length_ft?: number
           min_runway_width_ft?: number
           minimum_ceiling_ft?: number
           minimum_visibility_sm?: number
           organ_viability_hours?: Json
+          refueling_time_minutes?: number | null
           requires_lighting?: boolean
           requires_paved_surface?: boolean
           reserve_fuel_minutes?: number
@@ -340,23 +355,29 @@ export type Database = {
           acceptable_approaches?: string[]
           acceptable_surfaces?: string[]
           altitude_rules?: Json
+          avg_passenger_weight_lbs?: number | null
           climb_rate_fpm?: number
           created_at?: string | null
           cruise_speed_ktas?: number
           descent_rate_fpm?: number
+          empty_weight_lbs?: number | null
           fuel_burn_cruise_lbs_per_hr?: number
           fuel_capacity_lbs?: number
+          fuel_weight_per_gallon?: number | null
           ground_handling_time_min?: number
           id?: string
           ifr_requires_instrument_approach?: boolean
           max_crosswind_kt?: number | null
+          max_landing_weight_lbs?: number | null
           max_range_nm?: number
+          max_takeoff_weight_lbs?: number | null
           max_wind_kt?: number | null
           min_runway_length_ft?: number
           min_runway_width_ft?: number
           minimum_ceiling_ft?: number
           minimum_visibility_sm?: number
           organ_viability_hours?: Json
+          refueling_time_minutes?: number | null
           requires_lighting?: boolean
           requires_paved_surface?: boolean
           reserve_fuel_minutes?: number

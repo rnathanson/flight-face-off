@@ -347,6 +347,86 @@ export function FlightOpsConfigPanel() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
+            <Plane className="h-5 w-5" />
+            Weight & Balance Configuration
+          </CardTitle>
+          <CardDescription>
+            PC-24 weight limits and passenger weight assumptions
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="empty_weight">Empty Weight (lbs)</Label>
+              <Input
+                id="empty_weight"
+                type="number"
+                value={config.empty_weight_lbs || 12200}
+                onChange={(e) => updateField('empty_weight_lbs', parseInt(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="avg_passenger_weight">Avg Passenger Weight (lbs)</Label>
+              <Input
+                id="avg_passenger_weight"
+                type="number"
+                value={config.avg_passenger_weight_lbs || 180}
+                onChange={(e) => updateField('avg_passenger_weight_lbs', parseInt(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="max_takeoff_weight">Max Takeoff Weight (lbs)</Label>
+              <Input
+                id="max_takeoff_weight"
+                type="number"
+                value={config.max_takeoff_weight_lbs || 18740}
+                onChange={(e) => updateField('max_takeoff_weight_lbs', parseInt(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="max_landing_weight">Max Landing Weight (lbs)</Label>
+              <Input
+                id="max_landing_weight"
+                type="number"
+                value={config.max_landing_weight_lbs || 17340}
+                onChange={(e) => updateField('max_landing_weight_lbs', parseInt(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="fuel_weight_per_gallon">Fuel Weight per Gallon (lbs)</Label>
+              <Input
+                id="fuel_weight_per_gallon"
+                type="number"
+                step="0.1"
+                value={config.fuel_weight_per_gallon || 6.8}
+                onChange={(e) => updateField('fuel_weight_per_gallon', parseFloat(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="fuel_burn_rate">Fuel Burn Rate (gal/hr)</Label>
+              <Input
+                id="fuel_burn_rate"
+                type="number"
+                value={config.fuel_burn_cruise_gal_per_hr || 191}
+                onChange={(e) => updateField('fuel_burn_cruise_gal_per_hr', parseInt(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="refueling_time">Refueling Time (minutes)</Label>
+              <Input
+                id="refueling_time"
+                type="number"
+                value={config.refueling_time_minutes || 30}
+                onChange={(e) => updateField('refueling_time_minutes', parseInt(e.target.value))}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
             <Heart className="h-5 w-5" />
             Organ Viability Time Frames
           </CardTitle>
