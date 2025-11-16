@@ -71,6 +71,7 @@ export function LocationAutocomplete({
         lat: 0,
         lon: 0,
         displayName: '',
+        address: '',
         placeId: '0',
       });
     }
@@ -84,6 +85,7 @@ export function LocationAutocomplete({
       lat: suggestion.lat,
       lon: suggestion.lon,
       displayName: suggestion.name || suggestion.displayName,
+      address: suggestion.address,
       placeId: suggestion.placeId,
     });
     setShowSuggestions(false);
