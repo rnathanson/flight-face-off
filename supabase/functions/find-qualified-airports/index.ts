@@ -4,6 +4,7 @@ import { fetchAndParseAirNav } from '../_shared/airnav-parser.ts';
 import { parseMETAR } from '../_shared/metar-parser.ts';
 import { fetchTAFWithFallback } from '../_shared/checkwx-fetcher.ts';
 import { parseTAFPeriods, findRelevantTafPeriod } from '../_shared/taf-period-parser.ts';
+import { findNearbyAirports } from '../_shared/airportdb-api.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
