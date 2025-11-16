@@ -789,31 +789,34 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
           {/* Chief Pilot Approval Modal */}
           <Dialog open={showApprovalModal} onOpenChange={setShowApprovalModal}>
             <DialogContent className="sm:max-w-md">
-              <div className="flex flex-col items-center justify-center py-6 space-y-4">
-                {/* Icon */}
+              <div className="flex flex-col items-center justify-center text-center space-y-6 py-8">
+                {/* Icon with gradient background circle */}
                 <div className="relative">
-                  <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl animate-pulse" />
-                  <div className="relative bg-background border-4 border-primary/30 rounded-full p-4">
-                    <AlertTriangle className="w-12 h-12 text-primary animate-pulse" />
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary/60 to-[#86efac] rounded-full blur-2xl opacity-30 animate-pulse" />
+                  <div className="relative bg-gradient-to-br from-primary/10 to-[#86efac]/10 border-4 border-primary/20 rounded-full p-6">
+                    <AlertTriangle className="w-16 h-16 text-primary" strokeWidth={2.5} />
                   </div>
                 </div>
 
-                {/* Title */}
-                <DialogHeader className="text-center space-y-2">
-                  <DialogTitle className="text-2xl font-bold">
-                    Approval Required
-                  </DialogTitle>
-                  <DialogDescription className="text-base">
-                    This trip requires Chief Pilot review
-                  </DialogDescription>
-                </DialogHeader>
+                {/* Title and Description */}
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-bold text-foreground">
+                    Review Required
+                  </h2>
+                  <p className="text-muted-foreground">
+                    This trip is outside of normal guidelines
+                  </p>
+                </div>
+
+                {/* Progress/Status Bar */}
+                <div className="w-full h-2 bg-gradient-to-r from-primary via-primary/80 to-[#86efac] rounded-full" />
 
                 {/* Buttons */}
-                <div className="flex gap-3 w-full pt-4">
+                <div className="flex gap-3 w-full pt-2">
                   <Button 
                     variant="outline" 
                     onClick={() => setShowApprovalModal(false)}
-                    className="flex-1"
+                    className="flex-1 h-11"
                   >
                     Dismiss
                   </Button>
@@ -825,7 +828,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       });
                       setShowApprovalModal(false);
                     }}
-                    className="flex-1"
+                    className="flex-1 h-11 bg-primary hover:bg-primary/90"
                   >
                     Submit for Review
                   </Button>
