@@ -658,7 +658,11 @@ async function calculateFlightTime(
   console.log(`✈️  CRUISE: ${cruiseDistanceNM.toFixed(1)}nm @ ${cruiseGroundSpeed.toFixed(1)}kt GS (${cruiseSpeed}kt - ${headwind.toFixed(1)}kt headwind) = ${cruiseTimeMin.toFixed(1)}min`);
   console.log(`✈️  DESCENT: ${descentTimeMin.toFixed(1)}min covering ${descentNM.toFixed(1)}nm @ ${descentAvgSpeed}ktas avg`);
   
-  const totalMinutes = Math.round(climbTimeMin + cruiseTimeMin + descentTimeMin + weatherDelay);
+  // Add taxi time (taxi-out + taxi-in = 2 operations per flight leg)
+  const taxiTimeTotal = (config.taxi_time_per_airport_min || 5) * 2;
+  console.log(`🚕 TAXI: ${taxiTimeTotal}min (${config.taxi_time_per_airport_min || 5}min × 2 airports)`);
+  
+  const totalMinutes = Math.round(climbTimeMin + cruiseTimeMin + descentTimeMin + weatherDelay + taxiTimeTotal);
   
   return {
     minutes: totalMinutes,

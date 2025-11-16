@@ -294,6 +294,7 @@ export type Database = {
           speed_below_fl100_kias: number
           takeoff_landing_buffer_min: number
           taxi_time_major_airport_min: number
+          taxi_time_per_airport_min: number
           taxi_time_private_fbo_min: number
           taxi_time_regional_airport_min: number
           updated_at: string | null
@@ -322,6 +323,7 @@ export type Database = {
           speed_below_fl100_kias?: number
           takeoff_landing_buffer_min?: number
           taxi_time_major_airport_min?: number
+          taxi_time_per_airport_min?: number
           taxi_time_private_fbo_min?: number
           taxi_time_regional_airport_min?: number
           updated_at?: string | null
@@ -350,6 +352,7 @@ export type Database = {
           speed_below_fl100_kias?: number
           takeoff_landing_buffer_min?: number
           taxi_time_major_airport_min?: number
+          taxi_time_per_airport_min?: number
           taxi_time_private_fbo_min?: number
           taxi_time_regional_airport_min?: number
           updated_at?: string | null

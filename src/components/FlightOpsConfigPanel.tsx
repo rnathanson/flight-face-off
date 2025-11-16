@@ -237,6 +237,18 @@ export function FlightOpsConfigPanel() {
                 onChange={(e) => updateField('speed_below_fl100_kias', parseInt(e.target.value))}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="taxi_time_per_airport">Taxi Time Per Airport (minutes)</Label>
+              <Input
+                id="taxi_time_per_airport"
+                type="number"
+                value={config.taxi_time_per_airport_min}
+                onChange={(e) => updateField('taxi_time_per_airport_min', parseInt(e.target.value))}
+              />
+              <p className="text-sm text-muted-foreground">
+                Time for one taxi operation (×2 per flight leg: taxi-out + taxi-in)
+              </p>
+            </div>
           </div>
 
           <Separator />
