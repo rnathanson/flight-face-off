@@ -536,7 +536,7 @@ export async function fetchAverageWindsAlongRoute(
         // Fetch low-level winds
         const winds = await fetchLowLevelWinds(point.lat, point.lng, altitude, point.code);
         if (winds && winds.direction !== 'VRB') {
-          console.log(`  🔼 CLIMB phase at ${altitude.toFixed(0)}ft: ${winds.direction}° @ ${winds.speed}kt (station: ${winds.station})`);
+          console.log(`  🔼 CLIMB phase at ${altitude.toFixed(0)}ft from ${winds.station}: ${winds.direction}° @ ${winds.speed}kt`);
           windSamples.push({
             direction: winds.direction as number,
             speed: winds.speed,
@@ -558,7 +558,7 @@ export async function fetchAverageWindsAlongRoute(
         // Fetch low-level winds
         const winds = await fetchLowLevelWinds(point.lat, point.lng, altitude, point.code);
         if (winds && winds.direction !== 'VRB') {
-          console.log(`  🔽 DESCENT phase at ${altitude.toFixed(0)}ft: ${winds.direction}° @ ${winds.speed}kt (station: ${winds.station})`);
+          console.log(`  🔽 DESCENT phase at ${altitude.toFixed(0)}ft from ${winds.station}: ${winds.direction}° @ ${winds.speed}kt`);
           windSamples.push({
             direction: winds.direction as number,
             speed: winds.speed,
@@ -579,7 +579,7 @@ export async function fetchAverageWindsAlongRoute(
         // Fetch high-level winds
         const winds = await fetchWindsAloft(point.lat, point.lng, altitude, 0, point.code);
         if (winds && winds.direction !== 'VRB') {
-          console.log(`  ✈️  CRUISE phase at ${altitude.toFixed(0)}ft: ${winds.direction}° @ ${winds.speed}kt (station: ${winds.station})`);
+          console.log(`  ✈️  CRUISE phase at FL${Math.round(altitude / 100)} from ${winds.station}: ${winds.direction}° @ ${winds.speed}kt`);
           windSamples.push({
             direction: winds.direction as number,
             speed: winds.speed,
@@ -589,7 +589,7 @@ export async function fetchAverageWindsAlongRoute(
           });
           stationsUsed.add(winds.station);
         } else {
-          console.log(`  ✈️  CRUISE phase at ${altitude.toFixed(0)}ft: No wind data available`);
+          console.log(`  ✈️  CRUISE phase at FL${Math.round(altitude / 100)}: No wind data available`);
         }
       }
     }
