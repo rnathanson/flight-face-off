@@ -735,22 +735,32 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         <div className="space-y-6">
           <Card className="border-2 border-primary/20">
             <CardContent className="pt-6">
-              <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 border-b pb-6 mb-6">
-                <div className="flex items-center gap-2">
-                  <div className="text-sm text-muted-foreground">From:</div>
-                  <div className="font-semibold text-sm">
-                    {selectedOrigin?.displayName?.split(',')[0] || originHospital.split(',')[0]}
+              <div className="flex flex-wrap items-start justify-center gap-x-6 gap-y-6 border-b pb-6 mb-6">
+                <div className="flex items-start gap-3">
+                  <div className="text-sm text-muted-foreground pt-0.5">From:</div>
+                  <div className="space-y-0.5">
+                    <div className="font-semibold text-sm">
+                      {selectedOrigin?.displayName?.split(',')[0] || originHospital.split(',')[0]}
+                    </div>
+                    <div className="text-xs text-muted-foreground max-w-[200px]">
+                      {selectedOrigin?.address || originHospital}
+                    </div>
                   </div>
                 </div>
-                <div className="text-muted-foreground">→</div>
-                <div className="flex items-center gap-2">
-                  <div className="text-sm text-muted-foreground">To:</div>
-                  <div className="font-semibold text-sm">
-                    {selectedDestination?.displayName?.split(',')[0] || destinationHospital.split(',')[0]}
+                <div className="text-muted-foreground pt-2">→</div>
+                <div className="flex items-start gap-3">
+                  <div className="text-sm text-muted-foreground pt-0.5">To:</div>
+                  <div className="space-y-0.5">
+                    <div className="font-semibold text-sm">
+                      {selectedDestination?.displayName?.split(',')[0] || destinationHospital.split(',')[0]}
+                    </div>
+                    <div className="text-xs text-muted-foreground max-w-[200px]">
+                      {selectedDestination?.address || destinationHospital}
+                    </div>
                   </div>
                 </div>
-                <div className="text-muted-foreground">•</div>
-                <div className="flex items-center gap-2">
+                <div className="text-muted-foreground pt-2">•</div>
+                <div className="flex items-start gap-2 pt-0.5">
                   <Clock className="w-4 h-4 text-muted-foreground" />
                   <div className="text-sm font-medium">{format(departureDate, 'MMM d')} at {departureTime}</div>
                 </div>
@@ -791,6 +801,9 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                     <div className="text-sm text-muted-foreground">Pickup Airport</div>
                     <div className="text-2xl font-bold">
                       {tripResult.route?.pickupAirport?.code || 'N/A'}
+                    </div>
+                    <div className="text-sm font-medium">
+                      {tripResult.route?.pickupAirport?.name || ''}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {tripResult.route?.pickupAirport?.distance_from_pickup !== undefined && 
