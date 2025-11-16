@@ -43,7 +43,14 @@ const DEFAULT_CONFIG = {
     kidneys: { min: 24, max: 36 }
   },
   max_wind_kt: 35,
-  max_crosswind_kt: 15
+  max_crosswind_kt: 15,
+  empty_weight_lbs: 12200,
+  avg_passenger_weight_lbs: 180,
+  fuel_weight_per_gallon: 6.8,
+  max_takeoff_weight_lbs: 18740,
+  max_landing_weight_lbs: 17340,
+  refueling_time_minutes: 30,
+  fuel_burn_cruise_gal_per_hr: 191
 };
 
 Deno.serve(async (req) => {

@@ -192,7 +192,8 @@ serve(async (req) => {
       maxDistance = 50, 
       requireDaylight = false,
       departureTimeUTC,  // ISO string in UTC
-      estimatedArrivalTimeUTC  // ISO string in UTC
+      estimatedArrivalTimeUTC,  // ISO string in UTC
+      requiresJetFuel = false  // New parameter for fuel stop logic
     } = await req.json();
 
     const arrivalTime = estimatedArrivalTimeUTC 
@@ -278,6 +279,12 @@ serve(async (req) => {
       
       if (!airnavData) {
         console.log(`No AirNav data for ${airport.code}`);
+        continue;
+      }
+
+      // Skip if jet fuel is required but not available
+      if (requiresJetFuel && !airnavData.has_jet_fuel) {
+        console.log(`Airport ${airport.code} does not have Jet A fuel (required for fuel stop)`);
         continue;
       }
 
