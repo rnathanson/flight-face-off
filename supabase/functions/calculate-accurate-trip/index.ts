@@ -541,12 +541,18 @@ async function calculateFlightTime(
   // Calculate headwind component using winds aloft for cruise or fallback to surface winds
   if (cruiseWinds) {
     // Use winds aloft for the main flight calculation
-    headwind = calculateHeadwindComponent(
-      cruiseWinds.direction,
-      cruiseWinds.speed,
-      course
-    );
-    console.log(`Cruise winds at ${cruiseAltitudeFt}ft: ${cruiseWinds.direction}° at ${cruiseWinds.speed}kts = ${headwind.toFixed(1)}kt headwind component on course ${course.toFixed(0)}°`);
+    if (cruiseWinds.direction === 'VRB') {
+      // Light and variable winds - minimal headwind component
+      headwind = 0;
+      console.log(`Cruise winds at ${cruiseAltitudeFt}ft: Light and variable (${cruiseWinds.speed}kts) from station ${cruiseWinds.station}`);
+    } else {
+      headwind = calculateHeadwindComponent(
+        cruiseWinds.direction,
+        cruiseWinds.speed,
+        course
+      );
+      console.log(`Cruise winds at ${cruiseAltitudeFt}ft: ${cruiseWinds.direction}° at ${cruiseWinds.speed}kts = ${headwind.toFixed(1)}kt headwind component on course ${course.toFixed(0)}°`);
+    }
   } else {
     // Fallback to surface winds (old method)
     if (departureMetar && arrivalWind) {
