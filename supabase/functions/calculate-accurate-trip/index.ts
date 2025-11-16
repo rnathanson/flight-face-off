@@ -589,7 +589,8 @@ async function calculateFlightTime(
   const descentNM = (config.speed_below_fl100_kias * 0.9 * descentTimeMin) / 60;
   
   const cruiseDistanceNM = Math.max(0, distanceNM * 1.05 - climbNM - descentNM);
-  const cruiseGroundSpeed = Math.max(config.cruise_speed_ktas - headwind, 200);
+  // Negative headwind = tailwind, which increases groundspeed
+  const cruiseGroundSpeed = config.cruise_speed_ktas - headwind;
   const cruiseTimeMin = cruiseDistanceNM / cruiseGroundSpeed * 60;
   
   const taxiTime = config.taxi_time_regional_airport_min;
@@ -600,7 +601,7 @@ async function calculateFlightTime(
   return {
     minutes: totalMinutes,
     weatherDelay,
-    headwind: Math.max(0, headwind), // Only positive values (actual headwinds)
+    headwind, // Can be negative (tailwind) or positive (headwind)
     cruiseAltitude: cruiseAltitudeFt
   };
 }
