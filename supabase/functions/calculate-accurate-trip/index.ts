@@ -614,9 +614,9 @@ async function calculateFlightTime(
   return {
     minutes: totalMinutes,
     weatherDelay,
-    headwind, // Can be negative (tailwind) or positive (headwind)
+    headwind,
     cruiseAltitude: cruiseAltitudeFt,
-    cruiseWinds: cruiseWinds || undefined
+    cruiseWinds: cruiseWinds
   };
 }
 
