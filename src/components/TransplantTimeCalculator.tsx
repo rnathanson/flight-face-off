@@ -706,7 +706,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               </div>
 
               <div className="space-y-2">
-                <Label>Passengers (in addition to 2 pilots): {passengerCount}</Label>
+                <Label>Passengers: {passengerCount}</Label>
                 <Slider
                   value={[passengerCount]}
                   onValueChange={(value) => setPassengerCount(value[0])}
