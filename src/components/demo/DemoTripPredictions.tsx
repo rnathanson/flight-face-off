@@ -6,8 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { LocationAutocomplete } from '@/components/LocationAutocomplete';
-import { AlertTriangle, CheckCircle, Target, MapPin, Plane, Clock, Loader2, User, Users, X, Heart } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Target, MapPin, Plane, Clock, Loader2, User, Users, X, Heart, ChevronsUpDown, Check } from 'lucide-react';
 import { GeocodeResult } from '@/lib/geocoding';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -137,6 +139,8 @@ export const DemoTripPredictions = ({
   const [coordinatorSearch, setCoordinatorSearch] = useState('');
   const [selectedCoordinator, setSelectedCoordinator] = useState<MedicalPersonnel | null>(null);
   const [coordinatorSuggestions, setCoordinatorSuggestions] = useState<MedicalPersonnel[]>([]);
+  const [leadDoctorOpen, setLeadDoctorOpen] = useState(false);
+  const [coordinatorOpen, setCoordinatorOpen] = useState(false);
   const [availableCrew, setAvailableCrew] = useState<CrewMember[]>([]);
   const [selectedCrew, setSelectedCrew] = useState<CrewMember[]>([]);
   const [successAnalysis, setSuccessAnalysis] = useState<SuccessAnalysis | null>(null);
@@ -171,7 +175,7 @@ export const DemoTripPredictions = ({
 
   // Search medical personnel with debounce
   useEffect(() => {
-    if (leadDoctorSearch.length < 2) {
+    if (leadDoctorSearch.length < 2 && !leadDoctorOpen) {
       setLeadDoctorSuggestions([]);
       return;
     }
@@ -180,7 +184,7 @@ export const DemoTripPredictions = ({
         data
       } = await supabase.functions.invoke('search-medical-personnel', {
         body: {
-          searchTerm: leadDoctorSearch,
+          searchTerm: leadDoctorSearch || '',
           role: 'lead_doctor'
         }
       });
@@ -189,7 +193,7 @@ export const DemoTripPredictions = ({
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [leadDoctorSearch]);
+  }, [leadDoctorSearch, leadDoctorOpen]);
   useEffect(() => {
     const currentInput = surgeonInputs[activeSurgeonInput];
     if (!currentInput || currentInput.length < 2) {
@@ -212,7 +216,7 @@ export const DemoTripPredictions = ({
     return () => clearTimeout(timer);
   }, [surgeonInputs, activeSurgeonInput]);
   useEffect(() => {
-    if (coordinatorSearch.length < 2) {
+    if (coordinatorSearch.length < 2 && !coordinatorOpen) {
       setCoordinatorSuggestions([]);
       return;
     }
@@ -221,7 +225,7 @@ export const DemoTripPredictions = ({
         data
       } = await supabase.functions.invoke('search-medical-personnel', {
         body: {
-          searchTerm: coordinatorSearch,
+          searchTerm: coordinatorSearch || '',
           role: 'coordinator'
         }
       });
@@ -230,7 +234,7 @@ export const DemoTripPredictions = ({
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [coordinatorSearch]);
+  }, [coordinatorSearch, coordinatorOpen]);
 
   // Real-time live prediction calculation
   useEffect(() => {
@@ -665,41 +669,80 @@ export const DemoTripPredictions = ({
             {/* Lead Doctor */}
             <div className="space-y-2">
               <Label>Lead Doctor</Label>
-              <div className="relative">
-                <Input value={selectedLeadDoctor ? selectedLeadDoctor.full_name : leadDoctorSearch} onChange={e => {
-                setLeadDoctorSearch(e.target.value);
-                if (selectedLeadDoctor) setSelectedLeadDoctor(null);
-              }} placeholder="Search for lead doctor..." />
-                {leadDoctorSuggestions.length > 0 && !selectedLeadDoctor && <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-auto">
-                    {leadDoctorSuggestions.map(doc => <button key={doc.id} onClick={() => {
-                  setSelectedLeadDoctor(doc);
-                  setLeadDoctorSearch('');
-                  setLeadDoctorSuggestions([]);
-                }} className="w-full p-3 text-left hover:bg-accent/50 transition-colors">
-                        <p className="font-medium text-sm">{doc.full_name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {doc.specialty && <span className="mr-1">{doc.specialty}</span>}
-                          {organType && doc.organ_experience?.[organType] ? <>
-                              • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {doc.organ_experience[organType].missions} cases • {doc.organ_experience[organType].success_rate}% success
-                            </> : <span className="text-muted-foreground/50">• Select organ type to view experience</span>}
-                        </p>
-                      </button>)}
-                  </div>}
-              </div>
-              {selectedLeadDoctor && <div className="p-3 bg-primary/10 rounded-md">
+              <Popover open={leadDoctorOpen} onOpenChange={setLeadDoctorOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={leadDoctorOpen}
+                    className="w-full justify-between"
+                  >
+                    {selectedLeadDoctor ? selectedLeadDoctor.full_name : "Select lead doctor..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0 pointer-events-auto" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search doctors..." value={leadDoctorSearch} onValueChange={setLeadDoctorSearch} />
+                    <CommandList>
+                      <CommandEmpty>No doctor found.</CommandEmpty>
+                      <CommandGroup>
+                        {leadDoctorSuggestions.map((doc) => (
+                          <CommandItem
+                            key={doc.id}
+                            value={doc.full_name}
+                            onSelect={() => {
+                              setSelectedLeadDoctor(doc);
+                              setLeadDoctorOpen(false);
+                              setLeadDoctorSearch('');
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedLeadDoctor?.id === doc.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">{doc.full_name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {doc.specialty && <span className="mr-1">{doc.specialty}</span>}
+                                {organType && doc.organ_experience?.[organType] ? (
+                                  <>
+                                    • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {doc.organ_experience[organType].missions} cases • {doc.organ_experience[organType].success_rate}% success
+                                  </>
+                                ) : (
+                                  <span className="text-muted-foreground/50">• Select organ type to view experience</span>
+                                )}
+                              </p>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {selectedLeadDoctor && (
+                <div className="p-3 bg-primary/10 rounded-md">
                   <div className="flex items-center gap-2">
                     <User className="w-4 h-4 text-primary" />
                     <div className="flex-1">
                       <p className="font-medium text-sm">{selectedLeadDoctor.full_name}</p>
                       <p className="text-xs text-muted-foreground">
                         {selectedLeadDoctor.specialty && <span className="mr-1">{selectedLeadDoctor.specialty}</span>}
-                        {organType && selectedLeadDoctor.organ_experience?.[organType] ? <>
+                        {organType && selectedLeadDoctor.organ_experience?.[organType] ? (
+                          <>
                             • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {selectedLeadDoctor.organ_experience[organType].missions} cases • {selectedLeadDoctor.organ_experience[organType].success_rate}% success
-                          </> : <span className="text-muted-foreground/50">• Select organ type to view experience</span>}
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground/50">• Select organ type to view experience</span>
+                        )}
                       </p>
                     </div>
                   </div>
-                </div>}
+                </div>
+              )}
             </div>
 
             {/* Surgical Team */}
@@ -748,39 +791,78 @@ export const DemoTripPredictions = ({
           {/* Coordinator */}
           <div className="space-y-2">
             <Label>Transplant Coordinator (Optional)</Label>
-            <div className="relative">
-              <Input value={selectedCoordinator ? selectedCoordinator.full_name : coordinatorSearch} onChange={e => {
-              setCoordinatorSearch(e.target.value);
-              if (selectedCoordinator) setSelectedCoordinator(null);
-            }} placeholder="Search for coordinator..." />
-              {coordinatorSuggestions.length > 0 && !selectedCoordinator && <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-auto">
-                  {coordinatorSuggestions.map(coord => <button key={coord.id} onClick={() => {
-                setSelectedCoordinator(coord);
-                setCoordinatorSearch('');
-                setCoordinatorSuggestions([]);
-              }} className="w-full p-3 text-left hover:bg-accent/50 transition-colors">
-                      <p className="font-medium text-sm">{coord.full_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {organType && coord.organ_experience?.[organType] ? <>
-                            {organType.charAt(0).toUpperCase() + organType.slice(1)}: {coord.organ_experience[organType].missions} cases • {coord.organ_experience[organType].success_rate}% success
-                          </> : <span className="text-muted-foreground/50">Select organ type to view experience</span>}
-                      </p>
-                    </button>)}
-                </div>}
-            </div>
-            {selectedCoordinator && <div className="p-3 bg-secondary/10 rounded-md">
+            <Popover open={coordinatorOpen} onOpenChange={setCoordinatorOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={coordinatorOpen}
+                  className="w-full justify-between"
+                >
+                  {selectedCoordinator ? selectedCoordinator.full_name : "Select coordinator..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0 pointer-events-auto" align="start">
+                <Command>
+                  <CommandInput placeholder="Search coordinators..." value={coordinatorSearch} onValueChange={setCoordinatorSearch} />
+                  <CommandList>
+                    <CommandEmpty>No coordinator found.</CommandEmpty>
+                    <CommandGroup>
+                      {coordinatorSuggestions.map((coord) => (
+                        <CommandItem
+                          key={coord.id}
+                          value={coord.full_name}
+                          onSelect={() => {
+                            setSelectedCoordinator(coord);
+                            setCoordinatorOpen(false);
+                            setCoordinatorSearch('');
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedCoordinator?.id === coord.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">{coord.full_name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {organType && coord.organ_experience?.[organType] ? (
+                                <>
+                                  {organType.charAt(0).toUpperCase() + organType.slice(1)}: {coord.organ_experience[organType].missions} cases • {coord.organ_experience[organType].success_rate}% success
+                                </>
+                              ) : (
+                                <span className="text-muted-foreground/50">Select organ type to view experience</span>
+                              )}
+                            </p>
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            {selectedCoordinator && (
+              <div className="p-3 bg-secondary/10 rounded-md">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-secondary" />
                   <div className="flex-1">
                     <p className="font-medium text-sm">{selectedCoordinator.full_name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {organType && selectedCoordinator.organ_experience?.[organType] ? <>
+                      {organType && selectedCoordinator.organ_experience?.[organType] ? (
+                        <>
                           {organType.charAt(0).toUpperCase() + organType.slice(1)}: {selectedCoordinator.organ_experience[organType].missions} cases • {selectedCoordinator.organ_experience[organType].success_rate}% success
-                        </> : <span className="text-muted-foreground/50">Select organ type to view experience</span>}
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground/50">Select organ type to view experience</span>
+                      )}
                     </p>
                   </div>
                 </div>
-              </div>}
+              </div>
+            )}
           </div>
 
           {/* Detailed Prediction Breakdown - Above Generate Button */}
