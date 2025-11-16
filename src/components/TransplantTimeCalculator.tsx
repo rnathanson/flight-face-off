@@ -225,18 +225,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     setCalculating(true);
     
     try {
-      setLoadingStage('Analyzing optimal flight route...');
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      setLoadingStage('Checking live weather conditions...');
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      setLoadingStage('Calculating real-time traffic patterns...');
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      setLoadingStage('Evaluating ATC delays and restrictions...');
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
       setLoadingStage('Computing door-to-door timeline...');
       
       const [hours, minutes] = departureTime.split(':').map(Number);
@@ -285,9 +273,17 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             initializeMap(result, data.segments);
           } else {
             console.log('Updating existing map');
-            // Force resize in case container dimensions changed
-            map.current.resize();
-            updateMap(result, data.segments);
+            // Check if map is loaded before updating
+            if (map.current.loaded()) {
+              map.current.resize();
+              updateMap(result, data.segments);
+            } else {
+              // Wait for map to load, then update
+              map.current.once('load', () => {
+                map.current?.resize();
+                updateMap(result, data.segments);
+              });
+            }
           }
         }
       }, result.chiefPilotApproval?.required ? 500 : 100);
