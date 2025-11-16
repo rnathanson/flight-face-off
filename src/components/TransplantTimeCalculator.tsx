@@ -354,6 +354,16 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       return;
     }
 
+    // Check if style is loaded before trying to add layers
+    if (!map.current.isStyleLoaded()) {
+      console.log('Map style not loaded yet, waiting...');
+      map.current.once('style.load', () => {
+        console.log('Style loaded, now updating map');
+        updateMap(result, segments);
+      });
+      return;
+    }
+
     console.log('Updating map with trip result:', {
       segmentCount: result.segments?.length,
       pickupAirport: result.route?.pickupAirport,
