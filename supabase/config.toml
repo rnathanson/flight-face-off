@@ -2,3 +2,9 @@ project_id = "oprguetczdaelzoiceto"
 
 [functions.admin-flight-ops-config]
 verify_jwt = false
+
+[functions.search-medical-personnel]
+verify_jwt = false
+
+[functions.calculate-mission-success]
+verify_jwt = false
