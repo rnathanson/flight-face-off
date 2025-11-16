@@ -83,6 +83,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
   const [preferredDestinationAirport, setPreferredDestinationAirport] = useState<string>('');
   const [showPickupAirportPrefs, setShowPickupAirportPrefs] = useState(false);
   const [showDestinationAirportPrefs, setShowDestinationAirportPrefs] = useState(false);
+  const [showAirportInputs, setShowAirportInputs] = useState(false);
   const { toast } = useToast();
   
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -564,36 +565,44 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4 pt-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="pickup-airport" className="text-xs text-muted-foreground">
-                    Pickup Airport (optional)
-                  </Label>
-                  <input
-                    id="pickup-airport"
-                    type="text"
-                    value={preferredPickupAirport}
-                    onChange={(e) => setPreferredPickupAirport(e.target.value.toUpperCase())}
-                    placeholder="e.g. KRDU"
-                    maxLength={4}
-                    className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm uppercase placeholder:text-xs"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="destination-airport" className="text-xs text-muted-foreground">
-                    Destination Airport (optional)
-                  </Label>
-                  <input
-                    id="destination-airport"
-                    type="text"
-                    value={preferredDestinationAirport}
-                    onChange={(e) => setPreferredDestinationAirport(e.target.value.toUpperCase())}
-                    placeholder="e.g. KJFK"
-                    maxLength={4}
-                    className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm uppercase placeholder:text-xs"
-                  />
-                </div>
-              </div>
+              <Collapsible open={showAirportInputs} onOpenChange={setShowAirportInputs}>
+                <CollapsibleTrigger className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors py-2">
+                  <ChevronDown className={cn("h-4 w-4 transition-transform", showAirportInputs && "rotate-180")} />
+                  Specify preferred airports (optional)
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="grid grid-cols-2 gap-4 pt-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="pickup-airport" className="text-xs text-muted-foreground">
+                        Pickup Airport
+                      </Label>
+                      <input
+                        id="pickup-airport"
+                        type="text"
+                        value={preferredPickupAirport}
+                        onChange={(e) => setPreferredPickupAirport(e.target.value.toUpperCase())}
+                        placeholder="e.g. KRDU"
+                        maxLength={4}
+                        className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm uppercase placeholder:text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="destination-airport" className="text-xs text-muted-foreground">
+                        Destination Airport
+                      </Label>
+                      <input
+                        id="destination-airport"
+                        type="text"
+                        value={preferredDestinationAirport}
+                        onChange={(e) => setPreferredDestinationAirport(e.target.value.toUpperCase())}
+                        placeholder="e.g. KJFK"
+                        maxLength={4}
+                        className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm uppercase placeholder:text-xs"
+                      />
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
