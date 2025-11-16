@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { fetchAndParseAirNav } from '../_shared/airnav-parser.ts';
 import { parseMETAR, getWeatherDelayMinutes } from '../_shared/metar-parser.ts';
 import { parseRoute, getFAARoute } from '../_shared/route-parser.ts';
-import { fetchWindsAloft } from '../_shared/winds-aloft-fetcher.ts';
+import { fetchWindsAloft, fetchAverageWindsAlongRoute } from '../_shared/winds-aloft-fetcher.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -168,6 +168,7 @@ serve(async (req) => {
     // === LEG 1: KFRG to Pickup Airport (FLIGHT) ===
     let leg1RouteString = await getFAARoute(KFRG.code, pickupAirport.code, supabase);
     let leg1RouteDistance = null;
+    let leg1RouteWaypoints = null;
     let leg1RouteSource = 'great-circle';
 
     if (leg1RouteString && pickupAirport.code !== KFRG.code) {
@@ -175,7 +176,9 @@ serve(async (req) => {
       try {
         const parsedRoute = await parseRoute(leg1RouteString, KFRG, pickupAirport, supabase);
         leg1RouteDistance = parsedRoute.totalDistanceNM;
+        leg1RouteWaypoints = parsedRoute.waypoints;
         leg1RouteSource = 'faa-preferred';
+        console.log(`Leg 1 parsed ${parsedRoute.waypoints.length} waypoints, distance: ${leg1RouteDistance.toFixed(1)}nm`);
       } catch (error) {
         console.warn('Failed to parse leg 1 route:', error);
       }
@@ -206,7 +209,8 @@ serve(async (req) => {
           KFRG,
           pickupAirport,
           false, // Use METAR for arrival
-          pickupAirport.code
+          pickupAirport.code,
+          leg1RouteWaypoints || undefined
         );
 
     // === LEG 2: Pickup Airport to Pickup Hospital (GROUND) ===
@@ -230,6 +234,7 @@ serve(async (req) => {
     // === LEG 4: Pickup Airport to Destination Airport (FLIGHT) ===
     let leg4RouteString = await getFAARoute(pickupAirport.code, destinationAirport.code, supabase);
     let leg4RouteDistance = null;
+    let leg4RouteWaypoints = null;
     let leg4RouteSource = 'great-circle';
 
     if (leg4RouteString && pickupAirport.code !== destinationAirport.code) {
@@ -237,7 +242,9 @@ serve(async (req) => {
       try {
         const parsedRoute = await parseRoute(leg4RouteString, pickupAirport, destinationAirport, supabase);
         leg4RouteDistance = parsedRoute.totalDistanceNM;
+        leg4RouteWaypoints = parsedRoute.waypoints;
         leg4RouteSource = 'faa-preferred';
+        console.log(`Leg 4 parsed ${parsedRoute.waypoints.length} waypoints, distance: ${leg4RouteDistance.toFixed(1)}nm`);
       } catch (error) {
         console.warn('Failed to parse leg 4 route:', error);
       }
@@ -261,7 +268,8 @@ serve(async (req) => {
           pickupAirport,
           destinationAirport,
           true, // Use TAF for arrival (forecasted conditions)
-          destinationAirport.code
+          destinationAirport.code,
+          leg4RouteWaypoints || undefined
         );
 
     // === LEG 5: Destination Airport to Delivery Hospital (GROUND) ===
@@ -471,7 +479,8 @@ async function calculateFlightTime(
   departureAirport: any,
   arrivalAirport: any,
   useArrivalTAF: boolean = false,
-  nearestAirport?: string
+  nearestAirport?: string,
+  routeWaypoints?: Array<{lat: number, lng: number, code?: string}>
 ): Promise<{ minutes: number; weatherDelay: number; headwind: number; cruiseAltitude: number; cruiseWinds: any | null }> {
   const forecastHours = 0;
   if (distanceNM === 0) return { minutes: 0, weatherDelay: 0, headwind: 0, cruiseAltitude: 0, cruiseWinds: null };

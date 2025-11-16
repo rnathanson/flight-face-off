@@ -847,9 +847,16 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-sm font-medium">Outbound Flight</span>
                         <Badge variant="outline" className="text-xs">
-                          {tripResult.conditions.cruiseWinds.leg1.station}
+                          {(tripResult.conditions.cruiseWinds.leg1 as any).sampleCount 
+                            ? `${(tripResult.conditions.cruiseWinds.leg1 as any).sampleCount} samples`
+                            : tripResult.conditions.cruiseWinds.leg1.station}
                         </Badge>
                       </div>
+                      {(tripResult.conditions.cruiseWinds.leg1 as any).stations && (
+                        <div className="mb-3 text-xs text-muted-foreground">
+                          Stations: {(tripResult.conditions.cruiseWinds.leg1 as any).stations.join(', ')}
+                        </div>
+                      )}
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Altitude:</span>
@@ -892,9 +899,16 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-sm font-medium">Return Flight</span>
                         <Badge variant="outline" className="text-xs">
-                          {tripResult.conditions.cruiseWinds.leg4.station}
+                          {(tripResult.conditions.cruiseWinds.leg4 as any).sampleCount 
+                            ? `${(tripResult.conditions.cruiseWinds.leg4 as any).sampleCount} samples`
+                            : tripResult.conditions.cruiseWinds.leg4.station}
                         </Badge>
                       </div>
+                      {(tripResult.conditions.cruiseWinds.leg4 as any).stations && (
+                        <div className="mb-3 text-xs text-muted-foreground">
+                          Stations: {(tripResult.conditions.cruiseWinds.leg4 as any).stations.join(', ')}
+                        </div>
+                      )}
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Altitude:</span>
