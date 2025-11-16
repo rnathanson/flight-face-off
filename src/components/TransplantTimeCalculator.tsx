@@ -856,15 +856,14 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               <CollapsibleContent>
                 <CardContent>
                   <div className="space-y-4">
-                    {tripResult.segments.map((segment, index) => {
+                    {tripResult.segments
+                      .filter(segment => segment.type !== 'ground_handling')
+                      .map((segment, index, filteredSegments) => {
                       const isPickupHospital = segment.to.toLowerCase().includes('pickup hospital');
                       const isDeliveryHospital = segment.to.toLowerCase().includes('delivery hospital');
                       
-                      // Calculate leg number (excluding ground_handling segments)
-                      const legNumber = tripResult.segments
-                        .slice(0, index + 1)
-                        .filter(s => s.type !== 'ground_handling')
-                        .length;
+                      // Calculate leg number
+                      const legNumber = index + 1;
                       
                       // Calculate time to pickup for subtotal after pickup hospital segment
                       let timeToPickupSubtotal = null;
@@ -912,61 +911,53 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       return (
                         <React.Fragment key={index}>
                           <div 
-                            className={cn(
-                              "p-4 rounded-lg transition-all",
-                              segment.type === 'ground_handling' 
-                                ? "ml-8 border-l-2 border-muted bg-muted/30" 
-                                : "border border-border bg-background hover:bg-muted/50"
-                            )}
+                            className="p-4 rounded-lg transition-all border border-border bg-background hover:bg-muted/50"
                             style={{
-                              borderLeft: segment.type !== 'ground_handling' 
-                                ? `4px solid ${segment.type === 'flight' ? '#3b82f6' : '#10b981'}` 
-                                : undefined
+                              borderLeft: `4px solid ${segment.type === 'flight' ? '#3b82f6' : '#10b981'}`
                             }}
                           >
-                            {segment.type === 'ground_handling' ? (
-                              // Ground Handling - Subtle footnote style
-                              <div className="flex items-center justify-between gap-4 text-sm">
-                                <div className="flex items-center gap-2 text-muted-foreground">
-                                  <Package className="w-3.5 h-3.5" />
-                                  <span className="italic">Ground Handling</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                                  <span className="font-medium text-foreground">
-                                    {formatDuration(segment.duration)}
-                                  </span>
+                            {/* Segment Header */}
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex items-center gap-3">
+                                {segment.type === 'ground' ? (
+                                  <Car className="w-5 h-5 text-primary" />
+                                ) : (
+                                  <Plane className="w-5 h-5 text-green-600" />
+                                )}
+                                <div>
+                                  <Badge 
+                                    variant={segment.type === 'ground' ? 'default' : 'outline'}
+                                    className="mb-1"
+                                  >
+                                    {segment.type === 'ground' ? 'GROUND' : `FLIGHT - Leg ${legNumber}`}
+                                  </Badge>
+                                  <div className="font-semibold text-base">
+                                    {segment.from} {segment.from && '→'} {segment.to}
+                                  </div>
                                 </div>
                               </div>
-                            ) : (
-                              // Flight and Ground Transport - Full display
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    {segment.type === 'flight' ? (
-                                      <Plane className="w-4 h-4 text-muted-foreground" />
-                                    ) : (
-                                      <Car className="w-4 h-4 text-muted-foreground" />
-                                    )}
-                                    <span className="font-semibold text-sm uppercase tracking-wide">
-                                      {segment.type === 'flight' ? 'Flight' : 'Ground Transport'}
-                                    </span>
-                                    <Badge variant="outline" className="text-xs">
-                                      Leg {legNumber}
+                              
+                              {/* Details Section */}
+                              <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                                  {segment.hasTrafficData && segment.traffic && (
+                                    <Badge 
+                                      variant="outline" 
+                                      className={cn(
+                                        "capitalize",
+                                        segment.traffic === 'heavy' && "border-red-500 text-red-600",
+                                        segment.traffic === 'normal' && "border-yellow-500 text-yellow-600",
+                                        segment.traffic === 'light' && "border-green-500 text-green-600"
+                                      )}
+                                    >
+                                      {segment.traffic} traffic
                                     </Badge>
-                                  </div>
-                                  
-                                  <div className="flex items-center gap-2 text-base font-medium mb-1">
-                                    <span className="text-foreground">{segment.from}</span>
-                                    <span className="text-muted-foreground">→</span>
-                                    <span className="text-foreground">{segment.to}</span>
-                                  </div>
+                                  )}
                                 </div>
-                                
-                                <div className="text-right space-y-1">
-                                  <div className="flex items-center gap-2 justify-end">
+                                <div className="text-right">
+                                  <div className="flex items-center gap-2 text-lg font-semibold">
                                     <Clock className="w-4 h-4 text-muted-foreground" />
-                                    <span className="text-lg font-bold text-foreground">
+                                    <span className="text-foreground">
                                       {formatDuration(segment.duration)}
                                     </span>
                                   </div>
@@ -975,7 +966,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                                   </div>
                                 </div>
                               </div>
-                            )}
+                            </div>
                           </div>
                           {timeToPickupSubtotal}
                           {pickupToDeliverySubtotal}
@@ -984,7 +975,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                     })}
                     
                     {/* Total Summary */}
-                    <div className="pt-4 border-t-2 border-border">
+                    <div className="pt-4 border-t-2 border-border space-y-3">
                       <div className="flex items-center justify-between p-4 bg-primary/5 rounded-lg">
                         <div className="flex items-center gap-2">
                           <CheckCircle className="w-5 h-5 text-primary" />
@@ -999,6 +990,22 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                           </div>
                         </div>
                       </div>
+                      
+                      {/* Ground Handling Note */}
+                      {(() => {
+                        const groundHandlingTime = tripResult.segments
+                          .filter(s => s.type === 'ground_handling')
+                          .reduce((sum, s) => sum + s.duration, 0);
+                        
+                        if (groundHandlingTime > 0) {
+                          return (
+                            <div className="text-xs text-muted-foreground italic px-2">
+                              * {formatDuration(groundHandlingTime)} added for ground handling
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   </div>
                 </CardContent>
