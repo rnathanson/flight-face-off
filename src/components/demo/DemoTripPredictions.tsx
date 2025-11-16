@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { LocationAutocomplete } from '@/components/LocationAutocomplete';
-import { AlertTriangle, CheckCircle, Target, MapPin, Plane, Clock, Loader2, User, Users, X, Heart, ChevronsUpDown, Check } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Target, MapPin, Plane, Clock, Loader2, User, Users, X, Heart, ChevronsUpDown, Check, Wind, Droplets, Layers, Zap } from 'lucide-react';
 import { GeocodeResult } from '@/lib/geocoding';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -153,6 +153,18 @@ export const DemoTripPredictions = ({
   const {
     toast
   } = useToast();
+  
+  // Organ icon mapping
+  const getOrganIcon = (organType: string) => {
+    const iconMap: { [key: string]: typeof Heart } = {
+      heart: Heart,
+      lungs: Wind,
+      kidneys: Droplets,
+      liver: Layers,
+      pancreas: Zap,
+    };
+    return iconMap[organType.toLowerCase()] || Heart;
+  };
 
   // Fetch mission types and available crew on mount
   useEffect(() => {
@@ -573,23 +585,33 @@ export const DemoTripPredictions = ({
                   <SelectValue placeholder="Select organ type..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {missionTypes.map(mt => <SelectItem key={mt.id} value={mt.organ_type}>
-                      <div className="flex items-center gap-2">
-                        <Heart className="w-4 h-4" />
-                        <span className="capitalize">{mt.organ_type}</span>
-                        <span className="text-muted-foreground text-xs">
-                          ({mt.min_viability_hours}-{mt.max_viability_hours}h viability)
-                        </span>
-                      </div>
-                    </SelectItem>)}
+                  {missionTypes.map(mt => {
+                    const OrganIcon = getOrganIcon(mt.organ_type);
+                    return (
+                      <SelectItem key={mt.id} value={mt.organ_type}>
+                        <div className="flex items-center gap-2">
+                          <OrganIcon className="w-4 h-4" />
+                          <span className="capitalize">{mt.organ_type}</span>
+                          <span className="text-muted-foreground text-xs">
+                            ({mt.min_viability_hours}-{mt.max_viability_hours}h viability)
+                          </span>
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
-              {selectedMissionType && <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-                  <Heart className="w-4 h-4" />
+              {selectedMissionType && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+                  {(() => {
+                    const OrganIcon = getOrganIcon(selectedMissionType.organ_type);
+                    return <OrganIcon className="w-4 h-4" />;
+                  })()}
                   <span>
                     Viability Window: {selectedMissionType.min_viability_hours}-{selectedMissionType.max_viability_hours} hours
                   </span>
-                </div>}
+                </div>
+              )}
             </div>
 
             {/* Case Number Lookup - Right */}
