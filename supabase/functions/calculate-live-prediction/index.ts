@@ -200,6 +200,8 @@ serve(async (req) => {
       hospitalPartnershipScore = partnershipCount > 0 ? totalPartnershipScore / partnershipCount : 0;
     }
 
+    // CRITICAL: Calculate viability penalty - this is the most important factor
+    let viabilityPenaltyMultiplier = 1.0;
     if (distance && organType) {
       const viabilityHours: Record<string, number> = {
         heart: 6,
@@ -215,25 +217,49 @@ serve(async (req) => {
       
       distanceComplexityScore = Math.max(0, 100 - (viabilityRatio * 100));
       
+      // Exponential penalty as viability approaches limit
+      // 0-60%: no penalty (multiplier = 1.0)
+      // 60-80%: moderate penalty (multiplier drops to 0.7)
+      // 80-95%: severe penalty (multiplier drops to 0.4)
+      // 95-100%: critical penalty (multiplier drops to 0.25)
+      // >100%: extreme penalty (multiplier = 0.15)
+      if (viabilityRatio <= 0.6) {
+        viabilityPenaltyMultiplier = 1.0;
+      } else if (viabilityRatio <= 0.8) {
+        // Linear drop from 1.0 to 0.7
+        viabilityPenaltyMultiplier = 1.0 - ((viabilityRatio - 0.6) / 0.2) * 0.3;
+      } else if (viabilityRatio <= 0.95) {
+        // Steeper drop from 0.7 to 0.4
+        viabilityPenaltyMultiplier = 0.7 - ((viabilityRatio - 0.8) / 0.15) * 0.3;
+      } else if (viabilityRatio <= 1.0) {
+        // Critical drop from 0.4 to 0.25
+        viabilityPenaltyMultiplier = 0.4 - ((viabilityRatio - 0.95) / 0.05) * 0.15;
+      } else {
+        // Exceeded window - cap at 15% success max
+        viabilityPenaltyMultiplier = 0.15;
+      }
+      
       logisticsInsights.routeComplexity = `${distance.toFixed(0)} NM distance, ~${estimatedHours.toFixed(1)} hours flight time (${(viabilityRatio * 100).toFixed(0)}% of ${organType} viability window)`;
+      logisticsInsights.viabilityPenalty = `${(viabilityPenaltyMultiplier * 100).toFixed(0)}% success multiplier due to viability constraints`;
     }
 
-    // Calculate enhanced prediction
+    // Calculate enhanced prediction with logistics
     let enhancedPrediction = basePrediction;
     if (airportFamiliarityScore > 0 || hospitalPartnershipScore > 0 || distanceComplexityScore > 0) {
-      const logisticsWeight = 0.2;
+      const logisticsWeight = 0.15; // Reduced from 0.2 since viability is now separate
       const logisticsScore = (
-        (airportFamiliarityScore > 0 ? airportFamiliarityScore * 0.4 : 0) +
-        (hospitalPartnershipScore > 0 ? hospitalPartnershipScore * 0.4 : 0) +
-        (distanceComplexityScore > 0 ? distanceComplexityScore * 0.2 : 0)
+        (airportFamiliarityScore > 0 ? airportFamiliarityScore * 0.5 : 0) +
+        (hospitalPartnershipScore > 0 ? hospitalPartnershipScore * 0.5 : 0)
       ) / (
-        (airportFamiliarityScore > 0 ? 0.4 : 0) +
-        (hospitalPartnershipScore > 0 ? 0.4 : 0) +
-        (distanceComplexityScore > 0 ? 0.2 : 0)
+        (airportFamiliarityScore > 0 ? 0.5 : 0) +
+        (hospitalPartnershipScore > 0 ? 0.5 : 0)
       );
       
       enhancedPrediction = basePrediction * (1 - logisticsWeight) + logisticsScore * logisticsWeight;
     }
+    
+    // CRITICAL: Apply viability penalty as the final step - this overrides everything
+    enhancedPrediction = enhancedPrediction * viabilityPenaltyMultiplier;
 
     // Determine confidence
     let confidence: 'low' | 'medium' | 'high' = 'low';
