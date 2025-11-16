@@ -66,24 +66,23 @@ function parseAirNavSearchResults(html: string): NearbyAirport[] {
   const airports: NearbyAirport[] = [];
 
   try {
-    // Look for airport codes in links like: <a href="/airport/KXXX">
-    const airportLinkRegex = /<a\s+href=[\"']\/airport\/([A-Z0-9]{3,4})[\"'][^>]*>([^<]+)<\/a>/gi;
+    // Match each table row containing an airport
+    // Pattern: <TR>...<A href="/airport/CODE">...distance text...</TR>
+    const rowRegex = /<TR>[\s\S]*?<A href="\/airport\/([A-Z0-9]{3,4})"[\s\S]*?<\/TR>/gi;
+    const rows = [...html.matchAll(rowRegex)];
     
-    // Also look for distance information in the same row
-    // Typical format: "XXX.X nm" or "XX.X mi"
-    const matches = [...html.matchAll(airportLinkRegex)];
+    console.log(`Found ${rows.length} airport rows in HTML`);
     
-    for (const match of matches) {
-      const code = match[1];
-      const name = match[2].trim();
+    for (const row of rows) {
+      const code = row[1]; // Airport code from href="/airport/CODE"
+      const rowHtml = row[0]; // Full row HTML
       
-      // Try to find distance in nearby text
-      // Look for pattern like ">XX.X nm<" or ">XX.X mi<" near this match
-      const contextStart = Math.max(0, match.index! - 200);
-      const contextEnd = Math.min(html.length, match.index! + 400);
-      const context = html.slice(contextStart, contextEnd);
+      // Extract airport name from the row (4th TD cell typically)
+      const nameMatch = rowHtml.match(/<TD align=left>([^<]+AIRPORT[^<]*)<\/TD>/i);
+      const name = nameMatch ? nameMatch[1].trim() : '';
       
-      const distanceMatch = context.match(/>(\d+\.?\d*)\s*nm</i);
+      // Extract distance from last TD: "12.1 nm NNE"
+      const distanceMatch = rowHtml.match(/(\d+\.?\d*)\s*nm\s+[NSEW]{1,3}/i);
       const distance_nm = distanceMatch ? parseFloat(distanceMatch[1]) : 0;
       
       airports.push({
