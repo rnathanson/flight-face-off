@@ -474,7 +474,10 @@ export async function fetchAverageWindsAlongRoute(
   descentPhaseNM: number = 50
 ): Promise<WindsAloftData | null> {
   try {
-    console.log(`Averaging winds along route: ${waypoints.length} waypoints, ${distanceNM.toFixed(0)}nm total`);
+    console.log(`\n🌬️  WINDS ALOFT SAMPLING:`);
+    console.log(`   Route: ${waypoints.length} waypoints, ${distanceNM.toFixed(0)}nm total`);
+    console.log(`   Target cruise altitude: ${cruiseAltitudeFt.toFixed(0)}ft`);
+    console.log(`   Climb phase: ${climbPhaseNM.toFixed(1)}nm, Descent phase: ${descentPhaseNM.toFixed(1)}nm`);
     
     const windSamples: Array<{
       direction: number;
@@ -533,6 +536,7 @@ export async function fetchAverageWindsAlongRoute(
         // Fetch low-level winds
         const winds = await fetchLowLevelWinds(point.lat, point.lng, altitude, point.code);
         if (winds && winds.direction !== 'VRB') {
+          console.log(`  🔼 CLIMB phase at ${altitude.toFixed(0)}ft: ${winds.direction}° @ ${winds.speed}kt (station: ${winds.station})`);
           windSamples.push({
             direction: winds.direction as number,
             speed: winds.speed,
@@ -541,6 +545,8 @@ export async function fetchAverageWindsAlongRoute(
             phase: `climb-${altitude.toFixed(0)}ft`
           });
           stationsUsed.add(winds.station);
+        } else {
+          console.log(`  🔼 CLIMB phase at ${altitude.toFixed(0)}ft: No wind data available`);
         }
       } else if (distanceAlongRoute > distanceNM - descentPhaseNM) {
         // Descent phase - sample at multiple altitudes, weighted toward lower
@@ -552,6 +558,7 @@ export async function fetchAverageWindsAlongRoute(
         // Fetch low-level winds
         const winds = await fetchLowLevelWinds(point.lat, point.lng, altitude, point.code);
         if (winds && winds.direction !== 'VRB') {
+          console.log(`  🔽 DESCENT phase at ${altitude.toFixed(0)}ft: ${winds.direction}° @ ${winds.speed}kt (station: ${winds.station})`);
           windSamples.push({
             direction: winds.direction as number,
             speed: winds.speed,
@@ -560,6 +567,8 @@ export async function fetchAverageWindsAlongRoute(
             phase: `descent-${altitude.toFixed(0)}ft`
           });
           stationsUsed.add(winds.station);
+        } else {
+          console.log(`  🔽 DESCENT phase at ${altitude.toFixed(0)}ft: No wind data available`);
         }
       } else {
         // Cruise phase - sample at cruise altitude
@@ -570,6 +579,7 @@ export async function fetchAverageWindsAlongRoute(
         // Fetch high-level winds
         const winds = await fetchWindsAloft(point.lat, point.lng, altitude, 0, point.code);
         if (winds && winds.direction !== 'VRB') {
+          console.log(`  ✈️  CRUISE phase at ${altitude.toFixed(0)}ft: ${winds.direction}° @ ${winds.speed}kt (station: ${winds.station})`);
           windSamples.push({
             direction: winds.direction as number,
             speed: winds.speed,
@@ -578,6 +588,8 @@ export async function fetchAverageWindsAlongRoute(
             phase: `cruise-${altitude.toFixed(0)}ft`
           });
           stationsUsed.add(winds.station);
+        } else {
+          console.log(`  ✈️  CRUISE phase at ${altitude.toFixed(0)}ft: No wind data available`);
         }
       }
     }
@@ -599,6 +611,7 @@ export async function fetchAverageWindsAlongRoute(
       for (const point of fallbackPoints) {
         const winds = await fetchWindsAloft(point.lat, point.lng, cruiseAltitudeFt, 0, point.code);
         if (winds && winds.direction !== 'VRB') {
+          console.log(`  ✈️  CRUISE fallback at ${cruiseAltitudeFt.toFixed(0)}ft: ${winds.direction}° @ ${winds.speed}kt (station: ${winds.station})`);
           windSamples.push({
             direction: winds.direction as number,
             speed: winds.speed,
