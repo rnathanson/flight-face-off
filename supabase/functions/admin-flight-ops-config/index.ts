@@ -41,7 +41,9 @@ const DEFAULT_CONFIG = {
     liver: { min: 8, max: 12 },
     pancreas: { min: 0, max: 12 },
     kidneys: { min: 24, max: 36 }
-  }
+  },
+  max_wind_kt: 35,
+  max_crosswind_kt: 15
 };
 
 Deno.serve(async (req) => {
