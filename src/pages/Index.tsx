@@ -5,54 +5,46 @@ import { Settings, LogOut, Sparkles, Zap } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { TransplantTimeCalculator } from '@/components/TransplantTimeCalculator';
 import northwellLogo from '@/assets/northwell-health-logo.png';
-
 const Index = () => {
-  const { isAdmin, signOut } = useAuth();
+  const {
+    isAdmin,
+    signOut
+  } = useAuth();
   const navigate = useNavigate();
-
   const handleLogout = async () => {
     await signOut();
     window.location.reload();
   };
-
   const handleAIPlatformClick = (tripData?: any) => {
-    navigate('/ai-platform', { state: { tripData } });
+    navigate('/ai-platform', {
+      state: {
+        tripData
+      }
+    });
   };
-
-  return (
-    <div className="min-h-screen bg-background flex flex-col">
+  return <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b border-border bg-card shadow-sm">
         <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <img src={northwellLogo} alt="Northwell Health" className="h-10 md:h-12" />
               <h1 className="text-lg md:text-xl font-semibold text-foreground hidden md:block">
-                Heart Transplant Transportation Calculator
+                Aviation Transplant Trip Calculator
               </h1>
             </div>
 
             <div className="flex items-center gap-2">
-              <Button 
-                onClick={() => handleAIPlatformClick()} 
-                variant="outline"
-                className="gap-2"
-              >
+              <Button onClick={() => handleAIPlatformClick()} variant="outline" className="gap-2">
                 <Sparkles className="w-4 h-4" />
                 <span className="hidden md:inline">AI Intelligence Platform</span>
                 <span className="md:hidden">AI Platform</span>
               </Button>
               
-              {isAdmin ? (
-                <>
+              {isAdmin ? <>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button 
-                          onClick={() => navigate('/admin')} 
-                          variant="ghost" 
-                          size="icon"
-                          className="text-muted-foreground hover:text-foreground"
-                        >
+                        <Button onClick={() => navigate('/admin')} variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
                           <Settings className="w-5 h-5" />
                         </Button>
                       </TooltipTrigger>
@@ -64,12 +56,7 @@ const Index = () => {
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button 
-                          onClick={handleLogout} 
-                          variant="ghost" 
-                          size="icon"
-                          className="text-muted-foreground hover:text-foreground"
-                        >
+                        <Button onClick={handleLogout} variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
                           <LogOut className="w-5 h-5" />
                         </Button>
                       </TooltipTrigger>
@@ -78,17 +65,9 @@ const Index = () => {
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                </>
-              ) : (
-                <Button 
-                  onClick={() => navigate('/admin-login')} 
-                  variant="ghost" 
-                  size="icon"
-                  className="text-muted-foreground hover:text-foreground"
-                >
+                </> : <Button onClick={() => navigate('/admin-login')} variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
                   <Settings className="w-5 h-5" />
-                </Button>
-              )}
+                </Button>}
             </div>
           </div>
         </div>
@@ -108,8 +87,6 @@ const Index = () => {
           </div>
         </div>
       </footer>
-    </div>
-  );
+    </div>;
 };
-
 export default Index;
