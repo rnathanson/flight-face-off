@@ -21,18 +21,21 @@ export function FlightOpsConfigPanel() {
   const loadConfig = async () => {
     try {
       console.log('Loading flight ops config...');
-      const { data, error } = await supabase
-        .from('flight_ops_config')
-        .select('*')
-        .single();
+      const { data, error } = await supabase.functions.invoke('admin-flight-ops-config', {
+        method: 'GET'
+      });
 
       if (error) {
-        console.error('Supabase error loading config:', error);
+        console.error('Error loading config:', error);
         throw error;
       }
       
-      console.log('Config loaded successfully:', data);
-      setConfig(data);
+      if (data?.created) {
+        toast.success('Default configuration created');
+      }
+      
+      console.log('Config loaded successfully:', data.config);
+      setConfig(data.config);
     } catch (error: any) {
       console.error('Error loading config:', error);
       toast.error(`Failed to load configuration: ${error.message || 'Unknown error'}`);
@@ -44,16 +47,30 @@ export function FlightOpsConfigPanel() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('flight_ops_config')
-        .update(config)
-        .eq('id', config.id);
+      const adminSession = localStorage.getItem('admin_session');
+      if (!adminSession) {
+        toast.error('Admin session expired. Please log in again.');
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('admin-flight-ops-config', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${adminSession}`
+        },
+        body: config
+      });
 
       if (error) throw error;
+      
+      if (data?.config) {
+        setConfig(data.config);
+      }
+      
       toast.success('Flight operations configuration updated');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving config:', error);
-      toast.error('Failed to save configuration');
+      toast.error(error.message || 'Failed to save configuration');
     } finally {
       setSaving(false);
     }
