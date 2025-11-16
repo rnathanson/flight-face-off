@@ -65,14 +65,14 @@ const Demo = () => {
               <TabsTrigger value="success" className="text-xs md:text-sm">
                 Success Rate
               </TabsTrigger>
+              <TabsTrigger value="roi" className="text-xs md:text-sm">
+                ROI Calculator
+              </TabsTrigger>
               <TabsTrigger value="chatbot" className="text-xs md:text-sm">
                 Crew Chat
               </TabsTrigger>
               <TabsTrigger value="brief" className="text-xs md:text-sm">
                 Auto Brief
-              </TabsTrigger>
-              <TabsTrigger value="roi" className="text-xs md:text-sm">
-                ROI Calculator
               </TabsTrigger>
               <TabsTrigger value="pilot" className="text-xs md:text-sm">
                 Chief Pilot
@@ -90,16 +90,16 @@ const Demo = () => {
               <DemoSuccessRate />
             </TabsContent>
 
+            <TabsContent value="roi" className="animate-fade-in">
+              <DemoROI />
+            </TabsContent>
+
             <TabsContent value="chatbot" className="animate-fade-in">
               <DemoChatbot />
             </TabsContent>
 
             <TabsContent value="brief" className="animate-fade-in">
               <DemoCrewBrief />
-            </TabsContent>
-
-            <TabsContent value="roi" className="animate-fade-in">
-              <DemoROI />
             </TabsContent>
 
             <TabsContent value="pilot" className="animate-fade-in">

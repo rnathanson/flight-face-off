@@ -4,12 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LocationAutocomplete } from '@/components/LocationAutocomplete';
-import { AlertTriangle, CheckCircle, Target, MapPin, Plane, Clock, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Target, MapPin, Plane, Clock, Loader2, User, Users, X, Heart } from 'lucide-react';
 import { GeocodeResult } from '@/lib/geocoding';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { TripData } from '@/types/trip';
+import { cn } from '@/lib/utils';
 
 interface Airport {
   code: string;
@@ -27,6 +30,54 @@ interface TripCalculation {
   baseTime: number;
 }
 
+interface MedicalPersonnel {
+  id: string;
+  full_name: string;
+  role: string;
+  specialty?: string;
+  total_missions: number;
+  success_rate: number;
+}
+
+interface CrewMember {
+  id: string;
+  full_name: string;
+  role: string;
+  is_chief_pilot: boolean;
+  total_missions: number;
+  success_rate: number;
+}
+
+interface MissionType {
+  id: string;
+  organ_type: string;
+  min_viability_hours: number;
+  max_viability_hours: number;
+}
+
+interface SuccessAnalysis {
+  overallSuccess: number;
+  crewScore: number;
+  medicalTeamScore: number;
+  routeScore: number;
+  viabilityScore: number;
+  viabilityStatus: 'safe' | 'warning' | 'critical';
+  viabilityUsedPercent: number;
+  insights: Array<{
+    type: string;
+    title: string;
+    message: string;
+    score: number;
+    status?: string;
+  }>;
+  suggestions: string[];
+  crewMembers: CrewMember[];
+  leadDoctor: MedicalPersonnel;
+  surgicalTeam: MedicalPersonnel[];
+  coordinator?: MedicalPersonnel;
+  missionType: MissionType;
+}
+
 interface DemoTripPredictionsProps {
   initialTripData?: TripData | null;
 }
@@ -38,43 +89,111 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
   const [selectedDestination, setSelectedDestination] = useState<GeocodeResult | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [tripCalc, setTripCalc] = useState<TripCalculation | null>(null);
+  
+  // New state for organ selection and team
+  const [organType, setOrganType] = useState<string>('');
+  const [missionTypes, setMissionTypes] = useState<MissionType[]>([]);
+  const [leadDoctorSearch, setLeadDoctorSearch] = useState('');
+  const [selectedLeadDoctor, setSelectedLeadDoctor] = useState<MedicalPersonnel | null>(null);
+  const [leadDoctorSuggestions, setLeadDoctorSuggestions] = useState<MedicalPersonnel[]>([]);
+  const [surgicalTeam, setSurgicalTeam] = useState<MedicalPersonnel[]>([]);
+  const [surgeonSearch, setSurgeonSearch] = useState('');
+  const [surgeonSuggestions, setSurgeonSuggestions] = useState<MedicalPersonnel[]>([]);
+  const [coordinatorSearch, setCoordinatorSearch] = useState('');
+  const [selectedCoordinator, setSelectedCoordinator] = useState<MedicalPersonnel | null>(null);
+  const [coordinatorSuggestions, setCoordinatorSuggestions] = useState<MedicalPersonnel[]>([]);
+  const [assignedCrew, setAssignedCrew] = useState<CrewMember[]>([]);
+  const [successAnalysis, setSuccessAnalysis] = useState<SuccessAnalysis | null>(null);
+  
   const { toast } = useToast();
 
-  // Initialize with incoming trip data
+  // Fetch mission types on mount
   useEffect(() => {
-    if (initialTripData) {
-      setOriginHospital(initialTripData.originHospital);
-      setDestinationHospital(initialTripData.destinationHospital);
-      setSelectedOrigin(initialTripData.origin);
-      setSelectedDestination(initialTripData.destination);
-
-      // Auto-calculate if we have airports
-      if (initialTripData.originAirport && initialTripData.destAirport) {
-        const flightDistance = calculateDistance(
-          initialTripData.originAirport.lat,
-          initialTripData.originAirport.lng,
-          initialTripData.destAirport.lat,
-          initialTripData.destAirport.lng
-        );
-        const flightTime = calculateFlightTime(flightDistance);
-        const originGroundTime = Math.round((initialTripData.originAirport.distance_nm || 10) * 2.5);
-        const destGroundTime = Math.round((initialTripData.destAirport.distance_nm || 10) * 2.5);
-        const baseTime = originGroundTime + flightTime + destGroundTime;
-
-        setTripCalc({
-          origin: initialTripData.origin,
-          destination: initialTripData.destination,
-          originAirport: initialTripData.originAirport,
-          destAirport: initialTripData.destAirport,
-          baseTime,
-        });
+    const fetchMissionTypes = async () => {
+      const { data } = await supabase
+        .from('mission_types')
+        .select('*')
+        .order('organ_type');
+      if (data) {
+        setMissionTypes(data);
       }
-    }
-  }, [initialTripData]);
+    };
+    fetchMissionTypes();
+  }, []);
 
-  const findNearestAirport = async (lat: number, lon: number): Promise<Airport> => {
+  // Auto-assign 2 pilots when component loads
+  useEffect(() => {
+    const assignPilots = async () => {
+      const { data } = await supabase
+        .from('crew_members')
+        .select('*')
+        .order('success_rate', { ascending: false })
+        .limit(2);
+      if (data && data.length === 2) {
+        setAssignedCrew(data);
+      }
+    };
+    assignPilots();
+  }, []);
+
+  // Search medical personnel with debounce
+  useEffect(() => {
+    if (leadDoctorSearch.length < 2) {
+      setLeadDoctorSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      const { data } = await supabase.functions.invoke('search-medical-personnel', {
+        body: { searchTerm: leadDoctorSearch, role: 'lead_doctor' }
+      });
+      if (data?.results) {
+        setLeadDoctorSuggestions(data.results);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [leadDoctorSearch]);
+
+  useEffect(() => {
+    if (surgeonSearch.length < 2) {
+      setSurgeonSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      const { data } = await supabase.functions.invoke('search-medical-personnel', {
+        body: { searchTerm: surgeonSearch, role: 'surgeon' }
+      });
+      if (data?.results) {
+        setSurgeonSuggestions(data.results);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [surgeonSearch]);
+
+  useEffect(() => {
+    if (coordinatorSearch.length < 2) {
+      setCoordinatorSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      const { data } = await supabase.functions.invoke('search-medical-personnel', {
+        body: { searchTerm: coordinatorSearch, role: 'coordinator' }
+      });
+      if (data?.results) {
+        setCoordinatorSuggestions(data.results);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [coordinatorSearch]);
+
+  const findNearestAirport = async (lat: number, lng: number): Promise<Airport> => {
     const { data, error } = await supabase.functions.invoke('find-nearest-airport', {
-      body: { lat, lng: lon, maxDistance: 100 }
+      body: { lat, lng, maxDistance: 100 }
     });
 
     if (error || !data) {
@@ -91,7 +210,7 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
   };
 
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 3440.065; // Earth's radius in nautical miles
+    const R = 3440.065;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
@@ -102,30 +221,47 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
   };
 
   const calculateFlightTime = (distanceNM: number): number => {
-    const cruiseSpeed = 440; // PC-24 cruise speed in knots
-    const flightTimeHours = distanceNM / cruiseSpeed;
-    const flightTimeMinutes = flightTimeHours * 60;
-    const taxiAndProcedures = 15;
-    return Math.round(flightTimeMinutes + taxiAndProcedures);
+    const cruiseSpeed = 440;
+    const flightTimeMinutes = (distanceNM / cruiseSpeed) * 60;
+    const taxiTime = 20;
+    return Math.round(flightTimeMinutes + taxiTime);
   };
 
   const handleCalculate = async () => {
     if (!selectedOrigin || !selectedDestination) {
       toast({
         title: "Missing Information",
-        description: "Please select both origin and destination hospitals.",
+        description: "Please select both origin and destination hospitals",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!organType) {
+      toast({
+        title: "Missing Information",
+        description: "Please select an organ type",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!selectedLeadDoctor) {
+      toast({
+        title: "Missing Information",
+        description: "Please select a lead doctor",
         variant: "destructive",
       });
       return;
     }
 
     setCalculating(true);
+    setSuccessAnalysis(null);
+
     try {
-      // Find nearest airports
       const originAirport = await findNearestAirport(selectedOrigin.lat, selectedOrigin.lon);
       const destAirport = await findNearestAirport(selectedDestination.lat, selectedDestination.lon);
 
-      // Calculate flight distance and time
       const flightDistance = calculateDistance(
         originAirport.lat,
         originAirport.lng,
@@ -133,11 +269,8 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
         destAirport.lng
       );
       const flightTime = calculateFlightTime(flightDistance);
-
-      // Estimate ground transport times (rough estimates)
-      const originGroundTime = Math.round((originAirport.distance_nm || 10) * 2.5); // ~2.5 min per nm
+      const originGroundTime = Math.round((originAirport.distance_nm || 10) * 2.5);
       const destGroundTime = Math.round((destAirport.distance_nm || 10) * 2.5);
-
       const baseTime = originGroundTime + flightTime + destGroundTime;
 
       setTripCalc({
@@ -148,15 +281,32 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
         baseTime,
       });
 
+      const { data: analysis } = await supabase.functions.invoke('calculate-mission-success', {
+        body: {
+          crewMemberIds: assignedCrew.map(c => c.id),
+          leadDoctorId: selectedLeadDoctor.id,
+          surgicalTeamIds: surgicalTeam.map(s => s.id),
+          coordinatorId: selectedCoordinator?.id,
+          organType,
+          estimatedTimeMinutes: baseTime,
+          originHospital: selectedOrigin.displayName,
+          destinationHospital: selectedDestination.displayName,
+        }
+      });
+
+      if (analysis) {
+        setSuccessAnalysis(analysis);
+      }
+
       toast({
-        title: "Trip Calculated",
-        description: "AI predictions generated successfully.",
+        title: "Mission Analysis Complete",
+        description: "AI predictions generated successfully",
       });
     } catch (error) {
-      console.error('Calculation error:', error);
+      console.error('Error calculating trip:', error);
       toast({
-        title: "Calculation Failed",
-        description: "Unable to calculate trip. Please try again.",
+        title: "Calculation Error",
+        description: "Failed to calculate trip details",
         variant: "destructive",
       });
     } finally {
@@ -164,205 +314,431 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
     }
   };
 
-  const scenarios = tripCalc ? [
-    {
-      type: 'Worst Case',
-      icon: AlertTriangle,
-      color: 'text-destructive',
-      bgColor: 'bg-destructive/10',
-      borderColor: 'border-destructive/30',
-      time: `${Math.floor((tripCalc.baseTime * 1.25) / 60)}h ${Math.round((tripCalc.baseTime * 1.25) % 60)}m - ${Math.floor((tripCalc.baseTime * 1.35) / 60)}h ${Math.round((tripCalc.baseTime * 1.35) % 60)}m`,
-      confidence: 78,
-      factors: [
-        'Potential weather delays at destination',
-        'Peak traffic conditions possible',
-        'ATC delays during busy periods',
-      ],
-    },
-    {
-      type: 'Likely Scenario',
-      icon: CheckCircle,
-      color: 'text-success',
-      bgColor: 'bg-success/10',
-      borderColor: 'border-success/30',
-      time: `${Math.floor(tripCalc.baseTime / 60)}h ${Math.round(tripCalc.baseTime % 60)}m - ${Math.floor((tripCalc.baseTime * 1.1) / 60)}h ${Math.round((tripCalc.baseTime * 1.1) % 60)}m`,
-      confidence: 92,
-      factors: [
-        'Normal weather conditions expected',
-        'Optimal routing available',
-        'Standard traffic patterns',
-      ],
-    },
-    {
-      type: 'Best Case',
-      icon: Target,
-      color: 'text-primary',
-      bgColor: 'bg-primary/10',
-      borderColor: 'border-primary/30',
-      time: `${Math.floor((tripCalc.baseTime * 0.85) / 60)}h ${Math.round((tripCalc.baseTime * 0.85) % 60)}m - ${Math.floor((tripCalc.baseTime * 0.95) / 60)}h ${Math.round((tripCalc.baseTime * 0.95) % 60)}m`,
-      confidence: 85,
-      factors: [
-        'Favorable winds at altitude',
-        'Light traffic at all segments',
-        'Direct routing clearance',
-      ],
-    },
-  ] : [];
+  const addSurgeon = (surgeon: MedicalPersonnel) => {
+    if (!surgicalTeam.find(s => s.id === surgeon.id)) {
+      setSurgicalTeam([...surgicalTeam, surgeon]);
+      setSurgeonSearch('');
+      setSurgeonSuggestions([]);
+    }
+  };
+
+  const removeSurgeon = (id: string) => {
+    setSurgicalTeam(surgicalTeam.filter(s => s.id !== id));
+  };
+
+  const selectedMissionType = missionTypes.find(mt => mt.organ_type === organType);
 
   return (
     <div className="space-y-6">
-      <Card className="shadow-card">
+      <Card className="shadow-card animate-fade-in">
         <CardHeader>
-          <CardTitle className="text-2xl">AI-Powered Trip Predictions</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Target className="w-5 h-5 text-primary" />
+            AI-Powered Trip Intelligence
+          </CardTitle>
           <CardDescription>
-            Enter trip details to get intelligent time estimates with confidence scoring
+            Advanced mission planning with organ viability tracking and success prediction
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid md:grid-cols-2 gap-4 mb-6">
+        <CardContent className="space-y-6">
+          <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="origin">Origin Hospital</Label>
+              <Label>Origin Hospital</Label>
               <LocationAutocomplete
                 value={originHospital}
                 onChange={setOriginHospital}
-                onLocationSelect={setSelectedOrigin}
-                placeholder="Enter origin hospital address..."
-                label="Origin"
+                onLocationSelect={(result) => {
+                  setSelectedOrigin(result);
+                  setOriginHospital(result.displayName);
+                }}
+                placeholder="Search origin hospital..."
+                label="Origin Hospital"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="destination">Destination Hospital</Label>
+              <Label>Destination Hospital</Label>
               <LocationAutocomplete
                 value={destinationHospital}
                 onChange={setDestinationHospital}
-                onLocationSelect={setSelectedDestination}
-                placeholder="Enter destination hospital address..."
-                label="Destination"
+                onLocationSelect={(result) => {
+                  setSelectedDestination(result);
+                  setDestinationHospital(result.displayName);
+                }}
+                placeholder="Search destination hospital..."
+                label="Destination Hospital"
               />
             </div>
           </div>
 
+          <div className="space-y-2">
+            <Label>Organ Type / Mission Profile</Label>
+            <Select value={organType} onValueChange={setOrganType}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select organ type..." />
+              </SelectTrigger>
+              <SelectContent>
+                {missionTypes.map((mt) => (
+                  <SelectItem key={mt.id} value={mt.organ_type}>
+                    <div className="flex items-center gap-2">
+                      <Heart className="w-4 h-4" />
+                      <span className="capitalize">{mt.organ_type}</span>
+                      <span className="text-muted-foreground text-xs">
+                        ({mt.min_viability_hours}-{mt.max_viability_hours}h viability)
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedMissionType && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+                <Heart className="w-4 h-4" />
+                <span>
+                  Viability Window: {selectedMissionType.min_viability_hours}-{selectedMissionType.max_viability_hours} hours
+                </span>
+              </div>
+            )}
+          </div>
+
+          {assignedCrew.length === 2 && (
+            <div className="space-y-2">
+              <Label>Flight Crew</Label>
+              <div className="flex gap-2">
+                {assignedCrew.map((crew) => (
+                  <div key={crew.id} className="flex-1 p-3 bg-accent/10 rounded-md">
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-primary" />
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">Captain {crew.full_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {crew.is_chief_pilot && "Chief Pilot • "}
+                          {crew.total_missions} missions • {crew.success_rate}% success
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label>Lead Doctor</Label>
+            <div className="relative">
+              <Input
+                value={selectedLeadDoctor ? selectedLeadDoctor.full_name : leadDoctorSearch}
+                onChange={(e) => {
+                  setLeadDoctorSearch(e.target.value);
+                  if (selectedLeadDoctor) setSelectedLeadDoctor(null);
+                }}
+                placeholder="Search for lead doctor..."
+              />
+              {leadDoctorSuggestions.length > 0 && !selectedLeadDoctor && (
+                <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-auto">
+                  {leadDoctorSuggestions.map((doc) => (
+                    <button
+                      key={doc.id}
+                      onClick={() => {
+                        setSelectedLeadDoctor(doc);
+                        setLeadDoctorSearch('');
+                        setLeadDoctorSuggestions([]);
+                      }}
+                      className="w-full p-3 text-left hover:bg-accent/50 transition-colors"
+                    >
+                      <p className="font-medium text-sm">{doc.full_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {doc.specialty} • {doc.total_missions} missions • {doc.success_rate}% success
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {selectedLeadDoctor && (
+              <div className="p-3 bg-primary/10 rounded-md">
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-primary" />
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">{selectedLeadDoctor.full_name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedLeadDoctor.specialty} • {selectedLeadDoctor.total_missions} missions • {selectedLeadDoctor.success_rate}% success
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Surgical Team (Optional)</Label>
+            <div className="relative">
+              <Input
+                value={surgeonSearch}
+                onChange={(e) => setSurgeonSearch(e.target.value)}
+                placeholder="Search for surgeon to add..."
+              />
+              {surgeonSuggestions.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-auto">
+                  {surgeonSuggestions.map((surgeon) => (
+                    <button
+                      key={surgeon.id}
+                      onClick={() => addSurgeon(surgeon)}
+                      className="w-full p-3 text-left hover:bg-accent/50 transition-colors"
+                      disabled={surgicalTeam.some(s => s.id === surgeon.id)}
+                    >
+                      <p className="font-medium text-sm">{surgeon.full_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {surgeon.specialty} • {surgeon.total_missions} missions • {surgeon.success_rate}% success
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {surgicalTeam.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {surgicalTeam.map((surgeon) => (
+                  <Badge key={surgeon.id} variant="secondary" className="gap-2">
+                    {surgeon.full_name}
+                    <button
+                      onClick={() => removeSurgeon(surgeon.id)}
+                      className="hover:text-destructive"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Transplant Coordinator (Optional)</Label>
+            <div className="relative">
+              <Input
+                value={selectedCoordinator ? selectedCoordinator.full_name : coordinatorSearch}
+                onChange={(e) => {
+                  setCoordinatorSearch(e.target.value);
+                  if (selectedCoordinator) setSelectedCoordinator(null);
+                }}
+                placeholder="Search for coordinator..."
+              />
+              {coordinatorSuggestions.length > 0 && !selectedCoordinator && (
+                <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-auto">
+                  {coordinatorSuggestions.map((coord) => (
+                    <button
+                      key={coord.id}
+                      onClick={() => {
+                        setSelectedCoordinator(coord);
+                        setCoordinatorSearch('');
+                        setCoordinatorSuggestions([]);
+                      }}
+                      className="w-full p-3 text-left hover:bg-accent/50 transition-colors"
+                    >
+                      <p className="font-medium text-sm">{coord.full_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {coord.total_missions} missions • {coord.success_rate}% coordination success
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {selectedCoordinator && (
+              <div className="p-3 bg-secondary/10 rounded-md">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-secondary" />
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">{selectedCoordinator.full_name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedCoordinator.total_missions} missions • {selectedCoordinator.success_rate}% success
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           <Button 
             onClick={handleCalculate} 
-            disabled={!selectedOrigin || !selectedDestination || calculating}
-            className="w-full mb-6"
+            disabled={calculating || !selectedOrigin || !selectedDestination || !organType || !selectedLeadDoctor}
+            className="w-full"
             size="lg"
           >
             {calculating ? (
               <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Analyzing Route...
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Generating AI Predictions...
               </>
             ) : (
               <>
-                <Target className="w-4 h-4 mr-2" />
-                Generate AI Predictions
+                <Target className="mr-2 h-4 w-4" />
+                Generate AI Mission Analysis
               </>
             )}
           </Button>
-
-          {tripCalc && (
-            <>
-              <div className="space-y-4 mb-6">
-                <div className="flex items-center justify-between mb-4">
-                  <Badge variant="secondary" className="bg-primary/20 text-primary">
-                    Based on historical flight data
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
-                  <MapPin className="w-5 h-5 text-primary" />
-                  <div className="flex-1">
-                    <p className="font-semibold text-foreground">{tripCalc.origin.displayName}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {tripCalc.originAirport.code} - {Math.round(tripCalc.originAirport.distance_nm || 0)}nm away
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center justify-center">
-                  <Plane className="w-5 h-5 text-muted-foreground rotate-90" />
-                </div>
-                <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
-                  <MapPin className="w-5 h-5 text-primary" />
-                  <div className="flex-1">
-                    <p className="font-semibold text-foreground">{tripCalc.destination.displayName}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {tripCalc.destAirport.code} - {Math.round(tripCalc.destAirport.distance_nm || 0)}nm away
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-6 md:grid-cols-3">
-                {scenarios.map((scenario) => {
-                  const Icon = scenario.icon;
-                  return (
-                    <Card 
-                      key={scenario.type} 
-                      className={`${scenario.bgColor} ${scenario.borderColor} border-2 shadow-sm hover:shadow-md transition-shadow`}
-                    >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Icon className={`w-5 h-5 ${scenario.color}`} />
-                          <CardTitle className="text-base">{scenario.type}</CardTitle>
-                        </div>
-                        <div className="flex items-baseline gap-2">
-                          <Clock className={`w-4 h-4 ${scenario.color}`} />
-                          <span className="text-2xl font-bold text-foreground">{scenario.time}</span>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Confidence</span>
-                            <span className="font-semibold">{scenario.confidence}%</span>
-                          </div>
-                          <Progress value={scenario.confidence} className="h-2" />
-                        </div>
-
-                        <div className="space-y-2">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase">Key Factors</p>
-                          <ul className="space-y-1.5">
-                            {scenario.factors.map((factor, idx) => (
-                              <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
-                                <span className={`mt-1 w-1 h-1 rounded-full ${scenario.color} bg-current flex-shrink-0`} />
-                                <span>{factor}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-
-              <div className="mt-6 p-4 bg-card border border-border rounded-lg">
-                <div className="flex items-start gap-3">
-                  <Target className="w-5 h-5 text-primary mt-0.5" />
-                  <div>
-                    <p className="font-semibold text-foreground mb-1">AI Recommendation</p>
-                    <p className="text-sm text-muted-foreground">
-                      Based on historical analysis of similar routes and current conditions, the{' '}
-                      <span className="font-semibold text-success">Likely Scenario</span> has the highest 
-                      probability. Consider departure timing and weather patterns for optimal results.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-
-          {!tripCalc && (
-            <div className="text-center py-12 border-2 border-dashed border-border rounded-lg">
-              <Target className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-              <p className="text-lg font-semibold mb-1">Ready to Calculate</p>
-              <p className="text-sm text-muted-foreground">
-                Enter origin and destination to generate AI-powered time predictions
-              </p>
-            </div>
-          )}
         </CardContent>
       </Card>
+
+      {successAnalysis && tripCalc && (
+        <div className="space-y-4 animate-fade-in">
+          <Card className="shadow-elevated bg-gradient-to-br from-card to-accent/5">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span>Mission Success Prediction</span>
+                <Badge variant={successAnalysis.overallSuccess >= 90 ? "default" : successAnalysis.overallSuccess >= 75 ? "secondary" : "destructive"} className="text-lg px-4 py-1">
+                  {successAnalysis.overallSuccess}%
+                </Badge>
+              </CardTitle>
+              <CardDescription>
+                AI-powered analysis based on crew, medical team, route, and organ viability
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid md:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Flight Crew</span>
+                    <span className="font-medium">{successAnalysis.crewScore}%</span>
+                  </div>
+                  <Progress value={successAnalysis.crewScore} className="h-2" />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Medical Team</span>
+                    <span className="font-medium">{successAnalysis.medicalTeamScore}%</span>
+                  </div>
+                  <Progress value={successAnalysis.medicalTeamScore} className="h-2" />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Route</span>
+                    <span className="font-medium">{successAnalysis.routeScore}%</span>
+                  </div>
+                  <Progress value={successAnalysis.routeScore} className="h-2" />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Viability</span>
+                    <span className="font-medium">{successAnalysis.viabilityScore}%</span>
+                  </div>
+                  <Progress value={successAnalysis.viabilityScore} className="h-2" />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">Organ Viability Timeline</span>
+                  <Badge variant={successAnalysis.viabilityStatus === 'safe' ? 'default' : successAnalysis.viabilityStatus === 'warning' ? 'secondary' : 'destructive'}>
+                    {successAnalysis.viabilityUsedPercent.toFixed(0)}% of window used
+                  </Badge>
+                </div>
+                <div className="relative h-3 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className={cn(
+                      "h-full transition-all duration-500",
+                      successAnalysis.viabilityStatus === 'safe' && "bg-success",
+                      successAnalysis.viabilityStatus === 'warning' && "bg-warning",
+                      successAnalysis.viabilityStatus === 'critical' && "bg-destructive"
+                    )}
+                    style={{ width: `${Math.min(successAnalysis.viabilityUsedPercent, 100)}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Procurement</span>
+                  <span>{(tripCalc.baseTime / 60).toFixed(1)}h transport</span>
+                  <span>{successAnalysis.missionType.max_viability_hours}h max</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            {successAnalysis.insights.map((insight, idx) => (
+              <Card key={idx} className="shadow-card animate-scale-in">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    {insight.type === 'crew' && <Plane className="w-4 h-4 text-primary" />}
+                    {insight.type === 'medical' && <User className="w-4 h-4 text-primary" />}
+                    {insight.type === 'route' && <MapPin className="w-4 h-4 text-primary" />}
+                    {insight.type === 'viability' && <Clock className="w-4 h-4 text-primary" />}
+                    {insight.title}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">{insight.message}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {successAnalysis.suggestions.length > 0 && (
+            <Card className="shadow-card animate-fade-in">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  {successAnalysis.viabilityStatus === 'critical' ? (
+                    <AlertTriangle className="w-5 h-5 text-destructive" />
+                  ) : (
+                    <CheckCircle className="w-5 h-5 text-success" />
+                  )}
+                  AI Recommendations
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {successAnalysis.suggestions.map((suggestion, idx) => (
+                  <div key={idx} className="flex items-start gap-2 p-3 bg-muted/50 rounded-md">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2" />
+                    <p className="text-sm">{suggestion}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          <Card className="shadow-card">
+            <CardHeader>
+              <CardTitle className="text-base">Flight Route Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <MapPin className="w-4 h-4 text-primary" />
+                    <span className="font-medium">Origin</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{tripCalc.originAirport.name} ({tripCalc.originAirport.code})</p>
+                  <p className="text-xs text-muted-foreground">{tripCalc.originAirport.distance_nm?.toFixed(1)} NM from hospital</p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <MapPin className="w-4 h-4 text-primary" />
+                    <span className="font-medium">Destination</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{tripCalc.destAirport.name} ({tripCalc.destAirport.code})</p>
+                  <p className="text-xs text-muted-foreground">{tripCalc.destAirport.distance_nm?.toFixed(1)} NM from hospital</p>
+                </div>
+              </div>
+              <div className="p-3 bg-accent/10 rounded-md">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Total Estimated Time</span>
+                  <span className="text-lg font-bold text-primary">{Math.floor(tripCalc.baseTime / 60)}h {tripCalc.baseTime % 60}m</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {!tripCalc && !calculating && (
+        <Card className="shadow-card">
+          <CardContent className="py-12 text-center">
+            <Target className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground">
+              Enter trip details and select your medical team to generate AI-powered mission analysis
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
