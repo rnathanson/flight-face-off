@@ -499,7 +499,7 @@ export async function fetchAverageWindsAlongRoute(
         // Climb phase - sample at multiple altitudes, weighted toward lower
         phase = 'climb';
         const climbFraction = distanceAlongRoute / climbPhaseNM;
-        altitude = 3000 + (cruiseAltitudeFt - 3000) * climbFraction;
+        altitude = Math.max(6000, 6000 + (cruiseAltitudeFt - 6000) * climbFraction);
         weight = 1.0; // Equal weight for simplicity
         
         // Fetch low-level winds
@@ -518,7 +518,7 @@ export async function fetchAverageWindsAlongRoute(
         // Descent phase - sample at multiple altitudes, weighted toward lower
         phase = 'descent';
         const descentFraction = (distanceNM - distanceAlongRoute) / descentPhaseNM;
-        altitude = 3000 + (cruiseAltitudeFt - 3000) * descentFraction;
+        altitude = Math.max(6000, 6000 + (cruiseAltitudeFt - 6000) * descentFraction);
         weight = 1.0;
         
         // Fetch low-level winds
