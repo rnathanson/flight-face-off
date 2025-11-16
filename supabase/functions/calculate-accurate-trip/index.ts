@@ -29,6 +29,11 @@ serve(async (req) => {
       preferredDestinationAirport
     } = await req.json();
 
+    // Parse departure time and ensure it's in UTC
+    const departureTimeUTC = new Date(departureDateTime);
+    console.log(`🛫 Departure time (UTC): ${departureTimeUTC.toISOString()}`);
+    console.log(`🛫 Departure time (Local): ${new Date(departureDateTime).toLocaleString()}`);
+
     console.log('Calculating 5-leg trip from KFRG home base...');
     console.log('Route: KFRG → Pickup Airport (flight) → Pickup Hospital (ground) → Pickup Airport (ground) → Destination Airport (flight) → Delivery Hospital (ground)');
 
@@ -100,8 +105,23 @@ serve(async (req) => {
     if (!preferredPickupAirport || pickupAirport.code === KFRG.code) {
       // If pickup is NOT on Long Island, find nearest qualified airport
       if (!isPickupOnLongIsland) {
+        // Estimate flight time from KFRG to pickup location
+        const pickupFlightDistanceNM = calculateDistance(
+          KFRG.lat, KFRG.lng, 
+          pickupLocation.lat, pickupLocation.lng
+        );
+        const pickupFlightMinutes = Math.ceil((pickupFlightDistanceNM / config.cruise_speed_ktas) * 60) + 15; // +15min for climb/taxi
+        const pickupArrivalTimeUTC = new Date(departureTimeUTC.getTime() + pickupFlightMinutes * 60000);
+
+        console.log(`📍 Estimated arrival at pickup airport: ${pickupArrivalTimeUTC.toISOString()} (${pickupFlightMinutes}min flight)`);
+
         const pickupAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
-          body: { location: pickupLocation, maxDistance: 50 }
+          body: { 
+            location: pickupLocation, 
+            maxDistance: 50,
+            departureTimeUTC: departureTimeUTC.toISOString(),
+            estimatedArrivalTimeUTC: pickupArrivalTimeUTC.toISOString()
+          }
         });
         const pickupAirports = pickupAirportsResponse.data?.qualified || [];
         if (pickupAirports.length > 0) {
@@ -139,8 +159,33 @@ serve(async (req) => {
       // If delivery is NOT on Long Island, find nearest qualified airport  
       // BUT if delivery IS on Long Island, destination airport should ALWAYS be KFRG
       if (!isDeliveryOnLongIsland) {
+        // After pickup, add ground time + patient loading
+        const loadingMinutes = 30; // Estimate for patient loading/prep
+        const pickupToDeliveryDepartureTime = new Date(
+          departureTimeUTC.getTime() + 
+          Math.ceil((calculateDistance(KFRG.lat, KFRG.lng, pickupLocation.lat, pickupLocation.lng) / config.cruise_speed_ktas) * 60 + 15) * 60000 +
+          loadingMinutes * 60000
+        );
+
+        // Estimate flight time from pickup to delivery
+        const deliveryFlightDistanceNM = calculateDistance(
+          pickupLocation.lat, pickupLocation.lng,
+          deliveryLocation.lat, deliveryLocation.lng
+        );
+        const deliveryFlightMinutes = Math.ceil((deliveryFlightDistanceNM / config.cruise_speed_ktas) * 60) + 15;
+        const deliveryArrivalTimeUTC = new Date(
+          pickupToDeliveryDepartureTime.getTime() + deliveryFlightMinutes * 60000
+        );
+
+        console.log(`📍 Estimated arrival at delivery airport: ${deliveryArrivalTimeUTC.toISOString()} (${deliveryFlightMinutes}min flight)`);
+
         const deliveryAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
-          body: { location: deliveryLocation, maxDistance: 50 }
+          body: { 
+            location: deliveryLocation, 
+            maxDistance: 50,
+            departureTimeUTC: pickupToDeliveryDepartureTime.toISOString(),
+            estimatedArrivalTimeUTC: deliveryArrivalTimeUTC.toISOString()
+          }
         });
         const deliveryAirports = deliveryAirportsResponse.data?.qualified || [];
         if (deliveryAirports.length > 0) {

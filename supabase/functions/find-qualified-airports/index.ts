@@ -185,7 +185,22 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { location, maxDistance = 50, requireDaylight = false } = await req.json();
+    const { 
+      location, 
+      maxDistance = 50, 
+      requireDaylight = false,
+      departureTimeUTC,  // ISO string in UTC
+      estimatedArrivalTimeUTC  // ISO string in UTC
+    } = await req.json();
+
+    const arrivalTime = estimatedArrivalTimeUTC 
+      ? new Date(estimatedArrivalTimeUTC) 
+      : new Date(Date.now() + 60 * 60000); // Fallback to 60min estimate
+
+    console.log(`🕐 Using arrival time (UTC): ${arrivalTime.toISOString()}`);
+    if (departureTimeUTC) {
+      console.log(`🛫 Departure time (UTC): ${departureTimeUTC}`);
+    }
 
     console.log(`Finding qualified airports near ${location.lat}, ${location.lng}`);
 
@@ -358,8 +373,7 @@ serve(async (req) => {
         continue;
       }
       
-      const estimatedFlightMinutes = 60; // Rough estimate for arrival time
-      const arrivalTime = new Date(Date.now() + estimatedFlightMinutes * 60000);
+      console.log(`🕐 Selecting TAF period for ${airport.code} at arrival time: ${arrivalTime.toISOString()}`);
       const relevantPeriod = findRelevantTafPeriod(tafPeriods, arrivalTime);
       
       if (!relevantPeriod) {
