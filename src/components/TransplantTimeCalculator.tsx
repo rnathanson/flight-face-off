@@ -889,7 +889,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 </div>
                 <div className="px-4 py-4">
                   <div className="text-2xl font-semibold text-foreground">
-                    {Math.floor((tripResult.totalTime * 1.35) / 60)}h {Math.round((tripResult.totalTime * 1.35) % 60)}m
+                    {Math.floor((tripResult.totalTime * 1.27) / 60)}h {Math.round((tripResult.totalTime * 1.27) % 60)}m
                   </div>
                 </div>
               </div>
