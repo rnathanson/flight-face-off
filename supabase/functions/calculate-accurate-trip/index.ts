@@ -55,12 +55,16 @@ serve(async (req) => {
       .select('*')
       .single();
 
+    // Normalize incoming locations to ensure lng is present
+    const pickup = { ...pickupLocation, lng: (pickupLocation as any).lng ?? pickupLocation.lon } as any;
+    const delivery = { ...deliveryLocation, lng: (deliveryLocation as any).lng ?? deliveryLocation.lon } as any;
+
     // Calculate distances from KFRG (50nm threshold for Long Island)
-    console.log('Pickup Location:', { lat: pickupLocation.lat, lon: pickupLocation.lon, display: pickupLocation.displayName });
-    console.log('Delivery Location:', { lat: deliveryLocation.lat, lon: deliveryLocation.lon, display: deliveryLocation.displayName });
+    console.log('Pickup Location:', { lat: pickup.lat, lng: pickup.lng, display: pickup.displayName });
+    console.log('Delivery Location:', { lat: delivery.lat, lng: delivery.lng, display: delivery.displayName });
     
-    const pickupDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, pickupLocation.lat, pickupLocation.lon);
-    const deliveryDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, deliveryLocation.lat, deliveryLocation.lon);
+    const pickupDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, pickup.lat, pickup.lng);
+    const deliveryDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, delivery.lat, delivery.lng);
     
     const isPickupOnLongIsland = pickupDistanceFromKFRG <= 50;
     const isDeliveryOnLongIsland = deliveryDistanceFromKFRG <= 50;
@@ -75,7 +79,7 @@ serve(async (req) => {
     // If pickup is NOT on Long Island, find nearest qualified airport
     if (!isPickupOnLongIsland) {
       const pickupAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
-        body: { location: pickupLocation, maxDistance: 50 }
+        body: { location: pickup, maxDistance: 50 }
       });
       const pickupAirports = pickupAirportsResponse.data?.qualified || [];
       if (pickupAirports.length > 0) {
@@ -87,7 +91,7 @@ serve(async (req) => {
     // BUT if delivery IS on Long Island, destination airport should ALWAYS be KFRG
     if (!isDeliveryOnLongIsland) {
       const deliveryAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
-        body: { location: deliveryLocation, maxDistance: 50 }
+        body: { location: delivery, maxDistance: 50 }
       });
       const deliveryAirports = deliveryAirportsResponse.data?.qualified || [];
       if (deliveryAirports.length > 0) {
@@ -170,13 +174,13 @@ serve(async (req) => {
     // === LEG 2: Pickup Airport to Pickup Hospital (GROUND) ===
     const leg2Data = await calculateGroundSegmentEnhanced(
       { lat: pickupAirport.lat, lng: pickupAirport.lng },
-      pickupLocation,
+      pickup,
       trafficMultiplier
     );
 
     // === LEG 3: Pickup Hospital back to Pickup Airport (GROUND) ===
     const leg3Data = await calculateGroundSegmentEnhanced(
-      pickupLocation,
+      pickup,
       { lat: pickupAirport.lat, lng: pickupAirport.lng },
       trafficMultiplier
     );
@@ -216,7 +220,7 @@ serve(async (req) => {
     // === LEG 5: Destination Airport to Delivery Hospital (GROUND) ===
     const leg5Data = await calculateGroundSegmentEnhanced(
       { lat: destinationAirport.lat, lng: destinationAirport.lng },
-      deliveryLocation,
+      delivery,
       trafficMultiplier
     );
 
@@ -275,9 +279,17 @@ serve(async (req) => {
       }
     ];
 
-    const totalTime = segments.reduce((sum, seg) => sum + seg.duration, 0);
+    const totalTime = segments.reduce((sum, seg) => sum + (Number.isFinite(seg.duration) ? seg.duration : 0), 0);
     console.log('Total time calculated:', totalTime, 'minutes');
     console.log('Departure time:', departureTime.toISOString());
+
+    if (!Number.isFinite(totalTime)) {
+      console.error('Invalid totalTime computed from segments:', segments);
+      return new Response(
+        JSON.stringify({ error: 'Calculation failed due to invalid segment durations' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     
     const arrivalTime = new Date(departureTime.getTime() + totalTime * 60 * 1000);
     console.log('Arrival time:', arrivalTime.toISOString());
