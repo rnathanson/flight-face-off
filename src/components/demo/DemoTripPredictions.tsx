@@ -141,6 +141,7 @@ export const DemoTripPredictions = ({
   const [coordinatorSuggestions, setCoordinatorSuggestions] = useState<MedicalPersonnel[]>([]);
   const [leadDoctorOpen, setLeadDoctorOpen] = useState(false);
   const [coordinatorOpen, setCoordinatorOpen] = useState(false);
+  const [surgeonOpen, setSurgeonOpen] = useState(false);
   const [availableCrew, setAvailableCrew] = useState<CrewMember[]>([]);
   const [selectedCrew, setSelectedCrew] = useState<CrewMember[]>([]);
   const [successAnalysis, setSuccessAnalysis] = useState<SuccessAnalysis | null>(null);
@@ -204,7 +205,7 @@ export const DemoTripPredictions = ({
   }, [leadDoctorSearch, leadDoctorOpen, organType]);
   useEffect(() => {
     const currentInput = surgeonInputs[activeSurgeonInput];
-    if (!currentInput || currentInput.length < 2) {
+    if ((currentInput && currentInput.length < 2) && !surgeonOpen) {
       setSurgeonSuggestions([]);
       return;
     }
@@ -213,7 +214,7 @@ export const DemoTripPredictions = ({
         data
       } = await supabase.functions.invoke('search-medical-personnel', {
         body: {
-          searchTerm: currentInput,
+          searchTerm: currentInput || '',
           role: 'surgeon'
         }
       });
@@ -230,7 +231,7 @@ export const DemoTripPredictions = ({
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [surgeonInputs, activeSurgeonInput, organType]);
+  }, [surgeonInputs, activeSurgeonInput, surgeonOpen, organType]);
   useEffect(() => {
     if (coordinatorSearch.length < 2 && !coordinatorOpen) {
       setCoordinatorSuggestions([]);
@@ -775,7 +776,7 @@ export const DemoTripPredictions = ({
             {/* Surgical Team */}
             <div className="space-y-2">
               <Label>Surgical Team (Optional)</Label>
-              <Popover>
+              <Popover open={surgeonOpen} onOpenChange={setSurgeonOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
