@@ -129,11 +129,18 @@ serve(async (req) => {
             estimatedArrivalTimeUTC: pickupArrivalTimeUTC.toISOString()
           }
         });
-        const pickupAirports = pickupAirportsResponse.data?.airports || [];
-
-        if (pickupAirports.length > 0) {
-          pickupAirport = pickupAirports[0]; // Always use nearest airport
-          pickupAirportApprovalData = pickupAirports[0]; // Store full data for approval tracking
+        
+        const airportSelection = pickupAirportsResponse.data;
+        
+        if (airportSelection?.selectedAirport) {
+          pickupAirport = airportSelection.selectedAirport;
+          pickupAirportApprovalData = airportSelection.selectedAirport;
+          
+          // Store alternate airport info for display
+          if (airportSelection.isAlternate && airportSelection.closestRejected) {
+            console.log(`ℹ️ Using alternate pickup airport ${pickupAirport.code} - closest rejected: ${airportSelection.closestRejected.code}`);
+            console.log(`Rejection reasons: ${airportSelection.closestRejected.rejectionReasons.join(', ')}`);
+          }
           
           // Check if approval is required
           if (pickupAirportApprovalData.requiresChiefPilotApproval) {
@@ -203,13 +210,18 @@ serve(async (req) => {
             estimatedArrivalTimeUTC: deliveryArrivalTimeUTC.toISOString()
           }
         });
-        const deliveryAirports = deliveryAirportsResponse.data?.airports || [];
-
-        if (deliveryAirports.length > 0) {
-          destinationAirport = deliveryAirports[0]; // Always use nearest airport
-          deliveryAirportApprovalData = deliveryAirports[0]; // Store full data for approval tracking
+        
+        const deliverySelection = deliveryAirportsResponse.data;
+        
+        if (deliverySelection?.selectedAirport) {
+          destinationAirport = deliverySelection.selectedAirport;
+          deliveryAirportApprovalData = deliverySelection.selectedAirport;
           
-          // Check if approval is required
+          if (deliverySelection.isAlternate && deliverySelection.closestRejected) {
+            console.log(`ℹ️ Using alternate delivery airport ${destinationAirport.code} - closest rejected: ${deliverySelection.closestRejected.code}`);
+            console.log(`Rejection reasons: ${deliverySelection.closestRejected.rejectionReasons.join(', ')}`);
+          }
+          
           if (deliveryAirportApprovalData.requiresChiefPilotApproval) {
             requiresChiefPilotApproval = true;
             if (deliveryAirportApprovalData.violatedGuidelines) {

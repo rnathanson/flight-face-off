@@ -4,7 +4,7 @@ import { fetchAndParseAirNav } from '../_shared/airnav-parser.ts';
 import { parseMETAR } from '../_shared/metar-parser.ts';
 import { fetchTAFWithFallback } from '../_shared/checkwx-fetcher.ts';
 import { parseTAFPeriods, findRelevantTafPeriod } from '../_shared/taf-period-parser.ts';
-import { findNearbyAirports } from '../_shared/airportdb-api.ts';
+import { findNearbyAirports, calculateDistance } from '../_shared/airportdb-api.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -57,125 +57,120 @@ interface QualifiedAirport {
   violatedGuidelines: string[];
 }
 
+interface RejectionDetail {
+  ceiling_ft?: number;
+  visibility_sm?: number;
+  wind_kt?: number;
+  crosswind_kt?: number;
+  runway?: string;
+}
+
+interface AirportSelectionResult {
+  selectedAirport: QualifiedAirport | null;
+  isAlternate: boolean;
+  closestRejected?: {
+    code: string;
+    name: string;
+    distance_nm: number;
+    rejectionReasons: string[];
+    details: RejectionDetail;
+  };
+  airports: QualifiedAirport[];
+  configUsed: any;
+}
+
 // Extract wind from METAR/TAF string
 function extractWind(weatherData: string): WindData | null {
-  // Handle variable winds
   const vrbMatch = weatherData.match(/\bVRB(\d{2,3})(?:G(\d{2,3}))?KT\b/);
   if (vrbMatch) {
-    console.log(`✓ Variable winds detected: VRB${vrbMatch[1]}KT`);
     return {
-      direction: -1, // Flag as variable
+      direction: -1,
       speed: parseInt(vrbMatch[1]),
       gust: vrbMatch[2] ? parseInt(vrbMatch[2]) : undefined
     };
   }
 
-  // Handle calm winds
   if (/\b00000KT\b/.test(weatherData)) {
-    console.log('✓ Calm winds detected: 00000KT');
     return { direction: 0, speed: 0 };
   }
 
-  // Standard winds
   const match = weatherData.match(/\b(\d{3})(\d{2,3})(?:G(\d{2,3}))?KT\b/);
-  if (!match) {
-    console.log(`⚠️ Wind pattern not found in: ${weatherData.substring(0, 100)}`);
-    return null;
-  }
+  if (!match) return null;
   
-  const result = {
+  return {
     direction: parseInt(match[1]),
     speed: parseInt(match[2]),
     gust: match[3] ? parseInt(match[3]) : undefined
   };
-  console.log(`✓ Extracted wind:`, result);
-  return result;
 }
 
-// Calculate crosswind component
 function calculateCrosswind(windSpeed: number, windDir: number, runwayHeading: number): number {
   const angleDiff = Math.abs(windDir - runwayHeading);
   const angleRad = (angleDiff * Math.PI) / 180;
   return Math.abs(Math.round(windSpeed * Math.sin(angleRad)));
 }
 
-// Calculate headwind component (negative = tailwind)
 function calculateHeadwind(windSpeed: number, windDir: number, runwayHeading: number): number {
   const angleDiff = Math.abs(windDir - runwayHeading);
   const angleRad = (angleDiff * Math.PI) / 180;
   return Math.round(windSpeed * Math.cos(angleRad));
 }
 
-// Get runway heading from runway name (e.g., "14" -> 140, "01L" -> 10)
 function getRunwayHeading(runwayName: string): number {
   const digits = runwayName.match(/\d+/)?.[0];
   if (!digits) return 0;
   return parseInt(digits) * 10;
 }
 
-// Find best runway considering crosswind
 function analyzeBestRunway(wind: WindData, runways: any[]): RunwayWindAnalysis | null {
-  if (runways.length === 0) {
-    console.log('⚠️ No runways available for wind analysis');
-    return null;
-  }
+  if (runways.length === 0) return null;
   
-  // Use gust if present (conservative approach)
   const windSpeed = wind.gust || wind.speed;
-  console.log(`🌬️  Analyzing ${runways.length} runways for wind: ${wind.direction}° at ${wind.speed}kt${wind.gust ? ` gusting ${wind.gust}kt` : ''}`);
   
-  // Handle variable winds - worst case crosswind = full wind speed
   if (wind.direction === -1) {
-    console.log(`⚠️ Variable winds: using worst-case crosswind = ${windSpeed}kt`);
-    const bestRunway = runways[0]; // Just pick first qualifying runway
+    const longestRunway = runways.reduce((max, rw) => 
+      rw.length_ft > max.length_ft ? rw : max
+    );
     return {
-      runway: bestRunway.name,
-      totalWind: windSpeed,
-      crosswind: windSpeed, // Worst case
-      headwind: 0
-    };
-  }
-
-  // Calm winds - no crosswind concern
-  if (wind.speed === 0) {
-    console.log(`✓ Calm winds: no crosswind concern`);
-    return {
-      runway: runways[0].name,
-      totalWind: 0,
-      crosswind: 0,
-      headwind: 0
+      runway: longestRunway.name,
+      crosswind: windSpeed,
+      headwind: 0,
+      totalWind: windSpeed
     };
   }
   
-  // Standard crosswind calculation
-  let bestAnalysis: RunwayWindAnalysis | null = null;
+  if (wind.speed === 0) {
+    const longestRunway = runways.reduce((max, rw) => 
+      rw.length_ft > max.length_ft ? rw : max
+    );
+    return {
+      runway: longestRunway.name,
+      crosswind: 0,
+      headwind: 0,
+      totalWind: 0
+    };
+  }
+  
+  let bestRunway: RunwayWindAnalysis | null = null;
   let lowestCrosswind = Infinity;
   
   for (const runway of runways) {
-    const heading = getRunwayHeading(runway.name);
-    const crosswind = calculateCrosswind(windSpeed, wind.direction, heading);
-    const headwind = calculateHeadwind(windSpeed, wind.direction, heading);
-    
-    const analysis: RunwayWindAnalysis = {
-      runway: runway.name,
-      crosswind,
-      headwind,
-      totalWind: windSpeed
-    };
-    
-    console.log(`  Runway ${runway.name} (${heading}°): crosswind=${crosswind}kt, headwind=${headwind}kt`);
+    const runwayHeading = getRunwayHeading(runway.name);
+    const crosswind = calculateCrosswind(windSpeed, wind.direction, runwayHeading);
+    const headwind = calculateHeadwind(windSpeed, wind.direction, runwayHeading);
     
     if (crosswind < lowestCrosswind) {
       lowestCrosswind = crosswind;
-      bestAnalysis = analysis;
+      bestRunway = {
+        runway: runway.name,
+        crosswind,
+        headwind,
+        totalWind: windSpeed
+      };
     }
   }
   
-  if (bestAnalysis) {
-    console.log(`✓ Best runway selected: ${bestAnalysis.runway} with ${bestAnalysis.crosswind}kt crosswind`);
-  }
-  
-  return bestAnalysis;
+  return bestRunway;
 }
 
 serve(async (req) => {
@@ -190,118 +185,77 @@ serve(async (req) => {
 
     const { 
       location, 
-      maxDistance = 50, 
-      requireDaylight = false,
-      departureTimeUTC,  // ISO string in UTC
-      estimatedArrivalTimeUTC,  // ISO string in UTC
-      requiresJetFuel = false  // New parameter for fuel stop logic
+      maxDistance = 100,
+      departureTimeUTC,
+      estimatedArrivalTimeUTC,
+      requiresJetFuel = false 
     } = await req.json();
+
+    const requireDaylight = false;
 
     const arrivalTime = estimatedArrivalTimeUTC 
       ? new Date(estimatedArrivalTimeUTC) 
-      : new Date(Date.now() + 60 * 60000); // Fallback to 60min estimate
+      : new Date(Date.now() + 60 * 60000);
 
     console.log(`🕐 Using arrival time (UTC): ${arrivalTime.toISOString()}`);
-    if (departureTimeUTC) {
-      console.log(`🛫 Departure time (UTC): ${departureTimeUTC}`);
-    }
-
     console.log(`Finding qualified airports near ${location.lat}, ${location.lng}`);
 
-    // Get flight ops config
     const { data: configData, error: configError } = await supabase
       .from('flight_ops_config')
       .select('*')
       .single();
 
-    if (configError) {
-      console.error('Config error:', configError);
-      throw new Error('Failed to load flight ops configuration');
-    }
+    if (configError) throw new Error('Failed to load flight ops configuration');
 
     const config = configData;
 
-    // Import static airport coordinates
-    const AIRPORT_COORDS: Record<string, { lat: number; lng: number; name: string }> = {
-      // Major airports (sample - you'll need the full list)
-      'KJFK': { lat: 40.6398, lng: -73.7789, name: 'John F Kennedy Intl' },
-      'KFRG': { lat: 40.7288, lng: -73.4134, name: 'Republic Airport' }, // Preferred over KLGA
-      'KEWR': { lat: 40.6925, lng: -74.1687, name: 'Newark Liberty Intl' },
-      'KTEB': { lat: 40.8501, lng: -74.0608, name: 'Teterboro' },
-      'KBOS': { lat: 42.3656, lng: -71.0096, name: 'Boston Logan Intl' },
-      'KPHL': { lat: 39.8719, lng: -75.2411, name: 'Philadelphia Intl' },
-      'KBWI': { lat: 39.1754, lng: -76.6683, name: 'Baltimore Washington Intl' },
-      'KDCA': { lat: 38.8521, lng: -77.0377, name: 'Ronald Reagan Washington' },
-      'KIAD': { lat: 38.9445, lng: -77.4558, name: 'Washington Dulles Intl' },
-      'KRDU': { lat: 35.8776, lng: -78.7875, name: 'Raleigh-Durham Intl' },
-      'KHKY': { lat: 35.7411, lng: -81.3895, name: 'Hickory Regional' },
-      'KCLT': { lat: 35.2140, lng: -80.9431, name: 'Charlotte Douglas Intl' },
-      'KATL': { lat: 33.6407, lng: -84.4277, name: 'Hartsfield-Jackson Atlanta' },
-      'KMCO': { lat: 28.4294, lng: -81.3089, name: 'Orlando Intl' },
-      'KMIA': { lat: 25.7959, lng: -80.2870, name: 'Miami Intl' },
-      'KFLL': { lat: 26.0726, lng: -80.1528, name: 'Fort Lauderdale Intl' },
-      'KTPA': { lat: 27.9755, lng: -82.5332, name: 'Tampa Intl' },
-    };
+    console.log(`🔍 Querying AirportDB API for airports within ${maxDistance}nm`);
+    
+    const airportResults = await findNearbyAirports(location.lat, location.lng, maxDistance);
+    
+    const nearbyAirports = airportResults.map(airport => ({
+      code: airport.icao_code,
+      name: airport.name,
+      lat: airport.latitude_deg,
+      lng: airport.longitude_deg,
+      distance_nm: calculateDistance(location.lat, location.lng, airport.latitude_deg, airport.longitude_deg)
+    })).sort((a, b) => a.distance_nm - b.distance_nm);
 
-    // Find nearby airports
-    const nearbyAirports: Array<{ code: string; name: string; lat: number; lng: number; distance_nm: number }> = [];
+    console.log(`✓ Found ${nearbyAirports.length} airports within ${maxDistance}nm`);
 
-    for (const [code, airport] of Object.entries(AIRPORT_COORDS)) {
-      const distance = calculateDistance(
-        location.lat,
-        location.lng,
-        airport.lat,
-        airport.lng
-      );
-
-      if (distance <= maxDistance) {
-        nearbyAirports.push({
-          code,
-          name: airport.name,
-          lat: airport.lat,
-          lng: airport.lng,
-          distance_nm: distance
-        });
-      }
+    // PHASE 1: Check Runway Dimensions Only
+    console.log('\n🛫 PHASE 1: Checking runway dimensions...');
+    
+    interface RunwayQualifiedAirport {
+      code: string;
+      name: string;
+      lat: number;
+      lng: number;
+      distance_nm: number;
+      elevation_ft: number;
+      airnavData: any;
+      qualifyingRunways: any[];
+      warnings: string[];
     }
+    
+    const runwayQualifiedAirports: RunwayQualifiedAirport[] = [];
 
-    // Sort by distance
-    nearbyAirports.sort((a, b) => a.distance_nm - b.distance_nm);
-
-    console.log(`Found ${nearbyAirports.length} airports within ${maxDistance}nm`);
-
-    // Qualify each airport
-    const qualifiedAirports: QualifiedAirport[] = [];
-
-    for (const airport of nearbyAirports.slice(0, 10)) { // Check top 10 closest
-      console.log(`Qualifying airport ${airport.code}...`);
+    for (const airport of nearbyAirports.slice(0, 20)) {
+      console.log(`\n📍 Checking ${airport.code} (${airport.distance_nm.toFixed(1)}nm)...`);
 
       const airnavData = await fetchAndParseAirNav(airport.code, false);
       
       if (!airnavData) {
-        console.log(`No AirNav data for ${airport.code}`);
+        console.log(`❌ No AirNav data`);
         continue;
       }
 
-      // Skip if jet fuel is required but not available
       if (requiresJetFuel && !airnavData.has_jet_fuel) {
-        console.log(`Airport ${airport.code} does not have Jet A fuel (required for fuel stop)`);
+        console.log(`❌ No Jet A fuel`);
         continue;
       }
-
-      const qualifications = {
-        passed: true,
-        runway_ok: false,
-        surface_ok: false,
-        lighting_ok: false,
-        weather_ok: true,
-        approach_ok: true,
-        wind_ok: true
-      };
 
       const warnings: string[] = [];
-
-      // Check runways
       const acceptableSurfaces = config.acceptable_surfaces || ['ASPH', 'CONC'];
       const qualifyingRunways = airnavData.runways.filter(runway => 
         runway.length_ft >= config.min_runway_length_ft &&
@@ -311,197 +265,209 @@ serve(async (req) => {
       );
 
       if (qualifyingRunways.length > 0) {
-        qualifications.runway_ok = true;
-        qualifications.surface_ok = true;
-        qualifications.lighting_ok = true;
+        console.log(`✅ Passes runway checks (${qualifyingRunways.length} qualifying runways)`);
+        runwayQualifiedAirports.push({
+          code: airport.code,
+          name: airnavData.name || airport.name,
+          lat: airnavData.lat || airport.lat,
+          lng: airnavData.lng || airport.lng,
+          distance_nm: airport.distance_nm,
+          elevation_ft: airnavData.elevation_ft || 0,
+          airnavData,
+          qualifyingRunways,
+          warnings
+        });
       } else {
-        qualifications.passed = false;
-        if (airnavData.runways.length === 0) {
-          warnings.push('No runway data available');
-        } else {
-          const longestRunway = airnavData.runways.reduce((max, rw) => 
-            rw.length_ft > max.length_ft ? rw : max
-          );
-          if (longestRunway.length_ft < config.min_runway_length_ft) {
-            warnings.push(`Longest runway ${longestRunway.length_ft}ft < ${config.min_runway_length_ft}ft required`);
-          }
-          if (longestRunway.width_ft < config.min_runway_width_ft) {
-            warnings.push(`Runway width ${longestRunway.width_ft}ft < ${config.min_runway_width_ft}ft required`);
-          }
-          if (config.requires_paved_surface && !acceptableSurfaces.includes(longestRunway.surface)) {
-            warnings.push(`Surface ${longestRunway.surface} not acceptable`);
-          }
-          if (requireDaylight && config.requires_lighting && !longestRunway.lighted) {
-            warnings.push('Runway lighting required for night operations');
-          }
-        }
+        console.log(`❌ Fails runway checks`);
       }
+    }
 
-      // Use new 3-tier TAF fetcher with CheckWX fallback
-      console.log(`\n🔍 Fetching weather for ${airport.code}...`);
+    console.log(`\n✅ PHASE 1: ${runwayQualifiedAirports.length} airports pass runway checks`);
+    
+    const closestRunwayQualified = runwayQualifiedAirports[0] || null;
+    if (closestRunwayQualified) {
+      console.log(`📍 Closest runway-qualified: ${closestRunwayQualified.code} (${closestRunwayQualified.distance_nm.toFixed(1)}nm)`);
+    }
+
+    // PHASE 2: Check Weather, Wind, Approaches
+    console.log('\n☁️ PHASE 2: Checking weather, wind, approaches...');
+    
+    const qualifiedAirports: QualifiedAirport[] = [];
+    let closestRejectedInfo: {
+      code: string;
+      name: string;
+      distance_nm: number;
+      rejectionReasons: string[];
+      details: RejectionDetail;
+    } | undefined;
+
+    for (const airport of runwayQualifiedAirports) {
+      console.log(`\n📍 Qualifying ${airport.code} (${airport.distance_nm.toFixed(1)}nm)...`);
+
+      const qualifications = {
+        passed: true,
+        runway_ok: true,
+        surface_ok: true,
+        lighting_ok: true,
+        weather_ok: true,
+        approach_ok: true,
+        wind_ok: true
+      };
+
+      const warnings: string[] = [...airport.warnings];
+      let windAnalysis: RunwayWindAnalysis | null = null;
+
+      console.log(`🔍 Fetching weather...`);
       const tafData = await fetchTAFWithFallback(airport.code);
       
       if (!tafData) {
-        console.log(`❌ No weather data available for ${airport.code} after all fallbacks`);
+        console.log(`❌ No weather data`);
         qualifications.weather_ok = false;
         qualifications.passed = false;
-        warnings.push('Unable to obtain TAF or METAR - cannot verify weather limits');
-        qualifiedAirports.push({
-          code: airport.code,
-          name: airnavData.name || airport.name,
-          lat: airnavData.lat || airport.lat,
-          lng: airnavData.lng || airport.lng,
-          distance_nm: airport.distance_nm,
-          elevation_ft: airnavData.elevation_ft || 0,
-          qualifications,
-          warnings,
-          requiresChiefPilotApproval: true,
-          violatedGuidelines: ['weather']
-        });
+        warnings.push('No weather data');
+        
+        if (!closestRejectedInfo && airport.code === closestRunwayQualified?.code) {
+          closestRejectedInfo = {
+            code: airport.code,
+            name: airport.name,
+            distance_nm: airport.distance_nm,
+            rejectionReasons: ['No weather data available'],
+            details: {}
+          };
+        }
         continue;
       }
 
-      console.log(`✓ Weather from ${tafData.source_airport} (${tafData.distance_nm}nm)`);
-
-      // Parse TAF periods and select relevant one based on arrival time
       const tafPeriods = parseTAFPeriods(tafData.raw);
       
       if (tafPeriods.length === 0) {
-        console.log(`❌ TAF parsing returned 0 periods for ${airport.code}`);
+        console.log(`❌ TAF parsing failed`);
         qualifications.weather_ok = false;
         qualifications.passed = false;
-        warnings.push('TAF parsing failed - no forecast periods found');
-        qualifiedAirports.push({
-          code: airport.code,
-          name: airnavData.name || airport.name,
-          lat: airnavData.lat || airport.lat,
-          lng: airnavData.lng || airport.lng,
-          distance_nm: airport.distance_nm,
-          elevation_ft: airnavData.elevation_ft || 0,
-          qualifications,
-          warnings,
-          requiresChiefPilotApproval: true,
-          violatedGuidelines: ['weather']
-        });
+        warnings.push('TAF parsing failed');
+        
+        if (!closestRejectedInfo && airport.code === closestRunwayQualified?.code) {
+          closestRejectedInfo = {
+            code: airport.code,
+            name: airport.name,
+            distance_nm: airport.distance_nm,
+            rejectionReasons: ['TAF parsing failed'],
+            details: {}
+          };
+        }
         continue;
       }
-      
-      console.log(`🕐 Selecting TAF period for ${airport.code} at arrival time: ${arrivalTime.toISOString()}`);
+
       const relevantPeriod = findRelevantTafPeriod(tafPeriods, arrivalTime);
       
       if (!relevantPeriod) {
-        console.log(`❌ No relevant TAF period found for ${airport.code} at arrival time ${arrivalTime.toISOString()}`);
+        console.log(`❌ No TAF for arrival time`);
         qualifications.weather_ok = false;
         qualifications.passed = false;
-        warnings.push(`No TAF forecast period valid for arrival time`);
-        qualifiedAirports.push({
-          code: airport.code,
-          name: airnavData.name || airport.name,
-          lat: airnavData.lat || airport.lat,
-          lng: airnavData.lng || airport.lng,
-          distance_nm: airport.distance_nm,
-          elevation_ft: airnavData.elevation_ft || 0,
-          qualifications,
-          warnings,
-          requiresChiefPilotApproval: true,
-          violatedGuidelines: ['weather']
-        });
+        warnings.push('No TAF for arrival time');
+        
+        if (!closestRejectedInfo && airport.code === closestRunwayQualified?.code) {
+          closestRejectedInfo = {
+            code: airport.code,
+            name: airport.name,
+            distance_nm: airport.distance_nm,
+            rejectionReasons: ['No TAF forecast for arrival time'],
+            details: {}
+          };
+        }
         continue;
       }
-      
-      console.log(`✓ Using TAF period valid from ${relevantPeriod.validFrom.toISOString()} to ${relevantPeriod.validTo.toISOString()}`);
 
-      let windAnalysis: RunwayWindAnalysis | null = null;
+      const rejectionReasons: string[] = [];
+      const rejectionDetails: RejectionDetail = {};
 
-      // Check IFR conditions from TAF period
-        if (relevantPeriod.ceiling && relevantPeriod.ceiling < config.minimum_ceiling_ft) {
-          console.log(`❌ Forecast ceiling ${relevantPeriod.ceiling}ft < ${config.minimum_ceiling_ft}ft minimum`);
-          
-          // Check if airport has instrument approach
-          if (config.ifr_requires_instrument_approach) {
-            const hasApproach = airnavData.has_ils || airnavData.has_rnav;
-            if (!hasApproach) {
-              qualifications.approach_ok = false;
-              qualifications.passed = false;
-              warnings.push('IFR forecast but no instrument approach available');
-            }
-          }
-          
-          qualifications.weather_ok = false;
+      // Check ceiling
+      if (relevantPeriod.ceiling !== null && relevantPeriod.ceiling !== undefined && relevantPeriod.ceiling < config.minimum_ceiling_ft) {
+        qualifications.weather_ok = false;
+        qualifications.passed = false;
+        const reason = `Ceiling ${relevantPeriod.ceiling}ft < ${config.minimum_ceiling_ft}ft minimum`;
+        warnings.push(reason);
+        rejectionReasons.push(reason);
+        rejectionDetails.ceiling_ft = relevantPeriod.ceiling;
+        console.log(`❌ ${reason}`);
+      }
+
+      // Check visibility
+      const visibilitySM = parseFloat(relevantPeriod.visibility || '10');
+      if (visibilitySM < config.minimum_visibility_sm) {
+        qualifications.weather_ok = false;
+        qualifications.passed = false;
+        const reason = `Visibility ${visibilitySM}SM < ${config.minimum_visibility_sm}SM minimum`;
+        warnings.push(reason);
+        rejectionReasons.push(reason);
+        rejectionDetails.visibility_sm = visibilitySM;
+        console.log(`❌ ${reason}`);
+      }
+
+      // Check approaches if IFR
+      if (relevantPeriod.flightCategory === 'IFR' || relevantPeriod.flightCategory === 'LIFR') {
+        if (config.ifr_requires_instrument_approach && !airport.airnavData.has_instrument_approach) {
+          qualifications.approach_ok = false;
           qualifications.passed = false;
-          warnings.push(`Forecast ceiling ${relevantPeriod.ceiling}ft below minimum ${config.minimum_ceiling_ft}ft`);
+          const reason = `IFR requires instrument approach (${relevantPeriod.flightCategory})`;
+          warnings.push(reason);
+          rejectionReasons.push(reason);
+          console.log(`❌ ${reason}`);
         }
+      }
 
-        // Check visibility from TAF period
-        if (relevantPeriod.visibility) {
-          const visMatch = relevantPeriod.visibility.match(/([0-9\/]+)SM/);
-          if (visMatch) {
-            const visMiles = eval(visMatch[1]); // Handle fractions like "1/2"
-            if (visMiles < config.minimum_visibility_sm) {
-              qualifications.weather_ok = false;
-              qualifications.passed = false;
-              warnings.push(`Forecast visibility ${visMiles}SM below minimum ${config.minimum_visibility_sm}SM`);
-            }
+      // Check wind
+      if (airport.qualifyingRunways.length > 0 && relevantPeriod.wind) {
+        const windData = {
+          direction: relevantPeriod.wind.direction === 'VRB' ? -1 : relevantPeriod.wind.direction,
+          speed: relevantPeriod.wind.speed,
+          gust: relevantPeriod.wind.gust
+        };
+
+        windAnalysis = analyzeBestRunway(windData, airport.qualifyingRunways);
+        
+        if (windAnalysis) {
+          console.log(`📊 Best runway ${windAnalysis.runway}: ${windAnalysis.totalWind}kt total, ${windAnalysis.crosswind}kt crosswind`);
+
+          if (windAnalysis.totalWind > config.max_wind_kt) {
+            qualifications.wind_ok = false;
+            qualifications.passed = false;
+            const reason = `Wind ${windAnalysis.totalWind}kt > ${config.max_wind_kt}kt limit`;
+            warnings.push(reason);
+            rejectionReasons.push(reason);
+            rejectionDetails.wind_kt = windAnalysis.totalWind;
+            rejectionDetails.runway = windAnalysis.runway;
+            console.log(`❌ ${reason}`);
+          }
+          
+          if (windAnalysis.crosswind > config.max_crosswind_kt) {
+            qualifications.wind_ok = false;
+            qualifications.passed = false;
+            const reason = `Crosswind ${windAnalysis.crosswind}kt > ${config.max_crosswind_kt}kt limit on ${windAnalysis.runway}`;
+            warnings.push(reason);
+            rejectionReasons.push(reason);
+            rejectionDetails.crosswind_kt = windAnalysis.crosswind;
+            rejectionDetails.runway = windAnalysis.runway;
+            console.log(`❌ ${reason}`);
+          }
+
+          if (qualifications.wind_ok) {
+            console.log(`✅ Wind within limits`);
           }
         }
+      }
 
-        // Check wind limits
-        console.log(`🌬️ Wind checking for ${airport.code}...`);
-        console.log(`📋 TAF period raw text: ${relevantPeriod.raw}`);
-        console.log(`Wind limits: max ${config.max_wind_kt}kt total, max ${config.max_crosswind_kt}kt crosswind`);
+      // Track closest rejected
+      if (!qualifications.passed && !closestRejectedInfo && airport.code === closestRunwayQualified?.code) {
+        closestRejectedInfo = {
+          code: airport.code,
+          name: airport.name,
+          distance_nm: airport.distance_nm,
+          rejectionReasons,
+          details: rejectionDetails
+        };
+      }
 
-        if (qualifyingRunways.length > 0 && relevantPeriod.wind) {
-          const windData = {
-            direction: relevantPeriod.wind.direction === 'VRB' ? -1 : relevantPeriod.wind.direction,
-            speed: relevantPeriod.wind.speed,
-            gust: relevantPeriod.wind.gust
-          };
-          
-          console.log(`📊 Extracted wind: ${windData.direction === -1 ? 'Variable' : windData.direction + '°'} at ${windData.speed}kt${windData.gust ? ` gusting ${windData.gust}kt` : ''}`);
-
-          windAnalysis = analyzeBestRunway(windData, qualifyingRunways);
-          
-          if (windAnalysis) {
-            console.log(`\n📊 Wind analysis for ${airport.code}:`, {
-              runway: windAnalysis.runway,
-              totalWind: windAnalysis.totalWind,
-              crosswind: windAnalysis.crosswind,
-              headwind: windAnalysis.headwind,
-              maxWindLimit: config.max_wind_kt,
-              maxCrosswindLimit: config.max_crosswind_kt,
-              exceedsWindLimit: windAnalysis.totalWind > config.max_wind_kt,
-              exceedsCrosswindLimit: windAnalysis.crosswind > config.max_crosswind_kt
-            });
-
-            // Check total wind limit
-            if (windAnalysis.totalWind > config.max_wind_kt) {
-              qualifications.wind_ok = false;
-              qualifications.passed = false;
-              warnings.push(`Wind ${windAnalysis.totalWind}kt exceeds limit of ${config.max_wind_kt}kt (best runway: ${windAnalysis.runway})`);
-              console.log(`❌ Wind ${windAnalysis.totalWind}kt exceeds limit of ${config.max_wind_kt}kt`);
-            }
-            
-            // Check crosswind limit
-            if (windAnalysis.crosswind > config.max_crosswind_kt) {
-              qualifications.wind_ok = false;
-              qualifications.passed = false;
-              warnings.push(`Crosswind ${windAnalysis.crosswind}kt exceeds limit of ${config.max_crosswind_kt}kt on runway ${windAnalysis.runway}`);
-              console.log(`❌ Crosswind ${windAnalysis.crosswind}kt exceeds limit of ${config.max_crosswind_kt}kt`);
-            }
-
-            if (windAnalysis.totalWind <= config.max_wind_kt && windAnalysis.crosswind <= config.max_crosswind_kt) {
-              console.log(`✅ Wind within limits for ${airport.code}`);
-            }
-          } else {
-            console.log(`⚠️ No wind analysis possible for ${airport.code} despite having wind data`);
-          }
-        } else if (qualifyingRunways.length === 0) {
-          console.log(`⚠️ No qualifying runways to check wind for ${airport.code}`);
-        } else {
-          console.log(`⚠️ No wind data in TAF period for ${airport.code}`);
-        }
-
-      // Build violated guidelines list
       const violatedGuidelines: string[] = [];
       if (!qualifications.runway_ok) violatedGuidelines.push('runway');
       if (!qualifications.surface_ok) violatedGuidelines.push('surface');
@@ -512,14 +478,14 @@ serve(async (req) => {
 
       const qualifiedAirport: QualifiedAirport = {
         code: airport.code,
-        name: airnavData.name || airport.name,
-        lat: airnavData.lat || airport.lat,
-        lng: airnavData.lng || airport.lng,
+        name: airport.name,
+        lat: airport.lat,
+        lng: airport.lng,
         distance_nm: airport.distance_nm,
-        elevation_ft: airnavData.elevation_ft || 0,
+        elevation_ft: airport.elevation_ft,
         qualifications,
         warnings,
-        best_runway: qualifyingRunways.length > 0 ? qualifyingRunways[0] : undefined,
+        best_runway: airport.qualifyingRunways[0],
         windAnalysis: windAnalysis ? {
           runway: windAnalysis.runway,
           crosswind: windAnalysis.crosswind,
@@ -530,48 +496,49 @@ serve(async (req) => {
         violatedGuidelines
       };
 
-      // Push all airports to a single array (no longer splitting by passed/rejected)
       qualifiedAirports.push(qualifiedAirport);
+
+      if (qualifications.passed) {
+        console.log(`✅ ${airport.code} FULLY QUALIFIED`);
+      } else {
+        console.log(`⚠️ ${airport.code} requires approval: ${violatedGuidelines.join(', ')}`);
+      }
     }
 
-    // Sort all airports by distance
     qualifiedAirports.sort((a, b) => a.distance_nm - b.distance_nm);
 
-    console.log(`Found ${qualifiedAirports.length} airports total. ${qualifiedAirports.filter(a => a.requiresChiefPilotApproval).length} require Chief Pilot approval.`);
+    const selectedAirport = qualifiedAirports.find(a => a.qualifications.passed) || null;
+    const isAlternate = selectedAirport && closestRunwayQualified 
+      ? selectedAirport.code !== closestRunwayQualified.code 
+      : false;
 
-    return new Response(
-      JSON.stringify({
-        airports: qualifiedAirports,
-        config_used: {
-          min_runway_length_ft: config.min_runway_length_ft,
-          min_runway_width_ft: config.min_runway_width_ft,
-          requires_paved_surface: config.requires_paved_surface
-        }
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    console.log(`\n✅ PHASE 2: ${qualifiedAirports.filter(a => a.qualifications.passed).length} fully qualified`);
+    
+    if (selectedAirport) {
+      console.log(`🎯 Selected: ${selectedAirport.code} (${selectedAirport.distance_nm.toFixed(1)}nm)${isAlternate ? ' [ALTERNATE]' : ''}`);
+      if (isAlternate && closestRejectedInfo) {
+        console.log(`ℹ️ Closest rejected: ${closestRejectedInfo.code} - ${closestRejectedInfo.rejectionReasons.join(', ')}`);
       }
-    );
+    }
+
+    const result: AirportSelectionResult = {
+      selectedAirport,
+      isAlternate,
+      closestRejected: closestRejectedInfo,
+      airports: qualifiedAirports,
+      configUsed: config
+    };
+
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+
   } catch (error) {
     console.error('Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(
-      JSON.stringify({ error: errorMessage }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
+    return new Response(JSON.stringify({ error: errorMessage }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
   }
 });
-
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 3440.065; // Earth's radius in nautical miles
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
