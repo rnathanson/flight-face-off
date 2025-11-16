@@ -46,8 +46,11 @@ serve(async (req) => {
       .single();
 
     // Calculate distances from KFRG (50nm threshold for Long Island)
-    const pickupDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, pickupLocation.lat, pickupLocation.lon);
-    const deliveryDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, deliveryLocation.lat, deliveryLocation.lon);
+    console.log('Pickup Location:', { lat: pickupLocation.lat, lng: pickupLocation.lng, display: pickupLocation.displayName });
+    console.log('Delivery Location:', { lat: deliveryLocation.lat, lng: deliveryLocation.lng, display: deliveryLocation.displayName });
+    
+    const pickupDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, pickupLocation.lat, pickupLocation.lng);
+    const deliveryDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, deliveryLocation.lat, deliveryLocation.lng);
     
     const isPickupOnLongIsland = pickupDistanceFromKFRG <= 50;
     const isDeliveryOnLongIsland = deliveryDistanceFromKFRG <= 50;
@@ -70,7 +73,8 @@ serve(async (req) => {
       }
     }
 
-    // If delivery is NOT on Long Island, find nearest qualified airport
+    // If delivery is NOT on Long Island, find nearest qualified airport  
+    // BUT if delivery IS on Long Island, destination airport should ALWAYS be KFRG
     if (!isDeliveryOnLongIsland) {
       const deliveryAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
         body: { location: deliveryLocation, maxDistance: 50 }
@@ -79,8 +83,12 @@ serve(async (req) => {
       if (deliveryAirports.length > 0) {
         destinationAirport = deliveryAirports[0];
       }
+    } else {
+      // Delivery IS on Long Island, so destination airport is KFRG
+      destinationAirport = KFRG;
     }
 
+    console.log(`Selected Airports - Pickup: ${pickupAirport.code} (${pickupAirport.name}), Destination: ${destinationAirport.code} (${destinationAirport.name})`);
     console.log(`Flight Route: KFRG → ${pickupAirport.code} → ${destinationAirport.code}`);
 
     // Traffic calculation
