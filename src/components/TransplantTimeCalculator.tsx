@@ -76,8 +76,28 @@ interface TripResult {
   chiefPilotApproval?: {
     required: boolean;
     reasons: string[];
-    pickupAirport: { code: string; name: string; requiresApproval: boolean } | null;
-    deliveryAirport: { code: string; name: string; requiresApproval: boolean } | null;
+    pickupAirport: { 
+      code: string; 
+      name: string; 
+      requiresApproval: boolean;
+      violatedGuidelines: string[];
+      wouldHaveSelected?: {
+        code: string;
+        name: string;
+        reasons: string[];
+      } | null;
+    } | null;
+    deliveryAirport: { 
+      code: string; 
+      name: string; 
+      requiresApproval: boolean;
+      violatedGuidelines: string[];
+      wouldHaveSelected?: {
+        code: string;
+        name: string;
+        reasons: string[];
+      } | null;
+    } | null;
   };
 }
 
@@ -104,6 +124,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
   const [showPickupAirportPrefs, setShowPickupAirportPrefs] = useState(false);
   const [showDestinationAirportPrefs, setShowDestinationAirportPrefs] = useState(false);
   const [showAirportInputs, setShowAirportInputs] = useState(false);
+  const [showChiefPilotModal, setShowChiefPilotModal] = useState(false);
   const { toast } = useToast();
   
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -293,6 +314,11 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       };
 
       setTripResult(result);
+      
+      // Show modal if chief pilot approval is required
+      if (result.chiefPilotApproval?.required) {
+        setShowChiefPilotModal(true);
+      }
       
       toast({
         title: 'Trip Calculated',
@@ -1142,6 +1168,80 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 className="w-full max-w-xs" 
               />
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Chief Pilot Review Modal */}
+      <Dialog open={showChiefPilotModal} onOpenChange={setShowChiefPilotModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="w-6 h-6" />
+              Mission requires Chief Pilot Review
+            </DialogTitle>
+            <DialogDescription>
+              Conditions are outside standard guidelines
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {tripResult?.chiefPilotApproval?.pickupAirport?.requiresApproval && (
+              <div className="border rounded-lg p-4">
+                <h4 className="font-semibold mb-2">Pickup Airport: {tripResult.chiefPilotApproval.pickupAirport.code}</h4>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <span className="font-medium">Violated Guidelines:</span>
+                    <ul className="list-disc list-inside ml-4 text-muted-foreground">
+                      {tripResult.chiefPilotApproval.pickupAirport.violatedGuidelines.map((v, i) => (
+                        <li key={i}>{v}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  {tripResult.chiefPilotApproval.pickupAirport.wouldHaveSelected && (
+                    <div className="text-muted-foreground italic mt-2">
+                      Would have selected {tripResult.chiefPilotApproval.pickupAirport.wouldHaveSelected.code} if conditions were different: {tripResult.chiefPilotApproval.pickupAirport.wouldHaveSelected.reasons.join(', ')}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {tripResult?.chiefPilotApproval?.deliveryAirport?.requiresApproval && (
+              <div className="border rounded-lg p-4">
+                <h4 className="font-semibold mb-2">Delivery Airport: {tripResult.chiefPilotApproval.deliveryAirport.code}</h4>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <span className="font-medium">Violated Guidelines:</span>
+                    <ul className="list-disc list-inside ml-4 text-muted-foreground">
+                      {tripResult.chiefPilotApproval.deliveryAirport.violatedGuidelines.map((v, i) => (
+                        <li key={i}>{v}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  {tripResult.chiefPilotApproval.deliveryAirport.wouldHaveSelected && (
+                    <div className="text-muted-foreground italic mt-2">
+                      Would have selected {tripResult.chiefPilotApproval.deliveryAirport.wouldHaveSelected.code} if conditions were different: {tripResult.chiefPilotApproval.deliveryAirport.wouldHaveSelected.reasons.join(', ')}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowChiefPilotModal(false)}>
+              Dismiss
+            </Button>
+            <Button onClick={() => {
+              toast({
+                title: "Review Submitted",
+                description: "Chief Pilot will review this mission."
+              });
+              setShowChiefPilotModal(false);
+            }}>
+              Submit for Review
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

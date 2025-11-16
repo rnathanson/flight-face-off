@@ -546,7 +546,30 @@ serve(async (req) => {
 
     qualifiedAirports.sort((a, b) => a.distance_nm - b.distance_nm);
 
-    const selectedAirport = qualifiedAirports.find(a => a.qualifications.passed) || null;
+    // First try to find a fully qualified airport
+    let selectedAirport = qualifiedAirports.find(a => a.qualifications.passed) || null;
+
+    // If none fully qualified, select the "least bad" option
+    if (!selectedAirport && qualifiedAirports.length > 0) {
+      // Already sorted by distance, so first one is closest
+      // Choose based on: 1) closest, 2) fewest violations, 3) least severe violations
+      selectedAirport = qualifiedAirports.reduce((best, current) => {
+        const bestViolations = best.violatedGuidelines.length;
+        const currentViolations = current.violatedGuidelines.length;
+        
+        // If same distance range (within 5nm), prefer fewer violations
+        if (Math.abs(best.distance_nm - current.distance_nm) < 5) {
+          return currentViolations < bestViolations ? current : best;
+        }
+        
+        // Otherwise prefer closest
+        return best.distance_nm < current.distance_nm ? best : current;
+      });
+      
+      console.log(`⚠️ NO FULLY QUALIFIED AIRPORTS - selecting least bad option: ${selectedAirport.code}`);
+      console.log(`   Violations: ${selectedAirport.violatedGuidelines.join(', ')}`);
+    }
+    
     const isAlternate = selectedAirport && closestRunwayQualified 
       ? selectedAirport.code !== closestRunwayQualified.code 
       : false;
