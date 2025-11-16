@@ -83,7 +83,7 @@ export function LocationAutocomplete({
     onLocationSelect({
       lat: suggestion.lat,
       lon: suggestion.lon,
-      displayName: suggestion.displayName,
+      displayName: suggestion.name || suggestion.displayName,
       placeId: suggestion.placeId,
     });
     setShowSuggestions(false);

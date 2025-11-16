@@ -238,7 +238,8 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
           deliveryLocation: selectedDestination,
           pickupAirport: data.route.pickupAirport,
           destinationAirport: data.route.destinationAirport,
-        }
+        },
+        conditions: data.conditions
       };
 
       setTripResult(result);
@@ -531,7 +532,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                   onChange={setOriginHospital}
                   onLocationSelect={(location) => {
                     setSelectedOrigin(location);
-                    setOriginHospital(location.displayName);
+                    // Only set the display name if it's a valid selection
+                    if (location.placeId !== '0') {
+                      setOriginHospital(location.displayName);
+                    }
                   }}
                   placeholder="Enter hospital name or address"
                   label="Pick Up Hospital"
@@ -542,7 +546,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                   onChange={setDestinationHospital}
                   onLocationSelect={(location) => {
                     setSelectedDestination(location);
-                    setDestinationHospital(location.displayName);
+                    // Only set the display name if it's a valid selection
+                    if (location.placeId !== '0') {
+                      setDestinationHospital(location.displayName);
+                    }
                   }}
                   placeholder="Enter hospital name or address"
                   label="Delivery Hospital"
@@ -625,13 +632,21 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               <div className="grid md:grid-cols-3 gap-4 mb-6">
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Pick Up Hospital</div>
-                  <div className="font-semibold">{originHospital}</div>
-                  <div className="text-xs text-muted-foreground">{selectedOrigin?.displayName}</div>
+                  <div className="font-semibold text-lg">{originHospital}</div>
+                  {selectedOrigin?.displayName && originHospital !== selectedOrigin.displayName && (
+                    <div className="text-xs text-muted-foreground">
+                      {selectedOrigin.displayName}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Delivery Hospital</div>
-                  <div className="font-semibold">{destinationHospital}</div>
-                  <div className="text-xs text-muted-foreground">{selectedDestination?.displayName}</div>
+                  <div className="font-semibold text-lg">{destinationHospital}</div>
+                  {selectedDestination?.displayName && destinationHospital !== selectedDestination.displayName && (
+                    <div className="text-xs text-muted-foreground">
+                      {selectedDestination.displayName}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Departure</div>
