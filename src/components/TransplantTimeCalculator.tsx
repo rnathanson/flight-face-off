@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Slider } from '@/components/ui/slider';
 import { LocationAutocomplete } from '@/components/LocationAutocomplete';
 import { Plane, MapPin, Clock, Calendar, Users, Timer, Zap, Car, Target, Hospital, Navigation } from 'lucide-react';
 import { GeocodeResult } from '@/lib/geocoding';
@@ -393,45 +394,33 @@ export const TransplantTimeCalculator = ({ onAIPlatformClick }: TransplantTimeCa
         <Card>
           <CardContent className="p-8">
             <div className="mb-8">
-              <h2 className="text-3xl font-bold text-foreground mb-2">Medical Transport Time Calculator</h2>
-              <p className="text-muted-foreground">Calculate accurate organ transport times with real flight routes and traffic analysis</p>
+              <h2 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
+                <MapPin className="h-8 w-8 text-primary" />
+                Plan Your Medical Transport
+              </h2>
+              <p className="text-muted-foreground">Calculate door-to-door travel time with our private medical aviation service</p>
             </div>
 
             <div className="space-y-6">
+              <LocationAutocomplete
+                value={origin}
+                onChange={setOrigin}
+                onLocationSelect={setSelectedOrigin}
+                placeholder="Enter hospital name or address"
+                label="Origin Hospital"
+              />
+
+              <LocationAutocomplete
+                value={destination}
+                onChange={setDestination}
+                onLocationSelect={setSelectedDestination}
+                placeholder="Enter hospital name or address"
+                label="Destination Hospital"
+              />
+
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="origin" className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
-                    Pickup Hospital Location
-                  </Label>
-                  <LocationAutocomplete
-                    value={origin}
-                    onChange={setOrigin}
-                    onLocationSelect={setSelectedOrigin}
-                    placeholder="Enter pickup hospital address..."
-                    label=""
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="destination" className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
-                    Delivery Hospital Location
-                  </Label>
-                  <LocationAutocomplete
-                    value={destination}
-                    onChange={setDestination}
-                    onLocationSelect={setSelectedDestination}
-                    placeholder="Enter delivery hospital address..."
-                    label=""
-                  />
-                </div>
-              </div>
-
-              <div className="grid md:grid-cols-3 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="departure-date" className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
+                  <Label htmlFor="departure-date">
                     Departure Date
                   </Label>
                   <Input
@@ -443,8 +432,7 @@ export const TransplantTimeCalculator = ({ onAIPlatformClick }: TransplantTimeCa
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="departure-time" className="flex items-center gap-2">
-                    <Clock className="h-4 w-4" />
+                  <Label htmlFor="departure-time">
                     Departure Time
                   </Label>
                   <Input
@@ -454,21 +442,21 @@ export const TransplantTimeCalculator = ({ onAIPlatformClick }: TransplantTimeCa
                     onChange={(e) => setDepartureTime(e.target.value)}
                   />
                 </div>
+              </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="passengers" className="flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    Passengers
-                  </Label>
-                  <Input
-                    id="passengers"
-                    type="number"
-                    min="1"
-                    max="6"
-                    value={passengers}
-                    onChange={(e) => setPassengers(e.target.value)}
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="passengers">
+                  Passengers: {passengers}
+                </Label>
+                <Slider
+                  id="passengers"
+                  min={1}
+                  max={6}
+                  step={1}
+                  value={[parseInt(passengers)]}
+                  onValueChange={(value) => setPassengers(value[0].toString())}
+                  className="w-full"
+                />
               </div>
 
               <Button 
@@ -493,7 +481,7 @@ export const TransplantTimeCalculator = ({ onAIPlatformClick }: TransplantTimeCa
                   </div>
                 ) : (
                   <>
-                    <Clock className="mr-2 h-5 w-5" />
+                    <Plane className="mr-2 h-5 w-5" />
                     Calculate Trip Time
                   </>
                 )}
