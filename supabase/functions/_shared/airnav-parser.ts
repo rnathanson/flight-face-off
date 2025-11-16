@@ -54,7 +54,6 @@ export async function fetchAndParseAirNav(
 
     const html = await response.text();
 
-    // Check if airport not found
     if (html.includes('not found in the database')) {
       console.log(`Airport ${airportCode} not found in AirNav`);
       return null;
@@ -83,7 +82,6 @@ export async function fetchAndParseAirNav(
       result.lat = parseCoordinate(coordMatch[1]);
       result.lng = parseCoordinate(coordMatch[2]);
     } else {
-      // Try decimal format
       const decimalMatch = html.match(/Latitude:\s*([-\d.]+).*?Longitude:\s*([-\d.]+)/is);
       if (decimalMatch) {
         result.lat = parseFloat(decimalMatch[1]);
@@ -97,16 +95,22 @@ export async function fetchAndParseAirNav(
       result.elevation_ft = parseInt(elevMatch[1], 10);
     }
 
-    // Parse METAR
+    // Parse METAR (ROBUST)
     const metarData = parseMETAR(html, airportCode);
     if (metarData) {
       result.metar = metarData;
+      console.log(`✓ AirNav METAR: station=${metarData.source_airport}, dist=${metarData.distance_nm}nm, sample='${metarData.raw.substring(0, 80)}...'`);
+    } else {
+      console.log(`⚠️ No METAR found in AirNav for ${airportCode}`);
     }
 
-    // Parse TAF
+    // Parse TAF (ROBUST)
     const tafData = parseTAF(html, airportCode);
     if (tafData) {
       result.taf = tafData;
+      console.log(`✓ AirNav TAF: station=${tafData.source_airport}, dist=${tafData.distance_nm}nm, sample='${tafData.raw.substring(0, 80)}...'`);
+    } else {
+      console.log(`⚠️ No TAF found in AirNav for ${airportCode}`);
     }
 
     // If weather-only mode, return early
@@ -124,18 +128,15 @@ export async function fetchAndParseAirNav(
       const width = parseInt(runwayMatch[3], 10);
       const surface = runwayMatch[4].toUpperCase();
 
-      // Check for lighting in context
       const contextStart = Math.max(0, runwayMatch.index - 300);
       const contextEnd = Math.min(html.length, runwayMatch.index + 300);
       const context = html.substring(contextStart, contextEnd);
       const lighted = /LIGHTED|LIGHTING|MIRL|HIRL|REIL|VASI|PAPI/i.test(context);
 
-      // Track if we have paved runways
       if (surface === 'ASPH' || surface === 'CONC') {
         result.has_paved = true;
       }
 
-      // Split runway names (e.g., "12/30" -> ["12", "30"])
       const runwayNames = runwayName.split('/');
       runwayNames.forEach(name => {
         result.runways!.push({
@@ -161,7 +162,6 @@ export async function fetchAndParseAirNav(
 }
 
 function parseCoordinate(coord: string): number {
-  // Parse DD-MM-SS.SSS format (e.g., "29-57-06.8740N")
   const match = coord.match(/(\d{2,3})-(\d{2})-([\d.]+)([NSEW])/);
   if (!match) return 0;
 
@@ -180,28 +180,54 @@ function parseCoordinate(coord: string): number {
 }
 
 function parseMETAR(html: string, airportCode: string): METARData | undefined {
-  // Try table-based parsing first
-  const metarTableMatch = html.match(/<th[^>]*>METAR<\/th>\s*<td[^>]*>([^<]+)<\/td>/i);
+  // Strategy 1: Find METAR table and parse rows
+  const metarTableMatch = html.match(/<th[^>]*>\s*METARs?\s*<\/th>[\s\S]{0,5000}?<\/table>/i);
+  
   if (metarTableMatch) {
-    let metarText = metarTableMatch[1].trim();
+    const tableHtml = metarTableMatch[0];
+    const rowPattern = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let rowMatch;
     
-    // Extract distance if present
-    const distMatch = metarText.match(/\((\d+)\s*nm\s*away\)/i);
-    const distance = distMatch ? parseInt(distMatch[1], 10) : 0;
-    
-    // Clean up METAR text
-    metarText = metarText.replace(/\s*\(\d+\s*nm\s*away\)/i, '').trim();
-    
-    if (metarText.length > 10) {
-      return {
-        raw: metarText,
-        source_airport: airportCode,
-        distance_nm: distance
-      };
+    while ((rowMatch = rowPattern.exec(tableHtml)) !== null) {
+      const rowHtml = rowMatch[1];
+      
+      // Skip header row
+      if (/<th[^>]*>/i.test(rowHtml)) continue;
+      
+      // Extract cell content
+      const cellMatch = rowHtml.match(/<td[^>]*>([\s\S]*?)<\/td>/i);
+      if (!cellMatch) continue;
+      
+      // Clean HTML: <br> → newline, strip tags, normalize whitespace
+      let metarText = cellMatch[1]
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      // Extract distance if present
+      const distMatch = metarText.match(/\((\d+(?:\.\d+)?)\s*nm\s*(?:away)?\)/i);
+      const distance = distMatch ? parseFloat(distMatch[1]) : 0;
+      
+      // Remove distance text
+      metarText = metarText.replace(/\s*\(\d+(?:\.\d+)?\s*nm\s*(?:away)?\)/gi, '').trim();
+      
+      // Extract source airport from METAR text itself
+      const stationMatch = metarText.match(/\b([A-Z0-9]{4})\s+\d{6}Z/);
+      const sourceAirport = stationMatch ? stationMatch[1] : airportCode.toUpperCase();
+      
+      // Validate it's a real METAR (must have timestamp)
+      if (/\b[A-Z0-9]{4}\s+\d{6}Z/.test(metarText) && metarText.length > 20) {
+        return {
+          raw: metarText,
+          source_airport: sourceAirport,
+          distance_nm: distance
+        };
+      }
     }
   }
 
-  // Fallback: raw text search
+  // Strategy 2: Raw text search fallback
   const rawMetarMatch = html.match(/\b([A-Z0-9]{4})\s+(\d{6}Z)\s+[^\n<]{20,}/);
   if (rawMetarMatch) {
     return {
@@ -215,27 +241,60 @@ function parseMETAR(html: string, airportCode: string): METARData | undefined {
 }
 
 function parseTAF(html: string, airportCode: string): TAFData | undefined {
-  // Try table-based parsing first
-  const tafTableMatch = html.match(/<th[^>]*>TAF<\/th>\s*<td[^>]*>([^<]+)<\/td>/i);
+  // Strategy 1: Find TAF table and parse rows
+  const tafTableMatch = html.match(/<th[^>]*>\s*TAFs?\s*<\/th>[\s\S]{0,5000}?<\/table>/i);
+  
   if (tafTableMatch) {
-    let tafText = tafTableMatch[1].trim();
+    const tableHtml = tafTableMatch[0];
+    const rowPattern = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let rowMatch;
     
-    const distMatch = tafText.match(/\((\d+)\s*nm\s*away\)/i);
-    const distance = distMatch ? parseInt(distMatch[1], 10) : 0;
-    
-    tafText = tafText.replace(/\s*\(\d+\s*nm\s*away\)/i, '').trim();
-    
-    if (tafText.length > 10) {
-      return {
-        raw: tafText,
-        source_airport: airportCode,
-        distance_nm: distance
-      };
+    while ((rowMatch = rowPattern.exec(tableHtml)) !== null) {
+      const rowHtml = rowMatch[1];
+      
+      // Skip header row
+      if (/<th[^>]*>/i.test(rowHtml)) continue;
+      
+      // Extract cell content
+      const cellMatch = rowHtml.match(/<td[^>]*>([\s\S]*?)<\/td>/i);
+      if (!cellMatch) continue;
+      
+      // Clean HTML
+      let tafText = cellMatch[1]
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      // Extract distance
+      const distMatch = tafText.match(/\((\d+(?:\.\d+)?)\s*nm\s*(?:away)?\)/i);
+      const distance = distMatch ? parseFloat(distMatch[1]) : 0;
+      
+      // Remove distance text
+      tafText = tafText.replace(/\s*\(\d+(?:\.\d+)?\s*nm\s*(?:away)?\)/gi, '').trim();
+      
+      // Extract source airport
+      const stationMatch = tafText.match(/\b([A-Z0-9]{4})\s+\d{6}Z/);
+      const sourceAirport = stationMatch ? stationMatch[1] : airportCode.toUpperCase();
+      
+      // Ensure TAF prefix
+      if (!/^TAF\s/i.test(tafText) && /\b[A-Z0-9]{4}\s+\d{6}Z/.test(tafText)) {
+        tafText = `TAF ${tafText}`;
+      }
+      
+      // Validate it's a real TAF
+      if (/\b[A-Z0-9]{4}\s+\d{6}Z/.test(tafText) && tafText.length > 30) {
+        return {
+          raw: tafText,
+          source_airport: sourceAirport,
+          distance_nm: distance
+        };
+      }
     }
   }
 
-  // Fallback: raw text search
-  const rawTafMatch = html.match(/TAF\s+([A-Z0-9]{4})\s+(\d{6}Z)\s+[^\n<]{20,}/);
+  // Strategy 2: Raw text search fallback
+  const rawTafMatch = html.match(/TAF\s+([A-Z0-9]{4})[\s\S]{30,500}?(?=<\/(?:pre|td|tr|table)>|TAF\s+[A-Z0-9]{4}|$)/i);
   if (rawTafMatch) {
     return {
       raw: rawTafMatch[0].trim(),

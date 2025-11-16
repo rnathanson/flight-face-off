@@ -155,6 +155,109 @@ serve(async (req) => {
     console.log(`Selected Airports - Pickup: ${pickupAirport.code} (${pickupAirport.name}), Destination: ${destinationAirport.code} (${destinationAirport.name})`);
     console.log(`Flight Route: KFRG → ${pickupAirport.code} → ${destinationAirport.code}`);
 
+    // === DEPARTURE WIND CHECK (BLOCKING) ===
+    console.log(`\n🛫 Checking departure wind limits at ${KFRG.code}...`);
+    const departureWeather = await fetchAndParseAirNav(KFRG.code, true); // weatherOnly=true
+    
+    if (departureWeather?.metar) {
+      const metarRaw = departureWeather.metar.raw;
+      console.log(`METAR for ${KFRG.code}: ${metarRaw.substring(0, 80)}`);
+      
+      // Extract wind from METAR
+      const vrbMatch = metarRaw.match(/\bVRB(\d{2,3})(?:G(\d{2,3}))?KT\b/);
+      const calmMatch = /\b00000KT\b/.test(metarRaw);
+      const stdMatch = metarRaw.match(/\b(\d{3})(\d{2,3})(?:G(\d{2,3}))?KT\b/);
+      
+      let windDirection: number = 0;
+      let windSpeed: number = 0;
+      let windGust: number | undefined = undefined;
+      
+      if (vrbMatch) {
+        windDirection = -1; // Variable
+        windSpeed = parseInt(vrbMatch[1]);
+        windGust = vrbMatch[2] ? parseInt(vrbMatch[2]) : undefined;
+      } else if (calmMatch) {
+        windDirection = 0;
+        windSpeed = 0;
+      } else if (stdMatch) {
+        windDirection = parseInt(stdMatch[1]);
+        windSpeed = parseInt(stdMatch[2]);
+        windGust = stdMatch[3] ? parseInt(stdMatch[3]) : undefined;
+      }
+      
+      if (windSpeed > 0 || windGust) {
+        const effectiveWind = windGust || windSpeed;
+        console.log(`Wind at ${KFRG.code}: ${windDirection === -1 ? 'VRB' : windDirection}${String(windSpeed).padStart(2, '0')}${windGust ? `G${windGust}` : ''}KT`);
+        
+        // Check against max wind limit
+        if (effectiveWind > config.max_wind_kt) {
+          const errorMsg = `Departure not permitted: wind ${effectiveWind}kt exceeds limit ${config.max_wind_kt}kt at ${KFRG.code}`;
+          console.log(`❌ ${errorMsg}`);
+          return new Response(JSON.stringify({
+            error: 'Departure wind limits exceeded',
+            details: {
+              airport: KFRG.code,
+              wind: `${windDirection === -1 ? 'VRB' : String(windDirection).padStart(3, '0')}${String(windSpeed).padStart(2, '0')}${windGust ? `G${windGust}` : ''}KT`,
+              effectiveWind: `${effectiveWind}kt`,
+              limit: `${config.max_wind_kt}kt`,
+              message: errorMsg
+            }
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        
+        // Check crosswind if we have runways
+        if (departureWeather.runways && departureWeather.runways.length > 0) {
+          let lowestCrosswind = Infinity;
+          let bestRunway = departureWeather.runways[0];
+          
+          // Variable winds - worst case is full wind speed as crosswind
+          if (windDirection === -1) {
+            lowestCrosswind = effectiveWind;
+          } else {
+            for (const runway of departureWeather.runways) {
+              const runwayHeading = parseInt(runway.name) * 10;
+              const angleDiff = Math.abs(windDirection - runwayHeading);
+              const angleRad = (angleDiff * Math.PI) / 180;
+              const crosswind = Math.abs(Math.round(effectiveWind * Math.sin(angleRad)));
+              
+              if (crosswind < lowestCrosswind) {
+                lowestCrosswind = crosswind;
+                bestRunway = runway;
+              }
+            }
+          }
+          
+          if (lowestCrosswind > config.max_crosswind_kt) {
+            const errorMsg = `Departure not permitted: crosswind ${lowestCrosswind}kt on runway ${bestRunway.name} exceeds limit ${config.max_crosswind_kt}kt at ${KFRG.code}`;
+            console.log(`❌ ${errorMsg}`);
+            return new Response(JSON.stringify({
+              error: 'Departure crosswind limits exceeded',
+              details: {
+                airport: KFRG.code,
+                runway: bestRunway.name,
+                wind: `${windDirection === -1 ? 'VRB' : String(windDirection).padStart(3, '0')}${String(windSpeed).padStart(2, '0')}${windGust ? `G${windGust}` : ''}KT`,
+                crosswind: `${lowestCrosswind}kt`,
+                limit: `${config.max_crosswind_kt}kt`,
+                message: errorMsg
+              }
+            }), {
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+          
+          console.log(`✅ Departure wind check passed: wind ${effectiveWind}kt, crosswind ${lowestCrosswind}kt on RWY ${bestRunway.name}`);
+        }
+      } else {
+        console.log(`✅ Calm winds at ${KFRG.code}, no wind restrictions`);
+      }
+    } else {
+      console.log(`⚠️ No METAR data for ${KFRG.code}, proceeding without departure wind check`);
+    }
+
     // Traffic calculation
     const departureTime = new Date(departureDateTime);
     const departureHour = departureTime.getHours();
