@@ -26,16 +26,6 @@ serve(async (req) => {
       passengers = 4
     } = await req.json();
 
-    console.log('Received request:', { departureDateTime, passengers });
-    
-    // Validate required fields
-    if (!pickupLocation || !deliveryLocation || !departureDateTime) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields: pickupLocation, deliveryLocation, departureDateTime' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     console.log('Calculating 5-leg trip from KFRG home base...');
     console.log('Route: KFRG → Pickup Airport (flight) → Pickup Hospital (ground) → Pickup Airport (ground) → Destination Airport (flight) → Delivery Hospital (ground)');
 
@@ -55,16 +45,12 @@ serve(async (req) => {
       .select('*')
       .single();
 
-    // Normalize incoming locations to ensure lng is present
-    const pickup = { ...pickupLocation, lng: (pickupLocation as any).lng ?? pickupLocation.lon } as any;
-    const delivery = { ...deliveryLocation, lng: (deliveryLocation as any).lng ?? deliveryLocation.lon } as any;
-
     // Calculate distances from KFRG (50nm threshold for Long Island)
-    console.log('Pickup Location:', { lat: pickup.lat, lng: pickup.lng, display: pickup.displayName });
-    console.log('Delivery Location:', { lat: delivery.lat, lng: delivery.lng, display: delivery.displayName });
+    console.log('Pickup Location:', { lat: pickupLocation.lat, lng: pickupLocation.lng, display: pickupLocation.displayName });
+    console.log('Delivery Location:', { lat: deliveryLocation.lat, lng: deliveryLocation.lng, display: deliveryLocation.displayName });
     
-    const pickupDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, pickup.lat, pickup.lng);
-    const deliveryDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, delivery.lat, delivery.lng);
+    const pickupDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, pickupLocation.lat, pickupLocation.lng);
+    const deliveryDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, deliveryLocation.lat, deliveryLocation.lng);
     
     const isPickupOnLongIsland = pickupDistanceFromKFRG <= 50;
     const isDeliveryOnLongIsland = deliveryDistanceFromKFRG <= 50;
@@ -79,7 +65,7 @@ serve(async (req) => {
     // If pickup is NOT on Long Island, find nearest qualified airport
     if (!isPickupOnLongIsland) {
       const pickupAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
-        body: { location: pickup, maxDistance: 50 }
+        body: { location: pickupLocation, maxDistance: 50 }
       });
       const pickupAirports = pickupAirportsResponse.data?.qualified || [];
       if (pickupAirports.length > 0) {
@@ -91,7 +77,7 @@ serve(async (req) => {
     // BUT if delivery IS on Long Island, destination airport should ALWAYS be KFRG
     if (!isDeliveryOnLongIsland) {
       const deliveryAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
-        body: { location: delivery, maxDistance: 50 }
+        body: { location: deliveryLocation, maxDistance: 50 }
       });
       const deliveryAirports = deliveryAirportsResponse.data?.qualified || [];
       if (deliveryAirports.length > 0) {
@@ -107,16 +93,6 @@ serve(async (req) => {
 
     // Traffic calculation
     const departureTime = new Date(departureDateTime);
-    
-    // Validate the date is valid
-    if (isNaN(departureTime.getTime())) {
-      console.error('Invalid departureDateTime:', departureDateTime);
-      return new Response(
-        JSON.stringify({ error: `Invalid date format: ${departureDateTime}. Expected ISO format like 2025-11-16T14:30:00` }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
     const departureHour = departureTime.getHours();
     const dayOfWeek = departureTime.getDay();
     const isRushHour = (departureHour >= 7 && departureHour <= 9) || (departureHour >= 16 && departureHour <= 19);
@@ -174,13 +150,13 @@ serve(async (req) => {
     // === LEG 2: Pickup Airport to Pickup Hospital (GROUND) ===
     const leg2Data = await calculateGroundSegmentEnhanced(
       { lat: pickupAirport.lat, lng: pickupAirport.lng },
-      pickup,
+      pickupLocation,
       trafficMultiplier
     );
 
     // === LEG 3: Pickup Hospital back to Pickup Airport (GROUND) ===
     const leg3Data = await calculateGroundSegmentEnhanced(
-      pickup,
+      pickupLocation,
       { lat: pickupAirport.lat, lng: pickupAirport.lng },
       trafficMultiplier
     );
@@ -220,7 +196,7 @@ serve(async (req) => {
     // === LEG 5: Destination Airport to Delivery Hospital (GROUND) ===
     const leg5Data = await calculateGroundSegmentEnhanced(
       { lat: destinationAirport.lat, lng: destinationAirport.lng },
-      delivery,
+      deliveryLocation,
       trafficMultiplier
     );
 
@@ -279,20 +255,8 @@ serve(async (req) => {
       }
     ];
 
-    const totalTime = segments.reduce((sum, seg) => sum + (Number.isFinite(seg.duration) ? seg.duration : 0), 0);
-    console.log('Total time calculated:', totalTime, 'minutes');
-    console.log('Departure time:', departureTime.toISOString());
-
-    if (!Number.isFinite(totalTime)) {
-      console.error('Invalid totalTime computed from segments:', segments);
-      return new Response(
-        JSON.stringify({ error: 'Calculation failed due to invalid segment durations' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
+    const totalTime = segments.reduce((sum, seg) => sum + seg.duration, 0);
     const arrivalTime = new Date(departureTime.getTime() + totalTime * 60 * 1000);
-    console.log('Arrival time:', arrivalTime.toISOString());
 
     // Generate advisories
     const advisories = generateAdvisories(0, 0, trafficMultiplier);
