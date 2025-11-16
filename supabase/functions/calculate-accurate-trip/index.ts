@@ -200,7 +200,7 @@ serve(async (req) => {
       trafficMultiplier
     );
 
-    // Build segments (includes hospital stay time)
+    // Build segments
     const segments = [
       ...(pickupAirport.code !== KFRG.code ? [{
         type: 'flight' as const,
@@ -218,14 +218,6 @@ serve(async (req) => {
         distance: leg2Data.distance,
         traffic: leg2Data.source,
         polyline: leg2Data.polyline
-      },
-      {
-        type: 'hospital_stay' as const,
-        from: 'Pickup Hospital',
-        to: 'Pickup Hospital',
-        duration: HOSPITAL_STAY_MINUTES,
-        distance: 0,
-        note: 'Organ loading and preparation'
       },
       {
         type: 'ground' as const,
@@ -414,16 +406,10 @@ function calculateFlightTime(
   return Math.round(climbTimeMin + cruiseTimeMin + descentTimeMin + taxiTime + bufferTime + weatherDelay);
 }
 
-// Buffer time for organ transfer between plane and ground transport (minutes)
-const TRANSFER_BUFFER_MINUTES = 5;
-// Hospital stay time for pickup (organ loading, minutes)
-const HOSPITAL_STAY_MINUTES = 15;
-
 async function calculateGroundSegmentEnhanced(
   from: { lat: number; lng: number },
   to: { lat: number; lng: number },
-  trafficMultiplier: number,
-  includeTransferBuffer: boolean = true
+  trafficMultiplier: number
 ): Promise<{ duration: number; distance: number; source: string; polyline?: string }> {
   try {
     const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson&steps=true&annotations=duration,distance&alternatives=true`;
@@ -440,12 +426,9 @@ async function calculateGroundSegmentEnhanced(
       const distanceMiles = route.distance * 0.000621371;
       const baseTimeMinutes = route.duration / 60;
       const adjustedTimeMinutes = baseTimeMinutes * trafficMultiplier;
-      const finalDuration = includeTransferBuffer 
-        ? Math.round(adjustedTimeMinutes + TRANSFER_BUFFER_MINUTES)
-        : Math.round(adjustedTimeMinutes);
       
       return {
-        duration: finalDuration,
+        duration: Math.round(adjustedTimeMinutes),
         distance: Math.round(distanceMiles * 10) / 10,
         source: 'osrm',
         polyline: JSON.stringify(route.geometry)
@@ -459,12 +442,9 @@ async function calculateGroundSegmentEnhanced(
   const distance = calculateDistance(from.lat, from.lng, to.lat, to.lng) * 1.15092;
   const baseTime = (distance / 45) * 60;
   const adjustedTime = baseTime * trafficMultiplier;
-  const finalDuration = includeTransferBuffer 
-    ? Math.round(adjustedTime + TRANSFER_BUFFER_MINUTES)
-    : Math.round(adjustedTime);
   
   return {
-    duration: finalDuration,
+    duration: Math.round(adjustedTime),
     distance: Math.round(distance * 10) / 10,
     source: 'heuristic'
   };
