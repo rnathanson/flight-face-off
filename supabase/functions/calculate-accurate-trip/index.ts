@@ -46,11 +46,11 @@ serve(async (req) => {
       .single();
 
     // Calculate distances from KFRG (50nm threshold for Long Island)
-    console.log('Pickup Location:', { lat: pickupLocation.lat, lng: pickupLocation.lng, display: pickupLocation.displayName });
-    console.log('Delivery Location:', { lat: deliveryLocation.lat, lng: deliveryLocation.lng, display: deliveryLocation.displayName });
+    console.log('Pickup Location:', { lat: pickupLocation.lat, lon: pickupLocation.lon, display: pickupLocation.displayName });
+    console.log('Delivery Location:', { lat: deliveryLocation.lat, lon: deliveryLocation.lon, display: deliveryLocation.displayName });
     
-    const pickupDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, pickupLocation.lat, pickupLocation.lng);
-    const deliveryDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, deliveryLocation.lat, deliveryLocation.lng);
+    const pickupDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, pickupLocation.lat, pickupLocation.lon);
+    const deliveryDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, deliveryLocation.lat, deliveryLocation.lon);
     
     const isPickupOnLongIsland = pickupDistanceFromKFRG <= 50;
     const isDeliveryOnLongIsland = deliveryDistanceFromKFRG <= 50;
