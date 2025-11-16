@@ -39,8 +39,16 @@ export function LocationAutocomplete({
 
   // Search for suggestions as user types
   useEffect(() => {
+    // Don't search if location is already selected
+    if (selectedLocation && selectedLocation.placeId !== '0') {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
     if (value.length < 2) {
       setSuggestions([]);
+      setShowSuggestions(false);
       return;
     }
 
@@ -53,7 +61,7 @@ export function LocationAutocomplete({
     }, 300); // Debounce 300ms
 
     return () => clearTimeout(searchTimeout);
-  }, [value]);
+  }, [value, selectedLocation]);
 
   const handleInputChange = (newValue: string) => {
     onChange(newValue);
@@ -93,7 +101,13 @@ export function LocationAutocomplete({
           placeholder={placeholder}
           value={value}
           onChange={(e) => handleInputChange(e.target.value)}
-          onFocus={() => !selectedLocation?.placeId && suggestions.length > 0 && setShowSuggestions(true)}
+          onFocus={() => {
+            if (!selectedLocation || selectedLocation.placeId === '0') {
+              if (suggestions.length > 0) {
+                setShowSuggestions(true);
+              }
+            }
+          }}
           className={`h-12 text-lg ${selectedLocation && selectedLocation.placeId !== '0' ? 'border-success border-2' : ''}`}
         />
         {selectedLocation && selectedLocation.placeId !== '0' && (
