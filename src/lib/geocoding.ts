@@ -48,7 +48,7 @@ export async function searchLocations(query: string, limit: number = 5): Promise
 
     return data.map(result => ({
       placeId: result.place_id,
-      name: result.name,
+      name: result.name || '',
       address: result.address,
       displayName: result.display_name,
       lat: parseFloat(result.lat),
