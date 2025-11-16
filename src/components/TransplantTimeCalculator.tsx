@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { LocationAutocomplete } from '@/components/LocationAutocomplete';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -604,46 +605,13 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               <Button
                 onClick={calculateTrip}
                 disabled={calculating || !selectedOrigin || !selectedDestination}
-                className="w-full min-h-[100px]"
+                className="w-full h-12"
                 size="lg"
               >
-                {calculating ? (
-                  <div className="flex flex-col items-center gap-3 w-full py-2">
-                    <div className="flex items-center gap-2">
-                      <Timer className="w-5 h-5 animate-spin" />
-                      <span className="font-semibold text-base">Calculating Your Trip</span>
-                    </div>
-                    {loadingStage && (
-                      <div className="w-full space-y-2">
-                        <div className="flex items-center justify-center gap-2 text-sm opacity-90">
-                          {loadingStage.includes('route') && <Plane className="w-4 h-4" />}
-                          {loadingStage.includes('weather') && <Zap className="w-4 h-4" />}
-                          {loadingStage.includes('traffic') && <Car className="w-4 h-4" />}
-                          {loadingStage.includes('ATC') && <Target className="w-4 h-4" />}
-                          {loadingStage.includes('timeline') && <Clock className="w-4 h-4" />}
-                          <span>{loadingStage}</span>
-                        </div>
-                        <div className="w-full px-4">
-                          <Progress 
-                            value={
-                              loadingStage.includes('route') ? 20 :
-                              loadingStage.includes('weather') ? 40 :
-                              loadingStage.includes('traffic') ? 60 :
-                              loadingStage.includes('ATC') ? 80 :
-                              100
-                            } 
-                            className="w-full h-2" 
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <>
-                    <Plane className="w-4 h-4 mr-2" />
-                    Calculate Trip Time
-                  </>
-                )}
+                <div className="flex items-center gap-2">
+                  <Plane className="w-5 h-5" />
+                  <span className="font-semibold">Calculate Trip Time</span>
+                </div>
               </Button>
             </CardContent>
           </Card>
@@ -980,6 +948,40 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
           </Card>
         </div>
       )}
+
+      {/* Loading Modal */}
+      <Dialog open={calculating}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-center">Calculating Your Trip</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4 py-6">
+            <Timer className="w-12 h-12 animate-spin text-primary" />
+            {loadingStage && (
+              <div className="w-full space-y-3">
+                <div className="flex items-center justify-center gap-2 text-sm">
+                  {loadingStage.includes('route') && <Plane className="w-4 h-4" />}
+                  {loadingStage.includes('weather') && <Zap className="w-4 h-4" />}
+                  {loadingStage.includes('traffic') && <Car className="w-4 h-4" />}
+                  {loadingStage.includes('ATC') && <Target className="w-4 h-4" />}
+                  {loadingStage.includes('timeline') && <Clock className="w-4 h-4" />}
+                  <span>{loadingStage}</span>
+                </div>
+                <Progress 
+                  value={
+                    loadingStage.includes('route') ? 20 :
+                    loadingStage.includes('weather') ? 40 :
+                    loadingStage.includes('traffic') ? 60 :
+                    loadingStage.includes('ATC') ? 80 :
+                    100
+                  } 
+                  className="w-full" 
+                />
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
