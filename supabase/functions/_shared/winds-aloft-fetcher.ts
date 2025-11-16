@@ -329,134 +329,141 @@ async function fetchLowLevelWinds(
     const text = await response.text();
     const lines = text.split('\n').filter(line => line.trim());
     
-    // LOG: First 10 lines of response
-    console.log('Low-level NOAA response preview:');
-    lines.slice(0, 10).forEach((line, i) => console.log(`  Line ${i}: ${line}`));
-    
     if (lines.length < 5) {
       console.warn('NOAA low-level response too short');
       return null;
     }
 
-    // Find altitude headers (line 4)
-    const altHeaders = lines[3].split(/\s+/).filter(h => h.trim());
-    console.log(`Altitude headers: ${JSON.stringify(altHeaders)}`);
+    // Find the FT line dynamically (contains altitude columns)
+    const ftLineIndex = lines.findIndex(line => line.trim().startsWith('FT'));
+    if (ftLineIndex === -1) {
+      console.warn('No FT line found in low-level NOAA response');
+      return null;
+    }
+
+    // Parse altitudes from FT line (e.g., "FT  3000    6000    9000   12000   18000")
+    const ftLine = lines[ftLineIndex];
+    const altitudes = ftLine
+      .split(/\s+/)
+      .slice(1) // Skip "FT"
+      .map(alt => parseInt(alt))
+      .filter(alt => !isNaN(alt));
+
+    if (altitudes.length === 0) {
+      console.warn('No altitudes parsed from FT line');
+      return null;
+    }
+
+    console.log(`Found FT line at index ${ftLineIndex}, altitudes: ${altitudes.join(', ')}`);
     
-    // Available altitudes in low-level data
-    const availableAlts = [3000, 6000, 9000, 12000, 18000];
-    
-    // Find closest altitude to requested
-    let targetAlt = availableAlts[0];
-    let minDiff = Math.abs(altitudeFt - availableAlts[0]);
-    for (const alt of availableAlts) {
-      const diff = Math.abs(altitudeFt - alt);
+    // Find closest altitude to requested (minimum 6000ft)
+    const requestedAlt = Math.max(altitudeFt, 6000);
+    let targetAlt = altitudes[0];
+    let minDiff = Math.abs(requestedAlt - altitudes[0]);
+    for (const alt of altitudes) {
+      const diff = Math.abs(requestedAlt - alt);
       if (diff < minDiff) {
         minDiff = diff;
         targetAlt = alt;
       }
     }
     
-    console.log(`Requested ${altitudeFt}ft, using closest: ${targetAlt}ft`);
-    
-    // Find column index for this altitude
-    const altIndex = altHeaders.findIndex(h => h.includes(targetAlt.toString()));
-    console.log(`Altitude ${targetAlt}ft column index: ${altIndex}`);
-    
-    if (altIndex === -1) {
-      console.warn(`Altitude ${targetAlt}ft not found in low-level data headers: ${JSON.stringify(altHeaders)}`);
-      return null;
-    }
+    const altIndex = altitudes.indexOf(targetAlt);
+    console.log(`Requested ${altitudeFt}ft (clamped to ${requestedAlt}ft), using ${targetAlt}ft at column ${altIndex}`);
 
     // Determine target station
-    let targetStation = null;
+    let targetStation: string | null = null;
     if (nearestAirport) {
       targetStation = getStationCode(nearestAirport);
+      console.log(`Looking for station: ${targetStation}`);
     }
-    
-    console.log(`Looking for station: ${targetStation || 'any'}`);
 
-    // Parse station data (starts at line 5)
-    const stationsFound: string[] = [];
+    // Parse station data (starts after FT line)
+    let foundStation: string | null = null;
+    let windData: string | null = null;
     
-    for (let i = 4; i < lines.length; i++) {
-      const parts = lines[i].split(/\s+/).filter(p => p.trim());
+    for (let i = ftLineIndex + 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line || line.startsWith('FD') || line.startsWith('DATA')) continue;
+      
+      const parts = line.split(/\s+/).filter(p => p.trim());
       if (parts.length < 2) continue;
 
       const stationCode = parts[0];
-      stationsFound.push(stationCode);
       
       // If we have a target station, look for exact match
-      if (targetStation && stationCode !== targetStation) {
-        continue;
-      }
-
-      console.log(`Checking station ${stationCode}: ${parts.length} columns, altIndex=${altIndex}`);
-
-      // Get wind data at target altitude
-      if (parts.length > altIndex) {
-        const windData = parts[altIndex];
-        console.log(`Station ${stationCode} wind data at column ${altIndex}: "${windData}"`);
-        
-        if (!windData || windData === '9900' || windData.length < 4) {
-          console.log(`Skipping station ${stationCode}: invalid wind data`);
-          continue;
+      if (targetStation && stationCode === targetStation) {
+        foundStation = stationCode;
+        // parts[0] is station code, parts[1+] are wind data columns
+        if (parts.length > altIndex + 1) {
+          windData = parts[altIndex + 1];
+          console.log(`Found target station ${targetStation} with wind data: ${windData}`);
+          break;
         }
-
-        // Parse NOAA format: DDSSTT (direction, speed, temperature)
-        try {
-          let direction: number | 'VRB';
-          let speed: number;
-          
-          if (windData.startsWith('99')) {
-            direction = 'VRB';
-            speed = parseInt(windData.substring(2, 4));
-          } else {
-            direction = parseInt(windData.substring(0, 2)) * 10;
-            speed = parseInt(windData.substring(2, 4));
-            
-            if (speed > 100) {
-              direction += 50;
-              speed -= 100;
-            }
-          }
-
-          if (isNaN(speed) || speed === 0) {
-            console.log(`Skipping station ${stationCode}: invalid speed ${speed}`);
-            continue;
-          }
-
-          console.log(`✓ Low-level winds at ${targetAlt}ft from ${stationCode}: ${direction}° @ ${speed}kt`);
-
-          return {
-            direction,
-            speed,
-            altitude: targetAlt,
-            station: stationCode
-          };
-        } catch (error) {
-          console.error(`Error parsing wind data "${windData}" for station ${stationCode}:`, error);
-          continue;
-        }
-      } else {
-        console.warn(`Station ${stationCode} missing column ${altIndex} (only has ${parts.length} columns)`);
       }
+      
+      // Use first valid station as fallback
+      if (!foundStation && parts.length > altIndex + 1) {
+        foundStation = stationCode;
+        windData = parts[altIndex + 1];
+      }
+    }
+
+    if (!windData || !foundStation) {
+      console.warn(`No wind data found at ${targetAlt}ft for station ${targetStation || 'any'}`);
+      return null;
     }
     
-    if (stationsFound.length === 0) {
-      console.warn('No stations found in low-level data');
-    } else {
-      console.log(`Stations available: ${stationsFound.slice(0, 10).join(', ')}${stationsFound.length > 10 ? ` ... (${stationsFound.length} total)` : ''}`);
-      console.log(`No matching station found. Looking for: ${targetStation || 'any'}`);
+    if (targetStation && foundStation !== targetStation) {
+      console.log(`Using fallback station ${foundStation} instead of ${targetStation}`);
     }
 
-    // If target station not found, use first available station
-    if (targetStation) {
-      console.warn(`Target station ${targetStation} not found in low-level data, using first available`);
-      return fetchLowLevelWinds(lat, lng, altitudeFt); // Retry without target
+    // Parse NOAA format: DDSSTT (direction, speed, temperature)
+    const cleanData = windData.trim();
+    
+    // Handle light and variable
+    if (cleanData === '9900' || cleanData.startsWith('99')) {
+      console.log(`Light and variable winds at ${targetAlt}ft from ${foundStation}`);
+      return {
+        direction: 'VRB',
+        speed: 2,
+        altitude: targetAlt,
+        station: foundStation
+      };
     }
 
-    console.warn('No valid low-level wind data found');
-    return null;
+    if (cleanData.length < 4) {
+      console.warn(`Invalid wind data: ${cleanData}`);
+      return null;
+    }
+
+    try {
+      let direction = parseInt(cleanData.substring(0, 2)) * 10;
+      let speed = parseInt(cleanData.substring(2, 4));
+      
+      // Handle speeds > 100kt (direction + 50, speed - 100)
+      if (speed > 100) {
+        direction += 50;
+        speed -= 100;
+      }
+
+      if (isNaN(direction) || isNaN(speed) || speed === 0) {
+        console.warn(`Could not parse wind data: ${cleanData}`);
+        return null;
+      }
+
+      console.log(`✓ Low-level winds at ${targetAlt}ft from ${foundStation}: ${direction}° @ ${speed}kt`);
+
+      return {
+        direction,
+        speed,
+        altitude: targetAlt,
+        station: foundStation
+      };
+    } catch (error) {
+      console.error(`Error parsing wind data "${cleanData}":`, error);
+      return null;
+    }
   } catch (error) {
     console.error('Error fetching low-level winds:', error);
     return null;
@@ -589,9 +596,45 @@ export async function fetchAverageWindsAlongRoute(
       }
     }
     
+    // Fallback: if no samples, try cruise altitude at departure, midpoint, and arrival
     if (windSamples.length === 0) {
-      console.warn('No valid wind samples found along route');
-      return null;
+      console.warn('No valid wind samples found, trying cruise-altitude fallback...');
+      
+      const fallbackPoints = [
+        { ...waypoints[0], fraction: 0.0 },
+        { 
+          lat: (waypoints[0].lat + waypoints[waypoints.length - 1].lat) / 2,
+          lng: (waypoints[0].lng + waypoints[waypoints.length - 1].lng) / 2,
+          fraction: 0.5
+        },
+        { ...waypoints[waypoints.length - 1], fraction: 1.0 }
+      ];
+      
+      for (const point of fallbackPoints) {
+        const winds = await fetchWindsAloft(point.lat, point.lng, cruiseAltitudeFt, 0, point.code);
+        if (winds && winds.direction !== 'VRB') {
+          windSamples.push({
+            direction: winds.direction as number,
+            speed: winds.speed,
+            weight: 1.0,
+            station: winds.station,
+            phase: 'cruise-fallback'
+          });
+          stationsUsed.add(winds.station);
+        }
+      }
+      
+      // If still no samples, return calm winds as last resort
+      if (windSamples.length === 0) {
+        console.warn('All wind fetching failed, returning calm winds');
+        return {
+          direction: 0,
+          speed: 0,
+          altitude: cruiseAltitudeFt,
+          station: 'FALLBACK',
+          sampleCount: 0
+        };
+      }
     }
     
     console.log(`Collected ${windSamples.length} wind samples from ${stationsUsed.size} stations`);
