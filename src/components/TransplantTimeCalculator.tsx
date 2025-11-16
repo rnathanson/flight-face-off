@@ -90,6 +90,70 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     return `${hours}h ${mins}m`;
   };
 
+  const calculateMidpoint = (coords: [number, number][]): [number, number] => {
+    if (coords.length === 2) {
+      return [(coords[0][0] + coords[1][0]) / 2, (coords[0][1] + coords[1][1]) / 2];
+    }
+    const middleIndex = Math.floor(coords.length / 2);
+    return coords[middleIndex];
+  };
+
+  const createSegmentLabel = (segment: TripSegment, index: number, midpoint: [number, number]) => {
+    if (!map.current) return null;
+    
+    const el = document.createElement('div');
+    el.className = 'segment-label';
+    
+    const icon = segment.type === 'flight' ? '✈️' : '🚗';
+    const typeLabel = segment.type === 'flight' ? 'Flight' : 'Ground';
+    const unit = segment.type === 'flight' ? 'nm' : 'mi';
+    
+    el.innerHTML = `
+      <div style="
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        padding: 8px 12px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        font-size: 12px;
+        font-weight: 600;
+        border: 2px solid ${segment.type === 'flight' ? '#3b82f6' : '#10b981'};
+        white-space: nowrap;
+        cursor: pointer;
+        transition: transform 0.2s;
+      ">
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
+          <span>${icon}</span>
+          <span>Leg ${index + 1}: ${typeLabel}</span>
+        </div>
+        <div style="color: #666; font-size: 11px;">
+          ${formatDuration(segment.duration)} • ${segment.distance.toFixed(0)} ${unit}
+        </div>
+      </div>
+    `;
+    
+    el.addEventListener('mouseenter', () => {
+      el.style.transform = 'scale(1.05)';
+    });
+    
+    el.addEventListener('mouseleave', () => {
+      el.style.transform = 'scale(1)';
+    });
+    
+    return new mapboxgl.Marker(el)
+      .setLngLat(midpoint)
+      .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`
+        <div style="padding: 8px;">
+          <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600;">Leg ${index + 1} Details</h3>
+          <p style="margin: 4px 0;"><strong>Type:</strong> ${typeLabel}</p>
+          <p style="margin: 4px 0;"><strong>Duration:</strong> ${formatDuration(segment.duration)}</p>
+          <p style="margin: 4px 0;"><strong>Distance:</strong> ${segment.distance.toFixed(0)} ${unit === 'nm' ? 'nautical miles' : 'miles'}</p>
+          ${segment.from ? `<p style="margin: 4px 0;"><strong>From:</strong> ${segment.from}</p>` : ''}
+          ${segment.to ? `<p style="margin: 4px 0;"><strong>To:</strong> ${segment.to}</p>` : ''}
+        </div>
+      `));
+  };
+
   const calculateTrip = async () => {
     if (!selectedOrigin || !selectedDestination) {
       toast({
@@ -208,6 +272,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     });
 
     document.querySelectorAll('.mapboxgl-marker').forEach((el) => el.remove());
+    document.querySelectorAll('.segment-label').forEach((el) => el.remove());
 
     const { origin, destination, originAirport, destAirport } = result.route;
 
@@ -271,6 +336,20 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     });
 
     if (segments && segments.length >= 4) {
+      // Add first flight leg label (KFRG to origin airport)
+      const firstFlightMidpoint = calculateMidpoint([
+        [KFRG.lng, KFRG.lat],
+        [originAirport.lng, originAirport.lat]
+      ]);
+      const firstFlightSegment: TripSegment = {
+        type: 'flight',
+        from: 'KFRG',
+        to: originAirport.code,
+        duration: segments[0].duration,
+        distance: segments[0].distance
+      };
+      createSegmentLabel(firstFlightSegment, 0, firstFlightMidpoint)?.addTo(map.current);
+
       map.current.addSource('route-animated', {
         type: 'geojson',
         data: {
@@ -300,6 +379,20 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
           'line-dasharray': [2, 2]
         }
       });
+
+      // Add main flight leg label (origin airport to dest airport)
+      const mainFlightMidpoint = calculateMidpoint([
+        [originAirport.lng, originAirport.lat],
+        [destAirport.lng, destAirport.lat]
+      ]);
+      const mainFlightSegment: TripSegment = {
+        type: 'flight',
+        from: originAirport.code,
+        to: destAirport.code,
+        duration: segments[3]?.duration || 0,
+        distance: segments[3]?.distance || 0
+      };
+      createSegmentLabel(mainFlightSegment, 3, mainFlightMidpoint)?.addTo(map.current);
     }
 
     if (segments) {
@@ -332,6 +425,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               'line-width': 3
             }
           });
+
+          // Add label for ground segment
+          const midpoint = calculateMidpoint(segment.polyline as [number, number][]);
+          createSegmentLabel(segment, index, midpoint)?.addTo(map.current);
         }
       });
     }
@@ -660,83 +757,40 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Clock className="w-5 h-5 text-primary" />
-                Trip Breakdown
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {tripResult.segments.map((segment, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border"
-                >
-                  <div className="p-2 rounded-full bg-background">
-                    {segment.type === 'ground' ? (
-                      <Car className="w-5 h-5 text-primary" />
-                    ) : (
-                      <Plane className="w-5 h-5 text-green-600" />
-                    )}
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <div className="font-semibold">
-                      {segment.type === 'ground' ? 'Ground Transport' : 'Flight'}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {segment.from} → {segment.to}
-                    </div>
-                  </div>
-                  <div className="text-right space-y-1">
-                    <div className="font-bold text-lg">
-                      {formatDuration(segment.duration)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {segment.distance.toFixed(0)} {segment.type === 'ground' ? 'mi' : 'nm'}
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              {onAIPlatformClick && (
-                <div className="pt-3 border-t border-border">
-                  <Button
-                    onClick={() =>
-                      onAIPlatformClick({
-                        origin: selectedOrigin,
-                        destination: selectedDestination,
-                        originHospital,
-                        destinationHospital,
-                        departureDate,
-                        departureTime,
-                        passengerCount,
-                        totalTime: tripResult.totalTime,
-                        arrivalTime: tripResult.arrivalTime,
-                        originAirport: tripResult.route.originAirport,
-                        destAirport: tripResult.route.destAirport,
-                        segments: tripResult.segments,
-                      })
-                    }
-                    variant="default"
-                    className="w-full"
-                    size="lg"
-                  >
-                    <Zap className="w-4 h-4 mr-2" />
-                    View AI Intelligence Platform
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-xl">
                 <MapPin className="w-6 h-6 text-primary" />
                 Route Map
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-0">
-              <div ref={mapContainer} className="h-[500px] w-full rounded-b-lg" />
+            <CardContent className="p-0 relative">
+              <div ref={mapContainer} className="h-[600px] w-full rounded-b-lg" />
+              
+              {/* Map Legend */}
+              <div className="absolute top-4 right-4 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm p-3 rounded-lg shadow-lg text-xs z-10 border border-border">
+                <div className="font-semibold mb-2 text-foreground">Route Legend</div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-blue-500 flex-shrink-0"></div>
+                    <span className="text-foreground">KFRG Home Base</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></div>
+                    <span className="text-foreground">Pickup Location</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></div>
+                    <span className="text-foreground">Delivery Location</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-0.5 border-t-2 border-dashed border-blue-500 flex-shrink-0"></div>
+                    <span className="text-foreground">Flight Path</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-0.5 bg-green-500 flex-shrink-0"></div>
+                    <span className="text-foreground">Ground Transport</span>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
