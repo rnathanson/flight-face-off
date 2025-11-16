@@ -1033,15 +1033,16 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                                   <span className="font-semibold text-sm uppercase tracking-wide">
                                     {segment.type === 'flight' ? 'Flight' : 'Ground Transport'}
                                   </span>
-                                  <Badge variant="outline" className="text-xs">
-                                    Leg {index + 1}
-                                  </Badge>
                                 </div>
                                 
                                 <div className="flex items-center gap-2 text-base font-medium mb-1">
-                                  <span className="text-foreground">{segment.from}</span>
+                                  <span className="text-foreground">
+                                    {segment.from.replace(/\s*\([^)]*\)/g, '')}
+                                  </span>
                                   <span className="text-muted-foreground">→</span>
-                                  <span className="text-foreground">{segment.to}</span>
+                                  <span className="text-foreground">
+                                    {segment.to.replace(/\s*\([^)]*\)/g, '')}
+                                  </span>
                                 </div>
                                 
                                 <div className="text-xs text-muted-foreground mt-2">
