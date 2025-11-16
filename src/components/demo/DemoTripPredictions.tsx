@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { LocationAutocomplete } from '@/components/LocationAutocomplete';
-import { AlertTriangle, CheckCircle, Target, MapPin, Plane, Clock, Loader2, User, Users, X, Heart, ChevronsUpDown, Check, Wind, Droplets, Layers, Zap } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Target, MapPin, Plane, Clock, Loader2, User, Users, X, Heart, ChevronsUpDown, Check, Wind, Droplets, Layers, Zap, RotateCcw } from 'lucide-react';
 import { GeocodeResult } from '@/lib/geocoding';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -543,6 +543,28 @@ export const DemoTripPredictions = ({
       });
     }, 1200);
   };
+  
+  const handleReset = () => {
+    setOrganType('');
+    setSelectedOrigin(null);
+    setSelectedDestination(null);
+    setOriginHospital('');
+    setDestinationHospital('');
+    setSelectedCrew([]);
+    setSelectedLeadDoctor(null);
+    setSurgicalTeam([]);
+    setSelectedCoordinator(null);
+    setCaseNumber('');
+    setCaseData(null);
+    setSuccessAnalysis(null);
+    setLivePrediction(null);
+    setTripCalc(null);
+    toast({
+      title: "Scenario Reset",
+      description: "All selections have been cleared.",
+    });
+  };
+  
   const selectedMissionType = missionTypes.find(mt => mt.organ_type === organType);
   return <div className="space-y-6">
       <Card className="shadow-card animate-fade-in">
@@ -558,35 +580,48 @@ export const DemoTripPredictions = ({
               </CardDescription>
             </div>
             
-            {/* Compact Success Rate Counter - Top Right */}
-            {livePrediction && (
-              <div className="flex flex-col items-end gap-1 min-w-[120px]">
-                <div className="text-xs text-muted-foreground font-medium mb-0.5">Predicted Success Rate</div>
-                <div className={`text-4xl font-bold leading-none ${
-                  livePrediction.overallPrediction >= 85 ? 'text-success' :
-                  livePrediction.overallPrediction >= 70 ? 'text-warning' :
-                  'text-destructive'
-                }`}>
-                  {calculatingLive ? (
-                    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-                  ) : (
-                    `${livePrediction.overallPrediction}%`
-                  )}
+            <div className="flex items-start gap-3">
+              {/* Reset Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleReset}
+                className="gap-2"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Reset
+              </Button>
+              
+              {/* Compact Success Rate Counter - Top Right */}
+              {livePrediction && (
+                <div className="flex flex-col items-end gap-1 min-w-[120px]">
+                  <div className="text-xs text-muted-foreground font-medium mb-0.5">Predicted Success Rate</div>
+                  <div className={`text-4xl font-bold leading-none ${
+                    livePrediction.overallPrediction >= 85 ? 'text-success' :
+                    livePrediction.overallPrediction >= 70 ? 'text-warning' :
+                    'text-destructive'
+                  }`}>
+                    {calculatingLive ? (
+                      <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                    ) : (
+                      `${livePrediction.overallPrediction}%`
+                    )}
+                  </div>
+                  <Badge 
+                    variant={
+                      livePrediction.confidence === 'high' ? 'default' :
+                      livePrediction.confidence === 'medium' ? 'secondary' :
+                      'outline'
+                    }
+                    className="text-xs"
+                  >
+                    {livePrediction.confidence === 'high' ? 'High' : 
+                     livePrediction.confidence === 'medium' ? 'Medium' : 
+                     'Low'} Confidence
+                  </Badge>
                 </div>
-                <Badge 
-                  variant={
-                    livePrediction.confidence === 'high' ? 'default' :
-                    livePrediction.confidence === 'medium' ? 'secondary' :
-                    'outline'
-                  }
-                  className="text-xs"
-                >
-                  {livePrediction.confidence === 'high' ? 'High' : 
-                   livePrediction.confidence === 'medium' ? 'Medium' : 
-                   'Low'} Confidence
-                </Badge>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
