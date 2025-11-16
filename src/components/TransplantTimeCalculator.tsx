@@ -524,9 +524,9 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               'line-cap': 'round'
             },
             paint: {
-              'line-color': segment.type === 'flight' ? '#3b82f6' : (index === 1 || index === 2 ? '#10b981' : '#ef4444'),
+              'line-color': segment.type === 'flight' ? '#3b82f6' : '#10b981',
               'line-width': 3,
-              'line-dasharray': segment.type === 'flight' ? [2, 2] : undefined
+              ...(segment.type === 'flight' && { 'line-dasharray': [2, 2] })
             }
           });
 
