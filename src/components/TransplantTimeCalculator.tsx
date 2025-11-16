@@ -9,7 +9,7 @@ import { LocationAutocomplete } from '@/components/LocationAutocomplete';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
-import { CalendarIcon, MapPin, Plane, Zap, Clock, Car, Timer, AlertTriangle, CheckCircle, Target, ChevronDown } from 'lucide-react';
+import { CalendarIcon, MapPin, Plane, Zap, Clock, Car, Timer, AlertTriangle, CheckCircle, Target, ChevronDown, Package } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { GeocodeResult } from '@/lib/geocoding';
@@ -20,7 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface TripSegment {
-  type: 'ground' | 'flight';
+  type: 'ground' | 'flight' | 'ground_handling';
   from: string;
   to: string;
   duration: number;
@@ -29,6 +29,7 @@ interface TripSegment {
   polyline?: number[][];
   hasTrafficData?: boolean;
   route?: string;
+  description?: string;
 }
 
 interface Airport {
@@ -896,46 +897,70 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       return (
                         <React.Fragment key={index}>
                           <div 
-                            className="p-4 rounded-lg border border-border bg-background hover:bg-muted/50 transition-all"
+                            className={cn(
+                              "p-4 rounded-lg transition-all",
+                              segment.type === 'ground_handling' 
+                                ? "ml-8 border-l-2 border-muted bg-muted/30" 
+                                : "border border-border bg-background hover:bg-muted/50"
+                            )}
                             style={{
-                              borderLeft: `4px solid ${segment.type === 'flight' ? '#3b82f6' : '#10b981'}`
+                              borderLeft: segment.type !== 'ground_handling' 
+                                ? `4px solid ${segment.type === 'flight' ? '#3b82f6' : '#10b981'}` 
+                                : undefined
                             }}
                           >
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  {segment.type === 'flight' ? (
-                                    <Plane className="w-4 h-4 text-muted-foreground" />
-                                  ) : (
-                                    <Car className="w-4 h-4 text-muted-foreground" />
-                                  )}
-                                  <span className="font-semibold text-sm uppercase tracking-wide">
-                                    {segment.type === 'flight' ? 'Flight' : 'Ground Transport'}
-                                  </span>
-                                  <Badge variant="outline" className="text-xs">
-                                    Leg {index + 1}
-                                  </Badge>
+                            {segment.type === 'ground_handling' ? (
+                              // Ground Handling - Subtle footnote style
+                              <div className="flex items-center justify-between gap-4 text-sm">
+                                <div className="flex items-center gap-2 text-muted-foreground">
+                                  <Package className="w-3.5 h-3.5" />
+                                  <span className="italic">{segment.description || 'Ground handling'}</span>
                                 </div>
-                                
-                                <div className="flex items-center gap-2 text-base font-medium mb-1">
-                                  <span className="text-foreground">{segment.from}</span>
-                                  <span className="text-muted-foreground">→</span>
-                                  <span className="text-foreground">{segment.to}</span>
-                                </div>
-                              </div>
-                              
-                              <div className="text-right space-y-1">
-                                <div className="flex items-center gap-2 justify-end">
-                                  <Clock className="w-4 h-4 text-muted-foreground" />
-                                  <span className="text-lg font-bold text-foreground">
+                                <div className="flex items-center gap-2">
+                                  <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                                  <span className="font-medium text-foreground">
                                     {formatDuration(segment.duration)}
                                   </span>
                                 </div>
-                                <div className="text-sm text-muted-foreground">
-                                  {segment.distance.toFixed(1)} {segment.type === 'flight' ? 'nm' : 'mi'}
+                              </div>
+                            ) : (
+                              // Flight and Ground Transport - Full display
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    {segment.type === 'flight' ? (
+                                      <Plane className="w-4 h-4 text-muted-foreground" />
+                                    ) : (
+                                      <Car className="w-4 h-4 text-muted-foreground" />
+                                    )}
+                                    <span className="font-semibold text-sm uppercase tracking-wide">
+                                      {segment.type === 'flight' ? 'Flight' : 'Ground Transport'}
+                                    </span>
+                                    <Badge variant="outline" className="text-xs">
+                                      Leg {index + 1}
+                                    </Badge>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2 text-base font-medium mb-1">
+                                    <span className="text-foreground">{segment.from}</span>
+                                    <span className="text-muted-foreground">→</span>
+                                    <span className="text-foreground">{segment.to}</span>
+                                  </div>
+                                </div>
+                                
+                                <div className="text-right space-y-1">
+                                  <div className="flex items-center gap-2 justify-end">
+                                    <Clock className="w-4 h-4 text-muted-foreground" />
+                                    <span className="text-lg font-bold text-foreground">
+                                      {formatDuration(segment.duration)}
+                                    </span>
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {segment.distance.toFixed(1)} {segment.type === 'flight' ? 'nm' : 'mi'}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
+                            )}
                           </div>
                           {timeToPickupSubtotal}
                           {pickupToDeliverySubtotal}
