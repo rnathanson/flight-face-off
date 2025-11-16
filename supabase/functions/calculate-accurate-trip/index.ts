@@ -20,20 +20,23 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const { 
-      pickupLocation,  // Changed from originLocation
-      deliveryLocation,  // Changed from destinationLocation
+      pickupLocation,
+      deliveryLocation,
       departureDateTime,
       passengers = 4
     } = await req.json();
 
-    console.log('Calculating three-leg accurate trip from KFRG home base...');
+    console.log('Calculating 5-leg trip from KFRG home base...');
+    console.log('Route: KFRG → Pickup Airport (flight) → Pickup Hospital (ground) → Pickup Airport (ground) → Destination Airport (flight) → Delivery Hospital (ground)');
 
-    // KFRG home base coordinates
+    // KFRG home base
     const KFRG = {
       code: 'KFRG',
       name: 'Republic Airport',
       lat: 40.7289,
-      lng: -73.4134
+      lng: -73.4134,
+      elevation_ft: 82,
+      best_runway: '14/32'
     };
 
     // Get flight ops config
@@ -42,7 +45,7 @@ serve(async (req) => {
       .select('*')
       .single();
 
-    // Calculate distance from KFRG to determine if on Long Island (50nm threshold)
+    // Calculate distances from KFRG (50nm threshold for Long Island)
     const pickupDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, pickupLocation.lat, pickupLocation.lon);
     const deliveryDistanceFromKFRG = calculateDistance(KFRG.lat, KFRG.lng, deliveryLocation.lat, deliveryLocation.lon);
     
@@ -52,9 +55,9 @@ serve(async (req) => {
     console.log(`Pickup ${isPickupOnLongIsland ? 'IS' : 'IS NOT'} on Long Island (${pickupDistanceFromKFRG.toFixed(1)}nm from KFRG)`);
     console.log(`Delivery ${isDeliveryOnLongIsland ? 'IS' : 'IS NOT'} on Long Island (${deliveryDistanceFromKFRG.toFixed(1)}nm from KFRG)`);
 
-    // Determine departure and arrival airports
-    let departureAirport = KFRG;
-    let arrivalAirport = KFRG;
+    // Determine pickup and destination airports
+    let pickupAirport = KFRG;
+    let destinationAirport = KFRG;
 
     // If pickup is NOT on Long Island, find nearest qualified airport
     if (!isPickupOnLongIsland) {
@@ -63,7 +66,7 @@ serve(async (req) => {
       });
       const pickupAirports = pickupAirportsResponse.data?.qualified || [];
       if (pickupAirports.length > 0) {
-        departureAirport = pickupAirports[0];
+        pickupAirport = pickupAirports[0];
       }
     }
 
@@ -74,13 +77,13 @@ serve(async (req) => {
       });
       const deliveryAirports = deliveryAirportsResponse.data?.qualified || [];
       if (deliveryAirports.length > 0) {
-        arrivalAirport = deliveryAirports[0];
+        destinationAirport = deliveryAirports[0];
       }
     }
 
-    console.log(`Three-leg trip: KFRG -> ${departureAirport.code} -> ${arrivalAirport.code}`);
+    console.log(`Flight Route: KFRG → ${pickupAirport.code} → ${destinationAirport.code}`);
 
-    // Step 2: Calculate Leg 1 - KFRG to Pickup Hospital (ground only)
+    // Traffic calculation
     const departureTime = new Date(departureDateTime);
     const departureHour = departureTime.getHours();
     const dayOfWeek = departureTime.getDay();
@@ -97,324 +100,352 @@ serve(async (req) => {
       trafficMultiplier *= 0.9;
     }
 
-    const leg1Data = await calculateGroundSegmentEnhanced(
-      { lat: KFRG.lat, lng: KFRG.lng },
-      pickupLocation,
-      trafficMultiplier
-    );
+    // === LEG 1: KFRG to Pickup Airport (FLIGHT) ===
+    let leg1RouteString = await getFAARoute(KFRG.code, pickupAirport.code, supabase);
+    let leg1RouteDistance = null;
+    let leg1RouteSource = 'great-circle';
 
-    // Step 3: Calculate Leg 2 - Pickup Hospital to Departure Airport (ground only)
-    const leg2Data = await calculateGroundSegmentEnhanced(
-      pickupLocation,
-      { lat: departureAirport.lat, lng: departureAirport.lng },
-      trafficMultiplier
-    );
-
-    // Step 4: Try to get FAA preferred route for flight
-    let routeString = await getFAARoute(departureAirport.code, arrivalAirport.code, supabase);
-    let routeDistanceNM = null;
-    let routeSource = 'great-circle';
-
-    if (routeString) {
-      console.log(`Found FAA preferred route: ${routeString}`);
+    if (leg1RouteString && pickupAirport.code !== KFRG.code) {
+      console.log(`Leg 1 FAA route: ${leg1RouteString}`);
       try {
-        const parsedRoute = await parseRoute(routeString, departureAirport, arrivalAirport, supabase);
-        routeDistanceNM = parsedRoute.totalDistanceNM;
-        routeSource = 'faa-preferred';
+        const parsedRoute = await parseRoute(leg1RouteString, KFRG, pickupAirport, supabase);
+        leg1RouteDistance = parsedRoute.totalDistanceNM;
+        leg1RouteSource = 'faa-preferred';
       } catch (error) {
-        console.warn('Failed to parse route, using great-circle:', error);
-        routeString = null;
+        console.warn('Failed to parse leg 1 route:', error);
       }
     }
 
-    // Step 5: Get detailed airport data and weather
-    const [departureData, arrivalData] = await Promise.all([
-      fetchAndParseAirNav(departureAirport.code, false),
-      fetchAndParseAirNav(arrivalAirport.code, false)
+    const leg1FlightDistance = pickupAirport.code === KFRG.code ? 0 : (leg1RouteDistance || calculateDistance(
+      KFRG.lat,
+      KFRG.lng,
+      pickupAirport.lat,
+      pickupAirport.lng
+    ));
+
+    // Get airport weather data
+    const [kfrgData, pickupAirportData, destinationAirportData] = await Promise.all([
+      fetchAndParseAirNav(KFRG.code, false),
+      pickupAirport.code !== KFRG.code ? fetchAndParseAirNav(pickupAirport.code, false) : Promise.resolve(null),
+      destinationAirport.code !== KFRG.code && destinationAirport.code !== pickupAirport.code ? fetchAndParseAirNav(destinationAirport.code, false) : Promise.resolve(null)
     ]);
 
-    // Step 4: Calculate ground segments with enhanced OSRM and traffic
-    const departureTime = new Date(departureDateTime);
-    const departureHour = departureTime.getHours();
-    const dayOfWeek = departureTime.getDay();
-    const isRushHour = (departureHour >= 7 && departureHour <= 9) || (departureHour >= 16 && departureHour <= 19);
-    const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
-    
-    // Smart traffic multiplier
-    let trafficMultiplier = 1.0;
-    if (isRushHour && isWeekday) {
-      trafficMultiplier = 1.4;
-    } else if (departureHour >= 6 && departureHour <= 20) {
-      trafficMultiplier = 1.15;
-    }
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      trafficMultiplier *= 0.9;
-    }
+    const leg1FlightTime = pickupAirport.code === KFRG.code ? 0 : calculateFlightTime(
+      leg1FlightDistance,
+      config,
+      kfrgData,
+      pickupAirportData || kfrgData,
+      KFRG,
+      pickupAirport
+    );
 
-    // Calculate ground distance using enhanced OSRM API
-    const groundOriginData = await calculateGroundSegmentEnhanced(
-      originLocation,
-      { lat: originAirport.lat, lng: originAirport.lng },
+    // === LEG 2: Pickup Airport to Pickup Hospital (GROUND) ===
+    const leg2Data = await calculateGroundSegmentEnhanced(
+      { lat: pickupAirport.lat, lng: pickupAirport.lng },
+      pickupLocation,
       trafficMultiplier
     );
 
-    const groundDestData = await calculateGroundSegmentEnhanced(
-      { lat: destAirport.lat, lng: destAirport.lng },
-      destinationLocation,
+    // === LEG 3: Pickup Hospital back to Pickup Airport (GROUND) ===
+    const leg3Data = await calculateGroundSegmentEnhanced(
+      pickupLocation,
+      { lat: pickupAirport.lat, lng: pickupAirport.lng },
       trafficMultiplier
     );
 
-    // Step 5: Calculate flight segment
-    const straightLineDistance = calculateDistance(
-      originAirport.lat,
-      originAirport.lng,
-      destAirport.lat,
-      destAirport.lng
-    );
-    
-    // Use route distance if available
-    const flightDistance = routeDistanceNM || straightLineDistance;
+    // === LEG 4: Pickup Airport to Destination Airport (FLIGHT) ===
+    let leg4RouteString = await getFAARoute(pickupAirport.code, destinationAirport.code, supabase);
+    let leg4RouteDistance = null;
+    let leg4RouteSource = 'great-circle';
 
-    // Determine altitude and calculate flight
-    let cruiseAltitudeFt: number;
-    if (flightDistance < 100) {
-      cruiseAltitudeFt = config.altitude_rules.under_100nm.max_ft;
-    } else if (flightDistance < 350) {
-      cruiseAltitudeFt = config.altitude_rules['100_to_350nm'].max_ft;
-    } else {
-      cruiseAltitudeFt = config.altitude_rules.over_350nm.max_ft;
-    }
-
-    // Calculate headwind from weather
-    let headwind = 0;
-    let weatherDelay = 0;
-    let originMetar = null;
-    let destMetar = null;
-
-    if (originData?.metar) {
-      originMetar = parseMETAR(originData.metar.raw);
-      if (originMetar) {
-        weatherDelay += getWeatherDelayMinutes(originMetar);
+    if (leg4RouteString && pickupAirport.code !== destinationAirport.code) {
+      console.log(`Leg 4 FAA route: ${leg4RouteString}`);
+      try {
+        const parsedRoute = await parseRoute(leg4RouteString, pickupAirport, destinationAirport, supabase);
+        leg4RouteDistance = parsedRoute.totalDistanceNM;
+        leg4RouteSource = 'faa-preferred';
+      } catch (error) {
+        console.warn('Failed to parse leg 4 route:', error);
       }
     }
 
-    if (destData?.metar) {
-      destMetar = parseMETAR(destData.metar.raw);
-      if (destMetar) {
-        weatherDelay += getWeatherDelayMinutes(destMetar);
-      }
-    }
+    const leg4FlightDistance = pickupAirport.code === destinationAirport.code ? 0 : (leg4RouteDistance || calculateDistance(
+      pickupAirport.lat,
+      pickupAirport.lng,
+      destinationAirport.lat,
+      destinationAirport.lng
+    ));
 
-    // Calculate course
-    const course = calculateCourse(
-      originAirport.lat,
-      originAirport.lng,
-      destAirport.lat,
-      destAirport.lng
+    const leg4FlightTime = pickupAirport.code === destinationAirport.code ? 0 : calculateFlightTime(
+      leg4FlightDistance,
+      config,
+      pickupAirportData || kfrgData,
+      destinationAirportData || kfrgData,
+      pickupAirport,
+      destinationAirport
     );
 
-    // Average wind if both available
-    if (originMetar && destMetar) {
-      const originHeadwind = calculateHeadwindComponent(
-        originMetar.wind.direction,
-        originMetar.wind.speed,
-        course
-      );
-      const destHeadwind = calculateHeadwindComponent(
-        destMetar.wind.direction,
-        destMetar.wind.speed,
-        course
-      );
-      headwind = (originHeadwind + destHeadwind) / 2;
-    } else if (originMetar) {
-      headwind = calculateHeadwindComponent(
-        originMetar.wind.direction,
-        originMetar.wind.speed,
-        course
-      );
-    }
+    // === LEG 5: Destination Airport to Delivery Hospital (GROUND) ===
+    const leg5Data = await calculateGroundSegmentEnhanced(
+      { lat: destinationAirport.lat, lng: destinationAirport.lng },
+      deliveryLocation,
+      trafficMultiplier
+    );
 
-    // Calculate flight time with altitude-based performance
-    const climbTimeMin = cruiseAltitudeFt / config.climb_rate_fpm;
-    const descentTimeMin = cruiseAltitudeFt / config.descent_rate_fpm;
-    
-    // Distance covered during climb/descent
-    const climbNM = (config.speed_below_fl100_kias * 0.8 * climbTimeMin) / 60;
-    const descentNM = (config.speed_below_fl100_kias * 0.9 * descentTimeMin) / 60;
-    
-    // Cruise distance (add 5% for routing)
-    const cruiseNM = Math.max(0, flightDistance * 1.05 - climbNM - descentNM);
-    const cruiseGroundSpeed = config.cruise_speed_ktas - headwind;
-    const cruiseTimeMin = (cruiseNM / cruiseGroundSpeed) * 60;
+    // Build segments
+    const segments = [
+      ...(pickupAirport.code !== KFRG.code ? [{
+        type: 'flight' as const,
+        from: `${KFRG.code} (Home Base)`,
+        to: `${pickupAirport.code} (Pickup Airport)`,
+        duration: leg1FlightTime,
+        distance: leg1FlightDistance,
+        route: leg1RouteSource
+      }] : []),
+      {
+        type: 'ground' as const,
+        from: `${pickupAirport.code}${pickupAirport.code === KFRG.code ? ' (Home Base)' : ' (Pickup Airport)'}`,
+        to: 'Pickup Hospital',
+        duration: leg2Data.duration,
+        distance: leg2Data.distance,
+        traffic: leg2Data.source,
+        polyline: leg2Data.polyline
+      },
+      {
+        type: 'ground' as const,
+        from: 'Pickup Hospital',
+        to: `${pickupAirport.code} (Pickup Airport)`,
+        duration: leg3Data.duration,
+        distance: leg3Data.distance,
+        traffic: leg3Data.source,
+        polyline: leg3Data.polyline
+      },
+      ...(pickupAirport.code !== destinationAirport.code ? [{
+        type: 'flight' as const,
+        from: `${pickupAirport.code} (Pickup Airport)`,
+        to: `${destinationAirport.code}${destinationAirport.code === KFRG.code ? ' (Home Base)' : ' (Destination Airport)'}`,
+        duration: leg4FlightTime,
+        distance: leg4FlightDistance,
+        route: leg4RouteSource
+      }] : []),
+      {
+        type: 'ground' as const,
+        from: `${destinationAirport.code}${destinationAirport.code === KFRG.code ? ' (Home Base)' : ' (Destination Airport)'}`,
+        to: 'Delivery Hospital',
+        duration: leg5Data.duration,
+        distance: leg5Data.distance,
+        traffic: leg5Data.source,
+        polyline: leg5Data.polyline
+      }
+    ];
 
-    // Taxi and buffer times
-    const taxiTimeMin = config.taxi_time_regional_airport_min * 1.5; // Origin + destination
-    const bufferTimeMin = config.takeoff_landing_buffer_min;
+    const totalTime = segments.reduce((sum, seg) => sum + seg.duration, 0);
+    const arrivalTime = new Date(departureTime.getTime() + totalTime * 60 * 1000);
 
-    const totalFlightTimeMin = climbTimeMin + cruiseTimeMin + descentTimeMin + taxiTimeMin + bufferTimeMin + weatherDelay;
+    // Generate advisories
+    const advisories = generateAdvisories(0, 0, trafficMultiplier);
 
-    // Step 6: Calculate total trip time
-    const totalTripTimeMin = groundOriginData.timeMinutes + totalFlightTimeMin + groundDestData.timeMinutes;
-    const arrivalTime = new Date(departureTime.getTime() + totalTripTimeMin * 60000);
-
-    // Calculate confidence score
-    let confidence = 95;
-    if (weatherDelay > 15) confidence -= 10;
-    if (headwind > 20) confidence -= 10;
-    if (trafficMultiplier > 1.2) confidence -= 5;
-    if (!originMetar || !destMetar) confidence -= 10;
-    if (routeSource === 'great-circle') confidence -= 5;
+    // Confidence score
+    let confidence = 85;
+    if (leg1RouteSource === 'faa-preferred' || leg4RouteSource === 'faa-preferred') confidence += 5;
+    if (kfrgData?.metar) confidence += 5;
+    if (leg2Data.source === 'osrm' && leg3Data.source === 'osrm' && leg5Data.source === 'osrm') confidence += 5;
 
     const result = {
-      totalTimeMinutes: Math.round(totalTripTimeMin),
+      segments,
+      totalTime,
       arrivalTime: arrivalTime.toISOString(),
-      confidence: Math.max(50, confidence),
-      routeSource,
-      routeString: routeString || 'Direct',
-      segments: [
-        {
-          type: 'ground',
-          name: 'Hospital to Airport',
-          timeMinutes: Math.round(groundOriginData.timeMinutes),
-          distance_miles: groundOriginData.distanceMiles,
-          distance_nm: originAirport.distance_nm,
-          polyline: groundOriginData.polyline,
-          notes: trafficMultiplier > 1.3 ? 'Heavy traffic expected' : 'Moderate traffic'
+      confidence,
+      route: {
+        homeBase: KFRG,
+        pickupLocation,
+        deliveryLocation,
+        pickupAirport: {
+          code: pickupAirport.code,
+          name: pickupAirport.name,
+          lat: pickupAirport.lat,
+          lng: pickupAirport.lng,
+          elevation_ft: pickupAirport.elevation_ft,
+          runway: pickupAirport.best_runway
         },
-        {
-          type: 'flight',
-          name: 'Flight',
-          timeMinutes: Math.round(totalFlightTimeMin),
-          distance_nm: flightDistance,
-          straightLineDistance_nm: straightLineDistance,
-          details: {
-            climb: Math.round(climbTimeMin),
-            cruise: Math.round(cruiseTimeMin),
-            descent: Math.round(descentTimeMin),
-            taxi: Math.round(taxiTimeMin),
-            buffer: bufferTimeMin,
-            weatherDelay: Math.round(weatherDelay)
-          },
-          altitude: `${Math.round(cruiseAltitudeFt / 100) >= 180 ? 'FL' : ''}${Math.round(cruiseAltitudeFt / 100)}`,
-          headwind: Math.round(headwind),
-          route: routeString || 'Direct'
+        destinationAirport: {
+          code: destinationAirport.code,
+          name: destinationAirport.name,
+          lat: destinationAirport.lat,
+          lng: destinationAirport.lng,
+          elevation_ft: destinationAirport.elevation_ft,
+          runway: destinationAirport.best_runway
         },
-        {
-          type: 'ground',
-          name: 'Airport to Hospital',
-          timeMinutes: Math.round(groundDestData.timeMinutes),
-          distance_miles: groundDestData.distanceMiles,
-          distance_nm: destAirport.distance_nm,
-          polyline: groundDestData.polyline,
-          notes: 'Normal traffic'
-        }
-      ],
-      airports: {
-        origin: {
-          code: originAirport.code,
-          name: originAirport.name,
-          elevation_ft: originAirport.elevation_ft,
-          runway: originAirport.best_runway
+        // Legacy compatibility fields
+        departureAirport: {
+          code: pickupAirport.code,
+          name: pickupAirport.name,
+          lat: pickupAirport.lat,
+          lng: pickupAirport.lng
         },
-        destination: {
-          code: destAirport.code,
-          name: destAirport.name,
-          elevation_ft: destAirport.elevation_ft,
-          runway: destAirport.best_runway
+        arrivalAirport: {
+          code: destinationAirport.code,
+          name: destinationAirport.name,
+          lat: destinationAirport.lat,
+          lng: destinationAirport.lng
         }
       },
-      weather: {
-        origin: originMetar ? {
-          category: originMetar.flightCategory,
-          wind: `${originMetar.wind.direction}° at ${originMetar.wind.speed}kts`,
-          visibility: `${originMetar.visibility}SM`,
-          ceiling: originMetar.ceiling ? `${originMetar.ceiling}ft` : 'Clear'
-        } : null,
-        destination: destMetar ? {
-          category: destMetar.flightCategory,
-          wind: `${destMetar.wind.direction}° at ${destMetar.wind.speed}kts`,
-          visibility: `${destMetar.visibility}SM`,
-          ceiling: destMetar.ceiling ? `${destMetar.ceiling}ft` : 'Clear'
-        } : null
-      },
-      advisories: generateAdvisories(originMetar, destMetar, headwind, weatherDelay, trafficMultiplier)
+      advisories
     };
 
-    return new Response(
-      JSON.stringify(result),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.log(`Total trip time: ${totalTime} minutes (${Math.floor(totalTime / 60)}h ${totalTime % 60}m)`);
+
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   } catch (error) {
-    console.error('Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error('Trip calculation error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    return new Response(JSON.stringify({ error: errorMessage }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 });
 
-// Enhanced ground segment calculation with OSRM
-async function calculateGroundSegmentEnhanced(
-  origin: any,
-  dest: any,
-  trafficMultiplier: number
-): Promise<{ timeMinutes: number; distanceMiles: number; polyline?: string }> {
-  try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${dest.lng},${dest.lat}?overview=full&geometries=polyline`;
+function calculateFlightTime(
+  distanceNM: number,
+  config: any,
+  departureData: any,
+  arrivalData: any,
+  departureAirport: any,
+  arrivalAirport: any
+): number {
+  if (distanceNM === 0) return 0;
+
+  // Determine altitude
+  let cruiseAltitudeFt: number;
+  if (distanceNM < 100) {
+    cruiseAltitudeFt = config.altitude_rules.under_100nm.max_ft;
+  } else if (distanceNM < 350) {
+    cruiseAltitudeFt = config.altitude_rules['100_to_350nm'].max_ft;
+  } else {
+    cruiseAltitudeFt = config.altitude_rules.over_350nm.max_ft;
+  }
+
+  // Parse weather
+  let headwind = 0;
+  let weatherDelay = 0;
+  let departureMetar = null;
+  let arrivalMetar = null;
+
+  if (departureData?.metar) {
+    departureMetar = parseMETAR(departureData.metar.raw);
+    if (departureMetar) {
+      weatherDelay += getWeatherDelayMinutes(departureMetar);
+    }
+  }
+
+  if (arrivalData?.metar) {
+    arrivalMetar = parseMETAR(arrivalData.metar.raw);
+    if (arrivalMetar) {
+      weatherDelay += getWeatherDelayMinutes(arrivalMetar);
+    }
+  }
+
+  // Calculate course
+  const course = calculateCourse(
+    departureAirport.lat,
+    departureAirport.lng,
+    arrivalAirport.lat,
+    arrivalAirport.lng
+  );
+
+  // Average wind if both available
+  if (departureMetar && arrivalMetar) {
+    const depWindDir = typeof departureMetar.wind.direction === 'number' ? departureMetar.wind.direction : 0;
+    const arrWindDir = typeof arrivalMetar.wind.direction === 'number' ? arrivalMetar.wind.direction : 0;
     
+    const depHeadwind = calculateHeadwindComponent(
+      depWindDir,
+      departureMetar.wind.speed,
+      course
+    );
+    const arrHeadwind = calculateHeadwindComponent(
+      arrWindDir,
+      arrivalMetar.wind.speed,
+      course
+    );
+    headwind = (depHeadwind + arrHeadwind) / 2;
+  } else if (departureMetar) {
+    const depWindDir = typeof departureMetar.wind.direction === 'number' ? departureMetar.wind.direction : 0;
+    headwind = calculateHeadwindComponent(
+      depWindDir,
+      departureMetar.wind.speed,
+      course
+    );
+  }
+
+  // Calculate flight time
+  const climbTimeMin = cruiseAltitudeFt / config.climb_rate_fpm;
+  const descentTimeMin = cruiseAltitudeFt / config.descent_rate_fpm;
+  
+  const climbNM = (config.speed_below_fl100_kias * 0.8 * climbTimeMin) / 60;
+  const descentNM = (config.speed_below_fl100_kias * 0.9 * descentTimeMin) / 60;
+  
+  const cruiseDistanceNM = Math.max(0, distanceNM * 1.05 - climbNM - descentNM);
+  const cruiseGroundSpeed = Math.max(config.cruise_speed_ktas - headwind, 200);
+  const cruiseTimeMin = cruiseDistanceNM / cruiseGroundSpeed * 60;
+  
+  const taxiTime = config.taxi_time_regional_airport_min;
+  const bufferTime = config.takeoff_landing_buffer_min;
+  
+  return Math.round(climbTimeMin + cruiseTimeMin + descentTimeMin + taxiTime + bufferTime + weatherDelay);
+}
+
+async function calculateGroundSegmentEnhanced(
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number },
+  trafficMultiplier: number
+): Promise<{ duration: number; distance: number; source: string; polyline?: string }> {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson&steps=true&annotations=duration,distance&alternatives=true`;
     const response = await fetch(url);
     
     if (!response.ok) {
-      throw new Error('OSRM API failed');
+      throw new Error('OSRM request failed');
     }
     
     const data = await response.json();
     
-    if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
-      throw new Error('No route found');
+    if (data.routes && data.routes.length > 0) {
+      const route = data.routes[0];
+      const distanceMiles = route.distance * 0.000621371;
+      const baseTimeMinutes = route.duration / 60;
+      const adjustedTimeMinutes = baseTimeMinutes * trafficMultiplier;
+      
+      return {
+        duration: Math.round(adjustedTimeMinutes),
+        distance: Math.round(distanceMiles * 10) / 10,
+        source: 'osrm',
+        polyline: JSON.stringify(route.geometry)
+      };
     }
-    
-    const route = data.routes[0];
-    const distanceMiles = route.distance / 1609.344;
-    const baseTimeMinutes = route.duration / 60;
-    const timeMinutes = baseTimeMinutes * trafficMultiplier;
-    
-    return {
-      timeMinutes,
-      distanceMiles,
-      polyline: route.geometry
-    };
   } catch (error) {
     console.warn('OSRM failed, using heuristic:', error);
-    const distance = calculateDistance(origin.lat, origin.lng, dest.lat, dest.lng);
-    const distanceMiles = distance * 1.15078;
-    const roadMiles = distanceMiles * 1.3;
-    const baseTimeMinutes = (roadMiles / 50) * 60;
-    return {
-      timeMinutes: baseTimeMinutes * trafficMultiplier,
-      distanceMiles: roadMiles
-    };
-  }
-}
-
-async function calculateGroundSegment(origin: any, dest: any, trafficMultiplier: number): Promise<number> {
-  const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${dest.lng},${dest.lat}?overview=false`;
-  const response = await fetch(osrmUrl);
-  const data = await response.json();
-  
-  if (data.routes && data.routes[0]) {
-    const baseTimeMin = data.routes[0].duration / 60;
-    return baseTimeMin * trafficMultiplier;
   }
   
-  return 30; // Fallback
+  // Fallback heuristic
+  const distance = calculateDistance(from.lat, from.lng, to.lat, to.lng) * 1.15092;
+  const baseTime = (distance / 45) * 60;
+  const adjustedTime = baseTime * trafficMultiplier;
+  
+  return {
+    duration: Math.round(adjustedTime),
+    distance: Math.round(distance * 10) / 10,
+    source: 'heuristic'
+  };
 }
 
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 3440.065;
+function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 3440.065; // Earth's radius in nautical miles
   const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const dLon = (lng2 - lng1) * Math.PI / 180;
   const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
@@ -422,8 +453,8 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 }
 
-function calculateCourse(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const dLon = (lon2 - lon1) * Math.PI / 180;
+function calculateCourse(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const dLon = (lng2 - lng1) * Math.PI / 180;
   const y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
   const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
     Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
@@ -431,22 +462,23 @@ function calculateCourse(lat1: number, lon1: number, lat2: number, lon2: number)
   return (course + 360) % 360;
 }
 
-function calculateHeadwindComponent(direction: number | 'VRB', speed: number, course: number): number {
-  if (direction === 'VRB' || speed === 0) return 0;
-  let angleDiff = Math.abs(direction - course);
-  if (angleDiff > 180) angleDiff = 360 - angleDiff;
-  return Math.round(speed * Math.cos((angleDiff * Math.PI) / 180));
+function calculateHeadwindComponent(windDir: number, windSpeed: number, course: number): number {
+  const relativeAngle = ((windDir - course + 180) % 360) * Math.PI / 180;
+  return windSpeed * Math.cos(relativeAngle);
 }
 
-function generateAdvisories(originMetar: any, destMetar: any, headwind: number, weatherDelay: number, trafficMultiplier: number): string[] {
+function generateAdvisories(weatherDelay: number, headwind: number, trafficMultiplier: number): string[] {
   const advisories: string[] = [];
   
-  if (headwind > 20) advisories.push(`⚠️ Strong headwinds (${Math.round(headwind)}kts) will increase flight time`);
-  if (weatherDelay > 20) advisories.push('⚠️ Significant weather delays expected');
-  if (trafficMultiplier > 1.2) advisories.push('🚗 Heavy traffic expected during ground transport');
-  if (originMetar && originMetar.flightCategory !== 'VFR') advisories.push(`☁️ Origin weather: ${originMetar.flightCategory}`);
-  if (destMetar && destMetar.flightCategory !== 'VFR') advisories.push(`☁️ Destination weather: ${destMetar.flightCategory}`);
-  if (!originMetar || !destMetar) advisories.push('ℹ️ Weather data incomplete - estimates may vary');
+  if (weatherDelay > 10) {
+    advisories.push('⚠️ Significant weather delays expected');
+  }
+  if (headwind > 20) {
+    advisories.push('🌬️ Strong headwinds may increase flight time');
+  }
+  if (trafficMultiplier > 1.3) {
+    advisories.push('🚦 Heavy traffic expected on ground segments');
+  }
   
   return advisories;
 }
