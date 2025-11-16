@@ -126,6 +126,14 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
 
   // Initialize or update map whenever token and trip result are both available
   useEffect(() => {
+    // If tripResult is null, clean up the map
+    if (!tripResult && map.current) {
+      console.log('Trip result cleared, destroying map');
+      map.current.remove();
+      map.current = null;
+      return;
+    }
+
     if (!mapboxToken || !tripResult || !mapContainer.current) return;
 
     if (!map.current) {
