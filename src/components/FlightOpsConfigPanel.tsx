@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Plane, Settings, CloudRain } from "lucide-react";
+import { Plane, Settings, CloudRain, Heart } from "lucide-react";
 
 export function FlightOpsConfigPanel() {
   const [config, setConfig] = useState<any>(null);
@@ -290,6 +290,215 @@ export function FlightOpsConfigPanel() {
                 />
               </div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Heart className="h-5 w-5" />
+            Organ Viability Time Frames
+          </CardTitle>
+          <CardDescription>
+            Maximum acceptable cold ischemic time for transplant organs (hours)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Heart */}
+          <div className="space-y-2">
+            <Label className="font-semibold">Heart</Label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Minimum (hours)</Label>
+                <Input
+                  type="number"
+                  value={config.organ_viability_hours?.heart?.min || 4}
+                  onChange={(e) => updateField('organ_viability_hours', {
+                    ...config.organ_viability_hours,
+                    heart: { 
+                      ...config.organ_viability_hours?.heart, 
+                      min: parseFloat(e.target.value) 
+                    }
+                  })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Maximum (hours)</Label>
+                <Input
+                  type="number"
+                  value={config.organ_viability_hours?.heart?.max || 6}
+                  onChange={(e) => updateField('organ_viability_hours', {
+                    ...config.organ_viability_hours,
+                    heart: { 
+                      ...config.organ_viability_hours?.heart, 
+                      max: parseFloat(e.target.value) 
+                    }
+                  })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Lungs */}
+          <div className="space-y-2">
+            <Label className="font-semibold">Lungs</Label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Minimum (hours)</Label>
+                <Input
+                  type="number"
+                  value={config.organ_viability_hours?.lungs?.min || 4}
+                  onChange={(e) => updateField('organ_viability_hours', {
+                    ...config.organ_viability_hours,
+                    lungs: { 
+                      ...config.organ_viability_hours?.lungs, 
+                      min: parseFloat(e.target.value) 
+                    }
+                  })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Maximum (hours)</Label>
+                <Input
+                  type="number"
+                  value={config.organ_viability_hours?.lungs?.max || 6}
+                  onChange={(e) => updateField('organ_viability_hours', {
+                    ...config.organ_viability_hours,
+                    lungs: { 
+                      ...config.organ_viability_hours?.lungs, 
+                      max: parseFloat(e.target.value) 
+                    }
+                  })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Liver */}
+          <div className="space-y-2">
+            <Label className="font-semibold">Liver</Label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Minimum (hours)</Label>
+                <Input
+                  type="number"
+                  value={config.organ_viability_hours?.liver?.min || 8}
+                  onChange={(e) => updateField('organ_viability_hours', {
+                    ...config.organ_viability_hours,
+                    liver: { 
+                      ...config.organ_viability_hours?.liver, 
+                      min: parseFloat(e.target.value) 
+                    }
+                  })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Maximum (hours)</Label>
+                <Input
+                  type="number"
+                  value={config.organ_viability_hours?.liver?.max || 12}
+                  onChange={(e) => updateField('organ_viability_hours', {
+                    ...config.organ_viability_hours,
+                    liver: { 
+                      ...config.organ_viability_hours?.liver, 
+                      max: parseFloat(e.target.value) 
+                    }
+                  })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Pancreas */}
+          <div className="space-y-2">
+            <Label className="font-semibold">Pancreas</Label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Minimum (hours)</Label>
+                <Input
+                  type="number"
+                  value={config.organ_viability_hours?.pancreas?.min || 0}
+                  onChange={(e) => updateField('organ_viability_hours', {
+                    ...config.organ_viability_hours,
+                    pancreas: { 
+                      ...config.organ_viability_hours?.pancreas, 
+                      min: parseFloat(e.target.value) 
+                    }
+                  })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Maximum (hours)</Label>
+                <Input
+                  type="number"
+                  value={config.organ_viability_hours?.pancreas?.max || 12}
+                  onChange={(e) => updateField('organ_viability_hours', {
+                    ...config.organ_viability_hours,
+                    pancreas: { 
+                      ...config.organ_viability_hours?.pancreas, 
+                      max: parseFloat(e.target.value) 
+                    }
+                  })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Kidneys */}
+          <div className="space-y-2">
+            <Label className="font-semibold">Kidneys</Label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Minimum (hours)</Label>
+                <Input
+                  type="number"
+                  value={config.organ_viability_hours?.kidneys?.min || 24}
+                  onChange={(e) => updateField('organ_viability_hours', {
+                    ...config.organ_viability_hours,
+                    kidneys: { 
+                      ...config.organ_viability_hours?.kidneys, 
+                      min: parseFloat(e.target.value) 
+                    }
+                  })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Maximum (hours)</Label>
+                <Input
+                  type="number"
+                  value={config.organ_viability_hours?.kidneys?.max || 36}
+                  onChange={(e) => updateField('organ_viability_hours', {
+                    ...config.organ_viability_hours,
+                    kidneys: { 
+                      ...config.organ_viability_hours?.kidneys, 
+                      max: parseFloat(e.target.value) 
+                    }
+                  })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="rounded-lg bg-muted p-4">
+            <p className="text-sm text-muted-foreground">
+              These time frames will be used in future mission planning to:
+            </p>
+            <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-muted-foreground">
+              <li>Determine if a mission is viable within organ viability window</li>
+              <li>Calculate risk level based on timing margin</li>
+              <li>Alert when flights are approaching critical time limits</li>
+            </ul>
           </div>
         </CardContent>
       </Card>
