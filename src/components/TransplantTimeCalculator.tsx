@@ -813,7 +813,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
           </Card>
 
           {/* Wind Rejection Warnings */}
-          {tripResult.airportRejections?.pickup && (
+          {tripResult.airportRejections?.pickup?.nearestAirport && tripResult.airportRejections?.pickup?.windData && (
             <Alert variant="destructive" className="mt-4">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Pickup Airport Rejected Due to Wind Limits</AlertTitle>
@@ -840,7 +840,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             </Alert>
           )}
 
-          {tripResult.airportRejections?.delivery && (
+          {tripResult.airportRejections?.delivery?.nearestAirport && tripResult.airportRejections?.delivery?.windData && (
             <Alert variant="destructive" className="mt-4">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Delivery Airport Rejected Due to Wind Limits</AlertTitle>

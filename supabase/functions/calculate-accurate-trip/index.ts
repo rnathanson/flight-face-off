@@ -611,15 +611,43 @@ serve(async (req) => {
       airportRejections: {
         pickup: pickupRejected && pickupRejected.length > 0 ? {
           location: 'pickup',
-          nearestAirport: pickupRejected[0].airport,
-          reasons: pickupRejected[0].reasons,
-          windData: pickupRejected[0].windData
+          nearestAirport: {
+            code: pickupRejected[0].code,
+            name: pickupRejected[0].name,
+            lat: pickupRejected[0].lat,
+            lng: pickupRejected[0].lng
+          },
+          reasons: pickupRejected[0].qualifications,
+          windData: pickupRejected[0].windAnalysis ? {
+            runway: pickupRejected[0].windAnalysis.runway,
+            totalWind: pickupRejected[0].windAnalysis.totalWind,
+            crosswind: pickupRejected[0].windAnalysis.crosswind,
+            headwind: pickupRejected[0].windAnalysis.headwind,
+            exceedsWindLimit: !pickupRejected[0].qualifications.wind_ok,
+            exceedsCrosswindLimit: !pickupRejected[0].qualifications.wind_ok,
+            maxWindLimit: config.max_wind_kt || 0,
+            maxCrosswindLimit: config.max_crosswind_kt || 0
+          } : undefined
         } : null,
         delivery: deliveryRejected && deliveryRejected.length > 0 ? {
           location: 'delivery',
-          nearestAirport: deliveryRejected[0].airport,
-          reasons: deliveryRejected[0].reasons,
-          windData: deliveryRejected[0].windData
+          nearestAirport: {
+            code: deliveryRejected[0].code,
+            name: deliveryRejected[0].name,
+            lat: deliveryRejected[0].lat,
+            lng: deliveryRejected[0].lng
+          },
+          reasons: deliveryRejected[0].qualifications,
+          windData: deliveryRejected[0].windAnalysis ? {
+            runway: deliveryRejected[0].windAnalysis.runway,
+            totalWind: deliveryRejected[0].windAnalysis.totalWind,
+            crosswind: deliveryRejected[0].windAnalysis.crosswind,
+            headwind: deliveryRejected[0].windAnalysis.headwind,
+            exceedsWindLimit: !deliveryRejected[0].qualifications.wind_ok,
+            exceedsCrosswindLimit: !deliveryRejected[0].qualifications.wind_ok,
+            maxWindLimit: config.max_wind_kt || 0,
+            maxCrosswindLimit: config.max_crosswind_kt || 0
+          } : undefined
         } : null
       }
     };
