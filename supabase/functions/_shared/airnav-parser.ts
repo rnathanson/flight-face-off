@@ -243,57 +243,70 @@ function parseMETAR(html: string, airportCode: string): METARData | undefined {
 function parseTAF(html: string, airportCode: string): TAFData | undefined {
   console.log(`🔍 Parsing TAF for ${airportCode}...`);
   
-  // Strategy 1: Look for TAF table with part_title class - this is the reliable AirNav structure
-  const tafSectionMatch = html.match(/<TABLE[^>]*>[\s\S]*?<TR class="part_title"><TH[^>]*>TAF<\/TH><\/TR>[\s\S]*?<TR class="part_body"><TD[^>]*>([\s\S]*?)<\/TD><\/TR>[\s\S]*?<\/TABLE>/i);
-  
-  if (tafSectionMatch) {
-    console.log(`✓ Found TAF section with part_title class`);
-    const tableContent = tafSectionMatch[1];
+  // Strategy 1: Table-based parsing (more reliable)
+  const tafTableMatch = html.match(/<th[^>]*>\s*TAFs?\s*<\/th>[\s\S]{0,5000}?<\/table>/i);
+  if (tafTableMatch) {
+    console.log('[AirNav] TAF table found, parsing...');
+    const tafTable = tafTableMatch[0];
     
-    // Look for the nested table structure: <TR><TD><FONT><B>KPSF&nbsp;</B></FONT></TD><TD><FONT>TAF text</FONT></TD></TR>
-    const rowMatch = tableContent.match(/<TR><TD[^>]*><FONT[^>]*><B>([A-Z]{4})&nbsp;<\/B><\/FONT><\/TD><TD[^>]*><FONT[^>]*>([\s\S]*?)<\/FONT><\/TD><\/TR>/i);
-    
-    if (rowMatch) {
-      const sourceAirport = rowMatch[1];
-      let tafText = rowMatch[2]
-        .replace(/<br\s*\/?>/gi, ' ')  // Convert breaks to spaces
-        .replace(/<[^>]+>/g, '')        // Strip all HTML tags
-        .replace(/&nbsp;/gi, ' ')       // Handle entities
-        .replace(/\s+/g, ' ')            // Normalize whitespace
-        .trim();
+    // Extract all rows
+    const rowMatches = tafTable.matchAll(/<tr[^>]*>[\s\S]*?<\/tr>/gi);
+    for (const rowMatch of rowMatches) {
+      const row = rowMatch[0];
       
-      // Validate it looks like a TAF (has timestamp and valid period)
-      if (tafText.match(/\d{6}Z\s+\d{4}\/\d{4}/)) {
-        console.log(`✅ Extracted TAF from table: ${sourceAirport} (0nm) - ${tafText.substring(0, 80)}...`);
-        return {
-          raw: `TAF ${tafText}`,  // Ensure TAF prefix
-          source_airport: sourceAirport,
-          distance_nm: 0
-        };
-      } else {
-        console.log(`⚠️ TAF text did not match expected pattern: ${tafText.substring(0, 100)}`);
+      // Look for airport code link
+      const codeMatch = row.match(/<a[^>]*>([A-Z0-9]{3,4})<\/a>/i);
+      if (!codeMatch) continue;
+      
+      const sourceAirport = codeMatch[1];
+      
+      // Extract distance - handle "Xnm DIR" or "at KXXX" formats
+      let distance = 0;
+      const distMatch = row.match(/(\d+(?:\.\d+)?)\s*nm/i);
+      if (distMatch) {
+        distance = parseFloat(distMatch[1]);
       }
-    } else {
-      console.log(`⚠️ Could not parse nested table row from TAF section`);
+      
+      // Extract TAF text - strip HTML tags
+      const cellMatch = row.match(/<td[^>]*>([\s\S]*?)<\/td>\s*<\/tr>/i);
+      if (cellMatch) {
+        let tafText = cellMatch[1]
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        if (tafText && tafText.length > 15) {
+          // Ensure it starts with TAF
+          if (!/^TAF\s/i.test(tafText)) {
+            tafText = `TAF ${sourceAirport} ${tafText}`;
+          }
+          
+          console.log(`[AirNav] ✅ TAF from ${sourceAirport} at ${distance}nm`);
+          return {
+            raw: tafText,
+            source_airport: sourceAirport,
+            distance_nm: distance
+          };
+        }
+      }
     }
   }
-  
-  // Strategy 2: Fallback to raw text search
-  console.log(`⚠️ TAF table parse failed, trying raw text search...`);
-  const tafMatch = html.match(/TAF\s+([A-Z]{4})\s+(\d{6}Z\s+\d{4}\/\d{4}[^\n]*(?:\n(?!TAF|METAR)[^\n]*)*)/i);
-  
-  if (tafMatch) {
-    const sourceAirport = tafMatch[1];
-    let tafText = tafMatch[2].trim();
-    
-    console.log(`✅ Extracted TAF from raw text: ${sourceAirport} - ${tafText.substring(0, 80)}...`);
+
+  // Strategy 2: Fallback - raw TAF search if table parsing failed
+  console.log('[AirNav] Table parse failed, trying raw TAF fallback...');
+  const rawTafMatch = html.match(/TAF\s+([A-Z0-9]{4})[\s\S]{30,500}?(?=<\/(?:pre|td|tr|table)>|TAF\s+[A-Z0-9]{4}|$)/i);
+  if (rawTafMatch) {
+    const sourceAirport = rawTafMatch[1];
+    let tafText = rawTafMatch[0].replace(/\s+/g, ' ').trim();
+    console.log(`[AirNav] ✅ Raw TAF fallback: ${sourceAirport}`);
     return {
-      raw: `TAF ${sourceAirport} ${tafText}`,
+      raw: tafText,
       source_airport: sourceAirport,
       distance_nm: 0
     };
   }
   
-  console.log(`❌ No TAF found for ${airportCode}`);
+  console.log('[AirNav] ❌ No TAF found in HTML');
   return undefined;
 }
