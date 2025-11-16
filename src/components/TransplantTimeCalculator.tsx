@@ -112,6 +112,15 @@ export const TransplantTimeCalculator = ({ onAIPlatformClick }: TransplantTimeCa
       return;
     }
 
+    if (!departureDate || !departureTime) {
+      toast({
+        title: "Missing Information",
+        description: "Please select departure date and time",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setCalculating(true);
     setLoadingStage(0);
 
@@ -128,6 +137,19 @@ export const TransplantTimeCalculator = ({ onAIPlatformClick }: TransplantTimeCa
 
     try {
       const departureDateTime = `${departureDate}T${departureTime}:00`;
+      
+      // Validate the date format before sending
+      const testDate = new Date(departureDateTime);
+      if (isNaN(testDate.getTime())) {
+        throw new Error('Invalid date or time selected');
+      }
+      
+      console.log('Sending calculation request:', {
+        departureDateTime,
+        pickupLocation: selectedOrigin,
+        deliveryLocation: selectedDestination,
+        passengers: parseInt(passengers)
+      });
 
       const { data, error } = await supabase.functions.invoke('calculate-accurate-trip', {
         body: {
@@ -158,11 +180,12 @@ export const TransplantTimeCalculator = ({ onAIPlatformClick }: TransplantTimeCa
       if (mapboxToken && data) {
         setTimeout(() => initializeMap(data), 100);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Calculation error:', error);
+      const errorMessage = error?.message || error?.error || 'Unable to calculate trip time. Please try again.';
       toast({
         title: "Calculation Failed",
-        description: "Unable to calculate trip time. Please try again.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {

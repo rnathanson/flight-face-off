@@ -26,6 +26,16 @@ serve(async (req) => {
       passengers = 4
     } = await req.json();
 
+    console.log('Received request:', { departureDateTime, passengers });
+    
+    // Validate required fields
+    if (!pickupLocation || !deliveryLocation || !departureDateTime) {
+      return new Response(
+        JSON.stringify({ error: 'Missing required fields: pickupLocation, deliveryLocation, departureDateTime' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log('Calculating 5-leg trip from KFRG home base...');
     console.log('Route: KFRG → Pickup Airport (flight) → Pickup Hospital (ground) → Pickup Airport (ground) → Destination Airport (flight) → Delivery Hospital (ground)');
 
@@ -93,6 +103,16 @@ serve(async (req) => {
 
     // Traffic calculation
     const departureTime = new Date(departureDateTime);
+    
+    // Validate the date is valid
+    if (isNaN(departureTime.getTime())) {
+      console.error('Invalid departureDateTime:', departureDateTime);
+      return new Response(
+        JSON.stringify({ error: `Invalid date format: ${departureDateTime}. Expected ISO format like 2025-11-16T14:30:00` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     const departureHour = departureTime.getHours();
     const dayOfWeek = departureTime.getDay();
     const isRushHour = (departureHour >= 7 && departureHour <= 9) || (departureHour >= 16 && departureHour <= 19);
@@ -256,7 +276,11 @@ serve(async (req) => {
     ];
 
     const totalTime = segments.reduce((sum, seg) => sum + seg.duration, 0);
+    console.log('Total time calculated:', totalTime, 'minutes');
+    console.log('Departure time:', departureTime.toISOString());
+    
     const arrivalTime = new Date(departureTime.getTime() + totalTime * 60 * 1000);
+    console.log('Arrival time:', arrivalTime.toISOString());
 
     // Generate advisories
     const advisories = generateAdvisories(0, 0, trafficMultiplier);
