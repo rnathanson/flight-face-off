@@ -11,6 +11,7 @@ export interface GeocodeResult {
   lat: number;
   lon: number;
   displayName: string;
+  address: string;
   placeId: string;
 }
 
@@ -76,6 +77,7 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult> {
     lat: result.lat,
     lon: result.lon,
     displayName: result.displayName,
+    address: result.address,
     placeId: result.placeId,
   };
 }
