@@ -106,8 +106,10 @@ Deno.serve(async (req) => {
         );
       }
 
+      // Merge with defaults to ensure no null values
+      const mergedConfig = { ...DEFAULT_CONFIG, ...data[0] };
       return new Response(
-        JSON.stringify({ config: data[0], created: false }),
+        JSON.stringify({ config: mergedConfig, created: false }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
