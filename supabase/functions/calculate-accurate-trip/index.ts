@@ -642,8 +642,11 @@ async function calculateFlightTime(
   const climbTimeMin = cruiseAltitudeFt / config.climb_rate_fpm;
   const descentTimeMin = cruiseAltitudeFt / config.descent_rate_fpm;
   
-  const climbNM = (config.speed_below_fl100_kias * 0.8 * climbTimeMin) / 60;
-  const descentNM = (config.speed_below_fl100_kias * 0.9 * descentTimeMin) / 60;
+  // Realistic climb/descent distance: aircraft maintains forward speed while climbing/descending
+  const climbAvgSpeed = 320; // ktas average during climb (between 200 and 440)
+  const descentAvgSpeed = 370; // ktas average during descent (higher than climb, stepped down)
+  const climbNM = (climbTimeMin / 60) * climbAvgSpeed;
+  const descentNM = (descentTimeMin / 60) * descentAvgSpeed;
   
   const cruiseDistanceNM = Math.max(0, distanceNM * 1.05 - climbNM - descentNM);
   // Negative headwind = tailwind, which increases groundspeed
@@ -651,7 +654,9 @@ async function calculateFlightTime(
   const cruiseGroundSpeed = Math.max(50, cruiseSpeed - headwind); // Clamp to minimum 50 kt
   const cruiseTimeMin = cruiseDistanceNM / cruiseGroundSpeed * 60;
   
-  console.log(`Flight time calc: cruise=${cruiseSpeed}kts, headwind=${headwind.toFixed(1)}kt, GS=${cruiseGroundSpeed.toFixed(1)}kt, dist=${cruiseDistanceNM.toFixed(1)}nm, time=${cruiseTimeMin.toFixed(1)}min`);
+  console.log(`✈️  CLIMB: ${climbTimeMin.toFixed(1)}min covering ${climbNM.toFixed(1)}nm @ ${climbAvgSpeed}ktas avg`);
+  console.log(`✈️  CRUISE: ${cruiseDistanceNM.toFixed(1)}nm @ ${cruiseGroundSpeed.toFixed(1)}kt GS (${cruiseSpeed}kt - ${headwind.toFixed(1)}kt headwind) = ${cruiseTimeMin.toFixed(1)}min`);
+  console.log(`✈️  DESCENT: ${descentTimeMin.toFixed(1)}min covering ${descentNM.toFixed(1)}nm @ ${descentAvgSpeed}ktas avg`);
   
   const totalMinutes = Math.round(climbTimeMin + cruiseTimeMin + descentTimeMin + weatherDelay);
   
