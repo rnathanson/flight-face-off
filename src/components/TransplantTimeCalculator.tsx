@@ -288,6 +288,8 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         throw error;
       }
 
+      console.log('Airport rejections:', data.airportRejections);
+
       const result: TripResult = {
         segments: data.segments,
         totalTime: data.totalTime,
@@ -298,7 +300,8 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
           pickupAirport: data.route.pickupAirport,
           destinationAirport: data.route.destinationAirport,
         },
-        conditions: data.conditions
+        conditions: data.conditions,
+        airportRejections: data.airportRejections || null
       };
 
       setTripResult(result);
