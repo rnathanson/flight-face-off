@@ -18,16 +18,17 @@ export async function searchNearbyAirports(
   radiusNm: number
 ): Promise<NearbyAirport[]> {
   try {
-    // Build AirNav search URL
+    // Build AirNav search URL with filters for suitable airports
     const ns = lat >= 0 ? 'N' : 'S';
     const ew = lng >= 0 ? 'E' : 'W';
     const searchUrl = 
       `https://airnav.com/cgi-bin/airport-search?` +
       `lat=${Math.abs(lat).toFixed(6)}&ns=${ns}&` +
       `lon=${Math.abs(lng).toFixed(6)}&ew=${ew}&` +
-      `maxdistance=${Math.ceil(radiusNm)}&distanceunits=nm&fieldtypes=a`;
+      `maxdistance=${Math.ceil(radiusNm)}&distanceunits=nm&fieldtypes=a&` +
+      `runwaylength=4000&runwayspaved=1`; // Filter: min 4000ft paved runway
 
-    console.log(`Searching AirNav for airports within ${radiusNm}nm of ${lat}, ${lng}`);
+    console.log(`Searching AirNav for airports within ${radiusNm}nm of ${lat}, ${lng} (4000ft+ paved)`);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
