@@ -560,7 +560,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                   <div className="flex items-baseline gap-2">
                     <Clock className="w-3 h-3 text-destructive" />
                     <span className="text-lg font-bold text-foreground">
-                      {Math.floor((tripResult.totalTime * 1.25) / 60)}h {Math.round((tripResult.totalTime * 1.25) % 60)}m - {Math.floor((tripResult.totalTime * 1.35) / 60)}h {Math.round((tripResult.totalTime * 1.35) % 60)}m
+                      {Math.floor((tripResult.totalTime * 1.35) / 60)}h {Math.round((tripResult.totalTime * 1.35) % 60)}m
                     </span>
                   </div>
                 </CardHeader>
@@ -595,7 +595,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                   <div className="flex items-baseline gap-2">
                     <Clock className="w-3 h-3 text-green-600" />
                     <span className="text-lg font-bold text-foreground">
-                      {Math.floor((tripResult.totalTime * 0.95) / 60)}h {Math.round((tripResult.totalTime * 0.95) % 60)}m - {Math.floor((tripResult.totalTime * 1.10) / 60)}h {Math.round((tripResult.totalTime * 1.10) % 60)}m
+                      {Math.floor(tripResult.totalTime / 60)}h {Math.round(tripResult.totalTime % 60)}m
                     </span>
                   </div>
                 </CardHeader>
@@ -630,7 +630,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                   <div className="flex items-baseline gap-2">
                     <Clock className="w-3 h-3 text-blue-600" />
                     <span className="text-lg font-bold text-foreground">
-                      {Math.floor((tripResult.totalTime * 0.85) / 60)}h {Math.round((tripResult.totalTime * 0.85) % 60)}m - {Math.floor((tripResult.totalTime * 0.95) / 60)}h {Math.round((tripResult.totalTime * 0.95) % 60)}m
+                      {Math.floor((tripResult.totalTime * 0.85) / 60)}h {Math.round((tripResult.totalTime * 0.85) % 60)}m
                     </span>
                   </div>
                 </CardHeader>
@@ -659,17 +659,17 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
           </div>
 
           <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Clock className="w-6 h-6 text-primary" />
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Clock className="w-5 h-5 text-primary" />
                 Trip Breakdown
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-2">
               {tripResult.segments.map((segment, index) => (
                 <div
                   key={index}
-                  className="flex items-center gap-4 p-4 rounded-lg bg-muted/50 border border-border"
+                  className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border"
                 >
                   <div className="p-2 rounded-full bg-background">
                     {segment.type === 'ground' ? (
@@ -732,7 +732,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-xl">
                 <MapPin className="w-6 h-6 text-primary" />
-                Interactive Route Map
+                Route Map
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
