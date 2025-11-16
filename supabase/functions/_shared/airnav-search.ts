@@ -51,7 +51,7 @@ export async function searchNearbyAirports(
 
     // Parse results table
     const airports = parseAirNavSearchResults(html);
-    console.log(`✓ Found ${airports.length} airports from AirNav search`);
+    console.log(`✓ Found ${airports.length} airports from AirNav (pre-filtered by AirNav for 4000ft+ paved runways)`);
 
     return airports;
   } catch (error) {

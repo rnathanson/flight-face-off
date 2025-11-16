@@ -663,6 +663,12 @@ serve(async (req) => {
     };
 
     console.log(`Total trip time: ${totalTime} minutes (${Math.floor(totalTime / 60)}h ${totalTime % 60}m)`);
+    
+    // Log segment polyline info for debugging
+    segments.forEach((seg, i) => {
+      console.log(`Segment ${i} (${seg.type}): polyline has ${seg.polyline?.length || 0} points`);
+    });
+    
     console.log(`⏱️  PERFORMANCE: Total calculation time: ${Date.now() - startTime}ms`);
 
     return new Response(JSON.stringify(result), {
@@ -952,14 +958,17 @@ async function calculateGroundSegmentEnhanced(
     if (error) throw error;
     
     if (data && data.distance && data.duration) {
-      console.log('Google Maps route found:', {
-        distance: data.distance,
-        duration: data.duration,
-        hasTraffic: data.hasTrafficData
-      });
+    console.log('Google Maps route found:', {
+      distance: data.distance,
+      duration: data.duration,
+      hasTraffic: data.hasTrafficData,
+      hasPolyline: !!data.polyline,
+      polylineLength: data.polyline?.length
+    });
       
       // Decode polyline to coordinates array
-      const coordinates = data.polyline ? decodePolyline(data.polyline) : undefined;
+    const coordinates = data.polyline ? decodePolyline(data.polyline) : undefined;
+    console.log(`  Decoded ${coordinates?.length || 0} coordinate points`);
       
       return {
         duration: Math.round(data.duration),
