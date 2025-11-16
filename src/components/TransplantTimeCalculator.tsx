@@ -122,7 +122,9 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     const el = document.createElement('div');
     el.className = 'segment-label';
     
-    const icon = segment.type === 'flight' ? '✈️' : '🚗';
+    const icon = segment.type === 'flight' 
+      ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>'
+      : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>';
     const typeLabel = segment.type === 'flight' ? 'Flight' : 'Ground';
     const unit = segment.type === 'flight' ? 'nm' : 'mi';
     
@@ -623,11 +625,13 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               <div className="grid md:grid-cols-3 gap-4 mb-6">
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Pick Up Hospital</div>
-                  <div className="font-semibold">{selectedOrigin?.displayName.split(',')[0]}</div>
+                  <div className="font-semibold">{originHospital}</div>
+                  <div className="text-xs text-muted-foreground">{selectedOrigin?.displayName}</div>
                 </div>
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Delivery Hospital</div>
-                  <div className="font-semibold">{selectedDestination?.displayName.split(',')[0]}</div>
+                  <div className="font-semibold">{destinationHospital}</div>
+                  <div className="text-xs text-muted-foreground">{selectedDestination?.displayName}</div>
                 </div>
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Departure</div>
@@ -697,37 +701,8 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                   </div>
                 </div>
                 <div className="px-4 py-4">
-                  <div className="text-2xl font-semibold text-foreground mb-3">
+                  <div className="text-2xl font-semibold text-foreground">
                     {Math.floor((tripResult.totalTime * 1.35) / 60)}h {Math.round((tripResult.totalTime * 1.35) % 60)}m
-                  </div>
-                  <div className="space-y-1.5">
-                    {(() => {
-                      const factors = [];
-                      if (tripResult.conditions?.trafficLevel === 'heavy') {
-                        factors.push('Heavy traffic delays');
-                      } else if (tripResult.conditions?.trafficLevel === 'normal') {
-                        factors.push('Peak hour conditions');
-                      } else if (!tripResult.conditions?.hasRealTimeTraffic) {
-                        factors.push('Limited traffic data');
-                      }
-                      
-                      if (tripResult.conditions?.weatherDelay > 10 || tripResult.conditions?.maxHeadwind > 20) {
-                        factors.push(`Headwinds ${Math.round(tripResult.conditions.maxHeadwind)}kts`);
-                      } else if (tripResult.conditions?.maxHeadwind > 10) {
-                        factors.push('Moderate headwinds');
-                      }
-                      
-                      if (tripResult.conditions?.routingQuality === 'great-circle') {
-                        factors.push('Non-standard routing');
-                      }
-                      
-                      return factors.slice(0, 3).map((factor, idx) => (
-                        <div key={idx} className="text-xs text-muted-foreground flex items-center gap-2">
-                          <div className="h-px w-2 bg-border" />
-                          {factor}
-                        </div>
-                      ));
-                    })()}
                   </div>
                 </div>
               </div>
@@ -741,35 +716,8 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                   </div>
                 </div>
                 <div className="px-4 py-4">
-                  <div className="text-2xl font-semibold text-foreground mb-3">
+                  <div className="text-2xl font-semibold text-foreground">
                     {Math.floor(tripResult.totalTime / 60)}h {Math.round(tripResult.totalTime % 60)}m
-                  </div>
-                  <div className="space-y-1.5">
-                    {(() => {
-                      const factors = [];
-                      if (tripResult.conditions?.hasRealTimeTraffic) {
-                        factors.push('Real-time traffic');
-                      }
-                      
-                      if (tripResult.conditions?.weatherDelay <= 5 && tripResult.conditions?.maxHeadwind <= 15) {
-                        factors.push('Favorable conditions');
-                      } else {
-                        factors.push('Weather adjusted');
-                      }
-                      
-                      if (tripResult.conditions?.routingQuality === 'faa-preferred') {
-                        factors.push('FAA routing');
-                      } else {
-                        factors.push('Direct routing');
-                      }
-                      
-                      return factors.slice(0, 3).map((factor, idx) => (
-                        <div key={idx} className="text-xs text-muted-foreground flex items-center gap-2">
-                          <div className="h-px w-2 bg-border" />
-                          {factor}
-                        </div>
-                      ));
-                    })()}
                   </div>
                 </div>
               </div>
@@ -783,33 +731,8 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                   </div>
                 </div>
                 <div className="px-4 py-4">
-                  <div className="text-2xl font-semibold text-foreground mb-3">
+                  <div className="text-2xl font-semibold text-foreground">
                     {Math.floor((tripResult.totalTime * 0.85) / 60)}h {Math.round((tripResult.totalTime * 0.85) % 60)}m
-                  </div>
-                  <div className="space-y-1.5">
-                    {(() => {
-                      const factors = [];
-                      if (tripResult.conditions?.trafficLevel === 'light') {
-                        factors.push('Light traffic');
-                      } else {
-                        factors.push('Optimal flow');
-                      }
-                      
-                      if (tripResult.conditions?.maxHeadwind <= 5) {
-                        factors.push('Minimal wind');
-                      } else {
-                        factors.push('Tailwind potential');
-                      }
-                      
-                      factors.push('Direct routing');
-                      
-                      return factors.slice(0, 3).map((factor, idx) => (
-                        <div key={idx} className="text-xs text-muted-foreground flex items-center gap-2">
-                          <div className="h-px w-2 bg-border" />
-                          {factor}
-                        </div>
-                      ));
-                    })()}
                   </div>
                 </div>
               </div>
@@ -952,32 +875,28 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       {/* Loading Modal */}
       <Dialog open={calculating}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-center">Calculating Your Trip</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col items-center gap-4 py-6">
-            <Timer className="w-12 h-12 animate-spin text-primary" />
+          <div className="flex flex-col items-center gap-6 py-8">
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-primary/20 rounded-full" />
+              <div className="absolute inset-0 w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-lg font-semibold">Calculating Trip</h3>
+              {loadingStage && (
+                <p className="text-sm text-muted-foreground">{loadingStage}</p>
+              )}
+            </div>
             {loadingStage && (
-              <div className="w-full space-y-3">
-                <div className="flex items-center justify-center gap-2 text-sm">
-                  {loadingStage.includes('route') && <Plane className="w-4 h-4" />}
-                  {loadingStage.includes('weather') && <Zap className="w-4 h-4" />}
-                  {loadingStage.includes('traffic') && <Car className="w-4 h-4" />}
-                  {loadingStage.includes('ATC') && <Target className="w-4 h-4" />}
-                  {loadingStage.includes('timeline') && <Clock className="w-4 h-4" />}
-                  <span>{loadingStage}</span>
-                </div>
-                <Progress 
-                  value={
-                    loadingStage.includes('route') ? 20 :
-                    loadingStage.includes('weather') ? 40 :
-                    loadingStage.includes('traffic') ? 60 :
-                    loadingStage.includes('ATC') ? 80 :
-                    100
-                  } 
-                  className="w-full" 
-                />
-              </div>
+              <Progress 
+                value={
+                  loadingStage.includes('route') ? 20 :
+                  loadingStage.includes('weather') ? 40 :
+                  loadingStage.includes('traffic') ? 60 :
+                  loadingStage.includes('ATC') ? 80 :
+                  100
+                } 
+                className="w-full max-w-xs" 
+              />
             )}
           </div>
         </DialogContent>
