@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { AIRPORT_COORDS, calculateDistance } from "../_shared/airport-data.ts";
+import { findNearbyAirports, calculateDistance } from "../_shared/airportdb-api.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,19 +26,20 @@ serve(async (req) => {
 
     console.log(`Finding nearest airport to ${lat}, ${lng}`);
 
-    // Calculate distances to all known airports
-    const airportsWithDistance = Object.entries(AIRPORT_COORDS).map(([code, airport]) => ({
-      code,
-      name: airport.name || code,
-      lat: airport.lat,
-      lng: airport.lng,
-      distance: calculateDistance(lat, lng, airport.lat, airport.lng),
+    // Query AirportDB API for nearby airports
+    const airports = await findNearbyAirports(lat, lng, maxDistance);
+    
+    // Calculate distances and format results
+    const airportsWithDistance = airports.map(airport => ({
+      code: airport.icao_code,
+      name: airport.name,
+      lat: airport.latitude_deg,
+      lng: airport.longitude_deg,
+      distance: calculateDistance(lat, lng, airport.latitude_deg, airport.longitude_deg),
     }));
 
-    // Sort by distance and filter by max distance
-    const nearbyAirports = airportsWithDistance
-      .filter(a => a.distance <= maxDistance)
-      .sort((a, b) => a.distance - b.distance);
+    // Sort by distance
+    const nearbyAirports = airportsWithDistance.sort((a, b) => a.distance - b.distance);
 
     if (nearbyAirports.length === 0) {
       return new Response(
