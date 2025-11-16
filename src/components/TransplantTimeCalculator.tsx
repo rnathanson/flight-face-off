@@ -124,6 +124,27 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     fetchToken();
   }, []);
 
+  // Initialize or update map whenever token and trip result are both available
+  useEffect(() => {
+    if (!mapboxToken || !tripResult || !mapContainer.current) return;
+
+    if (!map.current) {
+      console.log('Lazy-initializing map after token became available');
+      initializeMap(tripResult, tripResult.segments);
+    } else {
+      console.log('Updating existing map with new trip data');
+      if (map.current.loaded()) {
+        map.current.resize();
+        updateMap(tripResult, tripResult.segments);
+      } else {
+        map.current.once('load', () => {
+          console.log('Map loaded, now updating');
+          map.current?.resize();
+          updateMap(tripResult, tripResult.segments);
+        });
+      }
+    }
+  }, [mapboxToken, tripResult]);
 
   const formatDuration = (minutes: number): string => {
     const hours = Math.floor(minutes / 60);
@@ -264,29 +285,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       };
 
       setTripResult(result);
-      
-      // Initialize map after a delay to ensure container is rendered
-      setTimeout(() => {
-        if (mapboxToken && mapContainer.current) {
-          if (!map.current) {
-            console.log('Initializing new map');
-            initializeMap(result, data.segments);
-          } else {
-            console.log('Updating existing map');
-            // Check if map is loaded before updating
-            if (map.current.loaded()) {
-              map.current.resize();
-              updateMap(result, data.segments);
-            } else {
-              // Wait for map to load, then update
-              map.current.once('load', () => {
-                map.current?.resize();
-                updateMap(result, data.segments);
-              });
-            }
-          }
-        }
-      }, result.chiefPilotApproval?.required ? 500 : 100);
       
       toast({
         title: 'Trip Calculated',
