@@ -80,6 +80,39 @@ export type Database = {
         }
         Relationships: []
       }
+      crew_members: {
+        Row: {
+          created_at: string
+          full_name: string
+          id: string
+          is_chief_pilot: boolean
+          role: string
+          success_rate: number
+          total_missions: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          full_name: string
+          id?: string
+          is_chief_pilot?: boolean
+          role?: string
+          success_rate?: number
+          total_missions?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string
+          id?: string
+          is_chief_pilot?: boolean
+          role?: string
+          success_rate?: number
+          total_missions?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       custom_ownership_estimates: {
         Row: {
           aircraft_cost: number
@@ -392,6 +425,171 @@ export type Database = {
         }
         Relationships: []
       }
+      medical_personnel: {
+        Row: {
+          created_at: string
+          full_name: string
+          id: string
+          role: Database["public"]["Enums"]["medical_role"]
+          specialty: string | null
+          success_rate: number
+          total_missions: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          full_name: string
+          id?: string
+          role: Database["public"]["Enums"]["medical_role"]
+          specialty?: string | null
+          success_rate?: number
+          total_missions?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string
+          id?: string
+          role?: Database["public"]["Enums"]["medical_role"]
+          specialty?: string | null
+          success_rate?: number
+          total_missions?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      mission_analytics: {
+        Row: {
+          avg_time_variance: number
+          id: string
+          last_updated: string
+          organ_type: string
+          pilot_combo_hash: string
+          route_hash: string
+          success_count: number
+          total_count: number
+        }
+        Insert: {
+          avg_time_variance?: number
+          id?: string
+          last_updated?: string
+          organ_type: string
+          pilot_combo_hash: string
+          route_hash: string
+          success_count?: number
+          total_count?: number
+        }
+        Update: {
+          avg_time_variance?: number
+          id?: string
+          last_updated?: string
+          organ_type?: string
+          pilot_combo_hash?: string
+          route_hash?: string
+          success_count?: number
+          total_count?: number
+        }
+        Relationships: []
+      }
+      mission_types: {
+        Row: {
+          created_at: string
+          id: string
+          max_viability_hours: number
+          min_viability_hours: number
+          organ_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          max_viability_hours: number
+          min_viability_hours: number
+          organ_type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          max_viability_hours?: number
+          min_viability_hours?: number
+          organ_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      missions: {
+        Row: {
+          actual_success: boolean | null
+          actual_time_minutes: number | null
+          coordinator_id: string | null
+          created_at: string
+          crew_member_ids: string[]
+          destination_hospital: string
+          destination_lat: number
+          destination_lng: number
+          estimated_time_minutes: number
+          id: string
+          lead_doctor_id: string
+          mission_date: string
+          notes: string | null
+          organ_type: string
+          origin_hospital: string
+          origin_lat: number
+          origin_lng: number
+          predicted_success_rate: number
+          surgical_team_ids: string[] | null
+          updated_at: string
+          viability_status: Database["public"]["Enums"]["viability_status"]
+        }
+        Insert: {
+          actual_success?: boolean | null
+          actual_time_minutes?: number | null
+          coordinator_id?: string | null
+          created_at?: string
+          crew_member_ids: string[]
+          destination_hospital: string
+          destination_lat: number
+          destination_lng: number
+          estimated_time_minutes: number
+          id?: string
+          lead_doctor_id: string
+          mission_date?: string
+          notes?: string | null
+          organ_type: string
+          origin_hospital: string
+          origin_lat: number
+          origin_lng: number
+          predicted_success_rate: number
+          surgical_team_ids?: string[] | null
+          updated_at?: string
+          viability_status: Database["public"]["Enums"]["viability_status"]
+        }
+        Update: {
+          actual_success?: boolean | null
+          actual_time_minutes?: number | null
+          coordinator_id?: string | null
+          created_at?: string
+          crew_member_ids?: string[]
+          destination_hospital?: string
+          destination_lat?: number
+          destination_lng?: number
+          estimated_time_minutes?: number
+          id?: string
+          lead_doctor_id?: string
+          mission_date?: string
+          notes?: string | null
+          organ_type?: string
+          origin_hospital?: string
+          origin_lat?: number
+          origin_lng?: number
+          predicted_success_rate?: number
+          surgical_team_ids?: string[] | null
+          updated_at?: string
+          viability_status?: Database["public"]["Enums"]["viability_status"]
+        }
+        Relationships: []
+      }
       nav_waypoints: {
         Row: {
           id: string
@@ -684,6 +882,8 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user"
+      medical_role: "lead_doctor" | "surgeon" | "coordinator"
+      viability_status: "safe" | "warning" | "critical"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -812,6 +1012,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user"],
+      medical_role: ["lead_doctor", "surgeon", "coordinator"],
+      viability_status: ["safe", "warning", "critical"],
     },
   },
 } as const
