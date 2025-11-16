@@ -504,8 +504,9 @@ export const DemoTripPredictions = ({
             
             {/* Compact Success Rate Counter - Top Right */}
             {livePrediction && (
-              <div className="flex flex-col items-end gap-1 min-w-[100px]">
-                <div className={`text-4xl font-bold ${
+              <div className="flex flex-col items-end gap-1 min-w-[120px]">
+                <div className="text-xs text-muted-foreground font-medium mb-0.5">AI Success Rate</div>
+                <div className={`text-4xl font-bold leading-none ${
                   livePrediction.overallPrediction >= 85 ? 'text-success' :
                   livePrediction.overallPrediction >= 70 ? 'text-warning' :
                   'text-destructive'
@@ -785,28 +786,63 @@ export const DemoTripPredictions = ({
           {/* Detailed Prediction Breakdown - Above Generate Button */}
           {livePrediction && (
             <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-transparent">
-              <CardContent className="pt-6 space-y-4">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Target className="w-4 h-4 text-primary" />
+                  AI Prediction Analysis
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Overall Success Score */}
+                <div className="flex items-center justify-between p-3 bg-card rounded-lg border">
+                  <span className="text-sm font-medium text-muted-foreground">Overall Success Rate</span>
+                  <div className="flex items-center gap-2">
+                    <div className={`text-2xl font-bold ${
+                      livePrediction.overallPrediction >= 85 ? 'text-success' :
+                      livePrediction.overallPrediction >= 70 ? 'text-warning' :
+                      'text-destructive'
+                    }`}>
+                      {livePrediction.overallPrediction}%
+                    </div>
+                    <Badge 
+                      variant={
+                        livePrediction.confidence === 'high' ? 'default' :
+                        livePrediction.confidence === 'medium' ? 'secondary' :
+                        'outline'
+                      }
+                      className="text-xs"
+                    >
+                      {livePrediction.confidence === 'high' ? 'High' : 
+                       livePrediction.confidence === 'medium' ? 'Medium' : 
+                       'Low'} Confidence
+                    </Badge>
+                  </div>
+                </div>
+
                 {/* Breakdown Scores */}
                 {(livePrediction.breakdown.crewScore > 0 || livePrediction.breakdown.medicalTeamScore > 0) && (
-                  <div className="grid grid-cols-2 gap-4">
-                    {livePrediction.breakdown.crewScore > 0 && (
-                      <div className="space-y-2">
-                        <Label className="text-xs text-muted-foreground">Flight Crew</Label>
-                        <div className="flex items-center justify-between">
-                          <Progress value={livePrediction.breakdown.crewScore} className="flex-1 h-2" />
-                          <span className="ml-2 text-sm font-semibold">{livePrediction.breakdown.crewScore}%</span>
+                  <div>
+                    <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Team Performance Breakdown</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      {livePrediction.breakdown.crewScore > 0 && (
+                        <div className="space-y-2">
+                          <Label className="text-xs text-muted-foreground">Flight Crew Score</Label>
+                          <div className="flex items-center justify-between">
+                            <Progress value={livePrediction.breakdown.crewScore} className="flex-1 h-2" />
+                            <span className="ml-2 text-sm font-semibold">{livePrediction.breakdown.crewScore}%</span>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    {livePrediction.breakdown.medicalTeamScore > 0 && (
-                      <div className="space-y-2">
-                        <Label className="text-xs text-muted-foreground">Medical Team</Label>
-                        <div className="flex items-center justify-between">
-                          <Progress value={livePrediction.breakdown.medicalTeamScore} className="flex-1 h-2" />
-                          <span className="ml-2 text-sm font-semibold">{livePrediction.breakdown.medicalTeamScore}%</span>
+                      )}
+                      {livePrediction.breakdown.medicalTeamScore > 0 && (
+                        <div className="space-y-2">
+                          <Label className="text-xs text-muted-foreground">Medical Team Score</Label>
+                          <div className="flex items-center justify-between">
+                            <Progress value={livePrediction.breakdown.medicalTeamScore} className="flex-1 h-2" />
+                            <span className="ml-2 text-sm font-semibold">{livePrediction.breakdown.medicalTeamScore}%</span>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 )}
 
