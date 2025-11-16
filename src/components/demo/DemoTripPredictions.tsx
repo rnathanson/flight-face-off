@@ -304,9 +304,10 @@ export const DemoTripPredictions = ({
               leadDoctorId: selectedLeadDoctor?.id,
               surgicalTeamIds: surgicalTeam.map(s => s.id),
               coordinatorId: selectedCoordinator?.id,
+              totalTimeMinutes: tripCalc?.baseTime, // Use real trip time if available
+              distance: tripCalc?.originAirport?.distance_nm, // Fallback for estimation
               originAirportCode: tripCalc?.originAirport?.code,
               destAirportCode: tripCalc?.destAirport?.code,
-              distance: tripCalc?.originAirport?.distance_nm,
               originHospital: originHospital || undefined,
               destHospital: destinationHospital || undefined
             }
@@ -347,20 +348,7 @@ export const DemoTripPredictions = ({
       distance_nm: data.distance_nm
     };
   };
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 3440.065;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-  const calculateFlightTime = (distanceNM: number): number => {
-    const cruiseSpeed = 440;
-    const flightTimeMinutes = distanceNM / cruiseSpeed * 60;
-    const taxiTime = 20;
-    return Math.round(flightTimeMinutes + taxiTime);
-  };
+  // Removed duplicate calculation functions - we now use calculate-accurate-trip edge function
   const handleCalculate = async () => {
     if (!selectedOrigin || !selectedDestination) {
       toast({
@@ -389,20 +377,79 @@ export const DemoTripPredictions = ({
     setCalculating(true);
     setSuccessAnalysis(null);
     try {
-      const originAirport = await findNearestAirport(selectedOrigin.lat, selectedOrigin.lon);
-      const destAirport = await findNearestAirport(selectedDestination.lat, selectedDestination.lon);
-      const flightDistance = calculateDistance(originAirport.lat, originAirport.lng, destAirport.lat, destAirport.lng);
-      const flightTime = calculateFlightTime(flightDistance);
-      const originGroundTime = Math.round((originAirport.distance_nm || 10) * 2.5);
-      const destGroundTime = Math.round((destAirport.distance_nm || 10) * 2.5);
-      const baseTime = originGroundTime + flightTime + destGroundTime;
+      // Use the accurate trip calculator to get real trip time with weather, traffic, winds, etc.
+      console.log('Calling calculate-accurate-trip for accurate trip data...');
+      const { data: tripData, error: tripError } = await supabase.functions.invoke(
+        'calculate-accurate-trip',
+        {
+          body: {
+            pickupLocation: {
+              lat: selectedOrigin.lat,
+              lng: selectedOrigin.lon,
+              displayName: selectedOrigin.displayName,
+              address: selectedOrigin.address
+            },
+            deliveryLocation: {
+              lat: selectedDestination.lat,
+              lng: selectedDestination.lon,
+              displayName: selectedDestination.displayName,
+              address: selectedDestination.address
+            },
+            departureDateTime: new Date().toISOString(),
+            passengers: 2 // Pilot + Medical personnel
+          }
+        }
+      );
+
+      if (tripError) {
+        console.error('Trip calculation error:', tripError);
+        toast({
+          title: "Calculation Error",
+          description: "Failed to calculate trip details",
+          variant: "destructive"
+        });
+        setCalculating(false);
+        return;
+      }
+
+      if (!tripData) {
+        toast({
+          title: "Calculation Error",
+          description: "No trip data returned",
+          variant: "destructive"
+        });
+        setCalculating(false);
+        return;
+      }
+
+      console.log('Trip calculation complete:', {
+        totalTime: tripData.totalTimeMinutes,
+        pickupAirport: tripData.pickupAirport?.code,
+        destinationAirport: tripData.destinationAirport?.code
+      });
+
+      // Store trip calculation for display
       setTripCalc({
         origin: selectedOrigin,
         destination: selectedDestination,
-        originAirport,
-        destAirport,
-        baseTime
+        originAirport: {
+          code: tripData.pickupAirport?.code || 'UNKNOWN',
+          name: tripData.pickupAirport?.name || 'Unknown',
+          lat: tripData.pickupAirport?.lat || 0,
+          lng: tripData.pickupAirport?.lng || 0,
+          distance_nm: tripData.pickupGroundDistance || 0
+        },
+        destAirport: {
+          code: tripData.destinationAirport?.code || 'UNKNOWN',
+          name: tripData.destinationAirport?.name || 'Unknown',
+          lat: tripData.destinationAirport?.lat || 0,
+          lng: tripData.destinationAirport?.lng || 0,
+          distance_nm: tripData.deliveryGroundDistance || 0
+        },
+        baseTime: tripData.totalTimeMinutes
       });
+
+      // Calculate mission success using accurate trip time
       const {
         data: analysis
       } = await supabase.functions.invoke('calculate-mission-success', {
@@ -412,7 +459,7 @@ export const DemoTripPredictions = ({
           surgicalTeamIds: surgicalTeam.map(s => s.id),
           coordinatorId: selectedCoordinator?.id,
           organType,
-          estimatedTimeMinutes: baseTime,
+          estimatedTimeMinutes: tripData.totalTimeMinutes, // Use real trip time
           originHospital: selectedOrigin.displayName,
           destinationHospital: selectedDestination.displayName
         }
