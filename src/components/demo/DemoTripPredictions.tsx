@@ -669,62 +669,57 @@ export const DemoTripPredictions = ({
             {/* Lead Doctor */}
             <div className="space-y-2">
               <Label>Lead Doctor</Label>
-              <Popover open={leadDoctorOpen} onOpenChange={setLeadDoctorOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={leadDoctorOpen}
-                    className="w-full justify-between"
-                  >
-                    {selectedLeadDoctor ? selectedLeadDoctor.full_name : "Select lead doctor..."}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-full p-0 pointer-events-auto" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search doctors..." value={leadDoctorSearch} onValueChange={setLeadDoctorSearch} />
-                    <CommandList>
-                      <CommandEmpty>No doctor found.</CommandEmpty>
-                      <CommandGroup>
-                        {leadDoctorSuggestions.map((doc) => (
-                          <CommandItem
-                            key={doc.id}
-                            value={doc.full_name}
-                            onSelect={() => {
-                              setSelectedLeadDoctor(doc);
-                              setLeadDoctorOpen(false);
-                              setLeadDoctorSearch('');
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                selectedLeadDoctor?.id === doc.id ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            <div className="flex-1">
-                              <p className="font-medium text-sm">{doc.full_name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {doc.specialty && <span className="mr-1">{doc.specialty}</span>}
-                                {organType && doc.organ_experience?.[organType] ? (
-                                  <>
-                                    • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {doc.organ_experience[organType].missions} cases • {doc.organ_experience[organType].success_rate}% success
-                                  </>
-                                ) : (
-                                  <span className="text-muted-foreground/50">• Select organ type to view experience</span>
-                                )}
-                              </p>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              {selectedLeadDoctor && (
-                <div className="p-3 bg-primary/10 rounded-md">
+              {!selectedLeadDoctor ? (
+                <Popover open={leadDoctorOpen} onOpenChange={setLeadDoctorOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={leadDoctorOpen}
+                      className="w-full justify-between"
+                    >
+                      Select lead doctor...
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0 pointer-events-auto" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search doctors..." value={leadDoctorSearch} onValueChange={setLeadDoctorSearch} />
+                      <CommandList>
+                        <CommandEmpty>No doctor found.</CommandEmpty>
+                        <CommandGroup>
+                          {leadDoctorSuggestions.map((doc) => (
+                            <CommandItem
+                              key={doc.id}
+                              value={doc.full_name}
+                              onSelect={() => {
+                                setSelectedLeadDoctor(doc);
+                                setLeadDoctorOpen(false);
+                                setLeadDoctorSearch('');
+                              }}
+                            >
+                              <div className="flex-1">
+                                <p className="font-medium text-sm">{doc.full_name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {doc.specialty && <span className="mr-1">{doc.specialty}</span>}
+                                  {organType && doc.organ_experience?.[organType] ? (
+                                    <>
+                                      • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {doc.organ_experience[organType].missions} cases • {doc.organ_experience[organType].success_rate}% success
+                                    </>
+                                  ) : (
+                                    <span className="text-muted-foreground/50">• Select organ type to view experience</span>
+                                  )}
+                                </p>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                <div className="p-3 bg-primary/10 rounded-md border border-primary/20">
                   <div className="flex items-center gap-2">
                     <User className="w-4 h-4 text-primary" />
                     <div className="flex-1">
@@ -740,6 +735,14 @@ export const DemoTripPredictions = ({
                         )}
                       </p>
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => setSelectedLeadDoctor(null)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               )}
@@ -748,104 +751,143 @@ export const DemoTripPredictions = ({
             {/* Surgical Team */}
             <div className="space-y-2">
               <Label>Surgical Team (Optional)</Label>
-              <div className="space-y-2">
-                {surgeonInputs.map((input, index) => <div key={index} className="relative flex gap-2">
-                    <div className="flex-1 relative">
-                      <Input value={input} onChange={e => updateSurgeonInput(index, e.target.value)} onFocus={() => setActiveSurgeonInput(index)} placeholder="Search or add surgeon name..." maxLength={100} onKeyDown={e => {
-                    if (e.key === 'Enter' && input.trim().length >= 2) {
-                      addCustomSurgeon(index);
-                    }
-                  }} />
-                      {surgeonSuggestions.length > 0 && activeSurgeonInput === index && input.length >= 2 && <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-auto">
-                          {surgeonSuggestions.map(surgeon => <button key={surgeon.id} onClick={() => addSurgeon(surgeon, index)} className="w-full p-3 text-left hover:bg-accent/50 transition-colors" disabled={surgicalTeam.some(s => s.id === surgeon.id)}>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between"
+                  >
+                    Add surgeon...
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0 pointer-events-auto" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search surgeons..." value={surgeonInputs[0]} onValueChange={(value) => updateSurgeonInput(0, value)} />
+                    <CommandList>
+                      <CommandEmpty>No surgeon found.</CommandEmpty>
+                      <CommandGroup>
+                        {surgeonSuggestions.map((surgeon) => (
+                          <CommandItem
+                            key={surgeon.id}
+                            value={surgeon.full_name}
+                            onSelect={() => {
+                              if (!surgicalTeam.some(s => s.id === surgeon.id)) {
+                                addSurgeon(surgeon, 0);
+                              }
+                            }}
+                            disabled={surgicalTeam.some(s => s.id === surgeon.id)}
+                          >
+                            <div className="flex-1">
                               <p className="font-medium text-sm">{surgeon.full_name}</p>
                               <p className="text-xs text-muted-foreground">
                                 {surgeon.specialty && <span className="mr-1">{surgeon.specialty}</span>}
-                                {organType && surgeon.organ_experience?.[organType] ? <>
+                                {organType && surgeon.organ_experience?.[organType] ? (
+                                  <>
                                     • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {surgeon.organ_experience[organType].missions} cases • {surgeon.organ_experience[organType].success_rate}% success
-                                  </> : <span className="text-muted-foreground/50">• Select organ type to view experience</span>}
+                                  </>
+                                ) : (
+                                  <span className="text-muted-foreground/50">• Select organ type to view experience</span>
+                                )}
                               </p>
-                            </button>)}
-                        </div>}
-                    </div>
-                    {index === surgeonInputs.length - 1 ? <Button onClick={addSurgeonInput} variant="outline" size="icon" className="flex-shrink-0">
-                        <Users className="w-4 h-4" />
-                      </Button> : <Button onClick={() => removeSurgeonInput(index)} variant="ghost" size="icon" className="flex-shrink-0">
-                        <X className="w-4 h-4" />
-                      </Button>}
-                  </div>)}
-              </div>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               
-              {surgicalTeam.length > 0 && <div className="flex flex-wrap gap-2 mt-2">
-                  {surgicalTeam.map(surgeon => <Badge key={surgeon.id} variant="secondary" className="gap-2">
-                      {surgeon.full_name}
-                      {surgeon.id.startsWith('custom-') && <span className="text-xs text-muted-foreground">(New)</span>}
-                      <button onClick={() => removeSurgeon(surgeon.id)} className="hover:text-destructive">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </Badge>)}
-                </div>}
+              {surgicalTeam.length > 0 && (
+                <div className="space-y-2">
+                  {surgicalTeam.map(surgeon => (
+                    <div key={surgeon.id} className="p-3 bg-secondary/10 rounded-md border border-secondary/20">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-secondary" />
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{surgeon.full_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {surgeon.specialty && <span className="mr-1">{surgeon.specialty}</span>}
+                            {organType && surgeon.organ_experience?.[organType] ? (
+                              <>
+                                • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {surgeon.organ_experience[organType].missions} cases • {surgeon.organ_experience[organType].success_rate}% success
+                              </>
+                            ) : (
+                              <span className="text-muted-foreground/50">• Select organ type to view experience</span>
+                            )}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => removeSurgeon(surgeon.id)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
           {/* Coordinator */}
           <div className="space-y-2">
             <Label>Transplant Coordinator (Optional)</Label>
-            <Popover open={coordinatorOpen} onOpenChange={setCoordinatorOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={coordinatorOpen}
-                  className="w-full justify-between"
-                >
-                  {selectedCoordinator ? selectedCoordinator.full_name : "Select coordinator..."}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-full p-0 pointer-events-auto" align="start">
-                <Command>
-                  <CommandInput placeholder="Search coordinators..." value={coordinatorSearch} onValueChange={setCoordinatorSearch} />
-                  <CommandList>
-                    <CommandEmpty>No coordinator found.</CommandEmpty>
-                    <CommandGroup>
-                      {coordinatorSuggestions.map((coord) => (
-                        <CommandItem
-                          key={coord.id}
-                          value={coord.full_name}
-                          onSelect={() => {
-                            setSelectedCoordinator(coord);
-                            setCoordinatorOpen(false);
-                            setCoordinatorSearch('');
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              selectedCoordinator?.id === coord.id ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                          <div className="flex-1">
-                            <p className="font-medium text-sm">{coord.full_name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {organType && coord.organ_experience?.[organType] ? (
-                                <>
-                                  {organType.charAt(0).toUpperCase() + organType.slice(1)}: {coord.organ_experience[organType].missions} cases • {coord.organ_experience[organType].success_rate}% success
-                                </>
-                              ) : (
-                                <span className="text-muted-foreground/50">Select organ type to view experience</span>
-                              )}
-                            </p>
-                          </div>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-            {selectedCoordinator && (
-              <div className="p-3 bg-secondary/10 rounded-md">
+            {!selectedCoordinator ? (
+              <Popover open={coordinatorOpen} onOpenChange={setCoordinatorOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={coordinatorOpen}
+                    className="w-full justify-between"
+                  >
+                    Select coordinator...
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0 pointer-events-auto" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search coordinators..." value={coordinatorSearch} onValueChange={setCoordinatorSearch} />
+                    <CommandList>
+                      <CommandEmpty>No coordinator found.</CommandEmpty>
+                      <CommandGroup>
+                        {coordinatorSuggestions.map((coord) => (
+                          <CommandItem
+                            key={coord.id}
+                            value={coord.full_name}
+                            onSelect={() => {
+                              setSelectedCoordinator(coord);
+                              setCoordinatorOpen(false);
+                              setCoordinatorSearch('');
+                            }}
+                          >
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">{coord.full_name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {organType && coord.organ_experience?.[organType] ? (
+                                  <>
+                                    {organType.charAt(0).toUpperCase() + organType.slice(1)}: {coord.organ_experience[organType].missions} cases • {coord.organ_experience[organType].success_rate}% success
+                                  </>
+                                ) : (
+                                  <span className="text-muted-foreground/50">Select organ type to view experience</span>
+                                )}
+                              </p>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <div className="p-3 bg-secondary/10 rounded-md border border-secondary/20">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-secondary" />
                   <div className="flex-1">
@@ -860,6 +902,14 @@ export const DemoTripPredictions = ({
                       )}
                     </p>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => setSelectedCoordinator(null)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             )}
