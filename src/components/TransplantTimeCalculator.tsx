@@ -42,6 +42,14 @@ interface Airport {
   distance_from_delivery?: number;
 }
 
+interface WindsAloftData {
+  direction: number | 'VRB';
+  speed: number;
+  altitude: number;
+  station: string;
+  temperature?: number;
+}
+
 interface TripResult {
   segments: TripSegment[];
   totalTime: number;
@@ -58,6 +66,10 @@ interface TripResult {
     hasRealTimeTraffic: boolean;
     routingQuality: 'faa-preferred' | 'great-circle' | 'mixed';
     trafficLevel: 'light' | 'normal' | 'heavy';
+    cruiseWinds?: {
+      leg1: WindsAloftData | null;
+      leg4: WindsAloftData | null;
+    };
   };
 }
 
@@ -747,6 +759,92 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               </div>
             </CardContent>
           </Card>
+
+          {/* Cruise Winds Data */}
+          {tripResult.conditions?.cruiseWinds && (
+            <div className="border-t pt-4 mt-4">
+              <div className="mb-3">
+                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <Zap className="w-4 h-4" />
+                  Cruise Winds Aloft
+                </h3>
+              </div>
+              
+              <div className="grid md:grid-cols-2 gap-3">
+                {/* Outbound Flight Winds */}
+                {tripResult.conditions.cruiseWinds.leg1 && (
+                  <div className="border rounded-lg bg-card p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-medium">Outbound Flight</span>
+                      <Badge variant="outline" className="text-xs">
+                        {tripResult.conditions.cruiseWinds.leg1.station}
+                      </Badge>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Altitude:</span>
+                        <span className="font-medium">{tripResult.conditions.cruiseWinds.leg1.altitude.toLocaleString()} ft</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Direction:</span>
+                        <span className="font-medium">
+                          {tripResult.conditions.cruiseWinds.leg1.direction === 'VRB' 
+                            ? 'Variable' 
+                            : `${tripResult.conditions.cruiseWinds.leg1.direction}°`}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Speed:</span>
+                        <span className="font-medium">{tripResult.conditions.cruiseWinds.leg1.speed} kts</span>
+                      </div>
+                      {tripResult.conditions.cruiseWinds.leg1.temperature !== undefined && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Temperature:</span>
+                          <span className="font-medium">{tripResult.conditions.cruiseWinds.leg1.temperature}°C</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Return Flight Winds */}
+                {tripResult.conditions.cruiseWinds.leg4 && (
+                  <div className="border rounded-lg bg-card p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-medium">Return Flight</span>
+                      <Badge variant="outline" className="text-xs">
+                        {tripResult.conditions.cruiseWinds.leg4.station}
+                      </Badge>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Altitude:</span>
+                        <span className="font-medium">{tripResult.conditions.cruiseWinds.leg4.altitude.toLocaleString()} ft</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Direction:</span>
+                        <span className="font-medium">
+                          {tripResult.conditions.cruiseWinds.leg4.direction === 'VRB' 
+                            ? 'Variable' 
+                            : `${tripResult.conditions.cruiseWinds.leg4.direction}°`}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Speed:</span>
+                        <span className="font-medium">{tripResult.conditions.cruiseWinds.leg4.speed} kts</span>
+                      </div>
+                      {tripResult.conditions.cruiseWinds.leg4.temperature !== undefined && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Temperature:</span>
+                          <span className="font-medium">{tripResult.conditions.cruiseWinds.leg4.temperature}°C</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="border-t pt-4 mt-4">
             <div className="mb-3">
