@@ -99,6 +99,8 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
   const [surgicalTeam, setSurgicalTeam] = useState<MedicalPersonnel[]>([]);
   const [surgeonSearch, setSurgeonSearch] = useState('');
   const [surgeonSuggestions, setSurgeonSuggestions] = useState<MedicalPersonnel[]>([]);
+  const [surgeonInputs, setSurgeonInputs] = useState<string[]>(['']);
+  const [activeSurgeonInput, setActiveSurgeonInput] = useState<number>(0);
   const [coordinatorSearch, setCoordinatorSearch] = useState('');
   const [selectedCoordinator, setSelectedCoordinator] = useState<MedicalPersonnel | null>(null);
   const [coordinatorSuggestions, setCoordinatorSuggestions] = useState<MedicalPersonnel[]>([]);
@@ -108,7 +110,6 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
   const [caseNumber, setCaseNumber] = useState('');
   const [caseData, setCaseData] = useState<any>(null);
   const [loadingCase, setLoadingCase] = useState(false);
-  const [customSurgeonName, setCustomSurgeonName] = useState('');
   
   const { toast } = useToast();
 
@@ -157,14 +158,15 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
   }, [leadDoctorSearch]);
 
   useEffect(() => {
-    if (surgeonSearch.length < 2) {
+    const currentInput = surgeonInputs[activeSurgeonInput];
+    if (!currentInput || currentInput.length < 2) {
       setSurgeonSuggestions([]);
       return;
     }
 
     const timer = setTimeout(async () => {
       const { data } = await supabase.functions.invoke('search-medical-personnel', {
-        body: { searchTerm: surgeonSearch, role: 'surgeon' }
+        body: { searchTerm: currentInput, role: 'surgeon' }
       });
       if (data?.results) {
         setSurgeonSuggestions(data.results);
@@ -172,7 +174,7 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [surgeonSearch]);
+  }, [surgeonInputs, activeSurgeonInput]);
 
   useEffect(() => {
     if (coordinatorSearch.length < 2) {
@@ -315,16 +317,19 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
     }
   };
 
-  const addSurgeon = (surgeon: MedicalPersonnel) => {
+  const addSurgeon = (surgeon: MedicalPersonnel, inputIndex: number) => {
     if (!surgicalTeam.find(s => s.id === surgeon.id)) {
       setSurgicalTeam([...surgicalTeam, surgeon]);
-      setSurgeonSearch('');
+      // Clear the input and suggestions
+      const newInputs = [...surgeonInputs];
+      newInputs[inputIndex] = '';
+      setSurgeonInputs(newInputs);
       setSurgeonSuggestions([]);
     }
   };
 
-  const addCustomSurgeon = () => {
-    const trimmedName = customSurgeonName.trim();
+  const addCustomSurgeon = (inputIndex: number) => {
+    const trimmedName = surgeonInputs[inputIndex].trim();
     if (trimmedName.length < 2 || trimmedName.length > 100) {
       toast({
         title: "Invalid Name",
@@ -344,11 +349,35 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
     };
 
     setSurgicalTeam([...surgicalTeam, customSurgeon]);
-    setCustomSurgeonName('');
+    const newInputs = [...surgeonInputs];
+    newInputs[inputIndex] = '';
+    setSurgeonInputs(newInputs);
     toast({
       title: "Surgeon Added",
       description: `${trimmedName} has been added to the surgical team`,
     });
+  };
+
+  const addSurgeonInput = () => {
+    setSurgeonInputs([...surgeonInputs, '']);
+    setActiveSurgeonInput(surgeonInputs.length);
+  };
+
+  const removeSurgeonInput = (index: number) => {
+    if (surgeonInputs.length > 1) {
+      const newInputs = surgeonInputs.filter((_, i) => i !== index);
+      setSurgeonInputs(newInputs);
+      if (activeSurgeonInput >= newInputs.length) {
+        setActiveSurgeonInput(Math.max(0, newInputs.length - 1));
+      }
+    }
+  };
+
+  const updateSurgeonInput = (index: number, value: string) => {
+    const newInputs = [...surgeonInputs];
+    newInputs[index] = value;
+    setSurgeonInputs(newInputs);
+    setActiveSurgeonInput(index);
   };
 
   const removeSurgeon = (id: string) => {
@@ -571,7 +600,7 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">
-                          Captain {crew.full_name}
+                          {crew.full_name}
                           {crew.is_chief_pilot && " 🛡️"}
                         </p>
                         <p className="text-xs text-muted-foreground">
@@ -590,121 +619,138 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label>Lead Doctor</Label>
-            <div className="relative">
-              <Input
-                value={selectedLeadDoctor ? selectedLeadDoctor.full_name : leadDoctorSearch}
-                onChange={(e) => {
-                  setLeadDoctorSearch(e.target.value);
-                  if (selectedLeadDoctor) setSelectedLeadDoctor(null);
-                }}
-                placeholder="Search for lead doctor..."
-              />
-              {leadDoctorSuggestions.length > 0 && !selectedLeadDoctor && (
-                <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-auto">
-                  {leadDoctorSuggestions.map((doc) => (
-                    <button
-                      key={doc.id}
-                      onClick={() => {
-                        setSelectedLeadDoctor(doc);
-                        setLeadDoctorSearch('');
-                        setLeadDoctorSuggestions([]);
-                      }}
-                      className="w-full p-3 text-left hover:bg-accent/50 transition-colors"
-                    >
-                      <p className="font-medium text-sm">{doc.full_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {doc.specialty} • {doc.total_missions} missions • {doc.success_rate}% success
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            {selectedLeadDoctor && (
-              <div className="p-3 bg-primary/10 rounded-md">
-                <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-primary" />
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{selectedLeadDoctor.full_name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {selectedLeadDoctor.specialty} • {selectedLeadDoctor.total_missions} missions • {selectedLeadDoctor.success_rate}% success
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label>Surgical Team (Optional)</Label>
-            <div className="space-y-3">
+          {/* Medical Team - 2 Column Layout */}
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Lead Doctor */}
+            <div className="space-y-2">
+              <Label>Lead Doctor</Label>
               <div className="relative">
                 <Input
-                  value={surgeonSearch}
-                  onChange={(e) => setSurgeonSearch(e.target.value)}
-                  placeholder="Search for surgeon in database..."
+                  value={selectedLeadDoctor ? selectedLeadDoctor.full_name : leadDoctorSearch}
+                  onChange={(e) => {
+                    setLeadDoctorSearch(e.target.value);
+                    if (selectedLeadDoctor) setSelectedLeadDoctor(null);
+                  }}
+                  placeholder="Search for lead doctor..."
                 />
-                {surgeonSuggestions.length > 0 && (
+                {leadDoctorSuggestions.length > 0 && !selectedLeadDoctor && (
                   <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-auto">
-                    {surgeonSuggestions.map((surgeon) => (
+                    {leadDoctorSuggestions.map((doc) => (
                       <button
-                        key={surgeon.id}
-                        onClick={() => addSurgeon(surgeon)}
+                        key={doc.id}
+                        onClick={() => {
+                          setSelectedLeadDoctor(doc);
+                          setLeadDoctorSearch('');
+                          setLeadDoctorSuggestions([]);
+                        }}
                         className="w-full p-3 text-left hover:bg-accent/50 transition-colors"
-                        disabled={surgicalTeam.some(s => s.id === surgeon.id)}
                       >
-                        <p className="font-medium text-sm">{surgeon.full_name}</p>
+                        <p className="font-medium text-sm">{doc.full_name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {surgeon.specialty} • {surgeon.total_missions} missions • {surgeon.success_rate}% success
+                          {doc.specialty} • {doc.total_missions} missions • {doc.success_rate}% success
                         </p>
                       </button>
                     ))}
                   </div>
                 )}
               </div>
-              
-              {/* Add Custom Surgeon */}
-              <div className="flex gap-2">
-                <Input
-                  value={customSurgeonName}
-                  onChange={(e) => setCustomSurgeonName(e.target.value)}
-                  placeholder="Or add surgeon not in database..."
-                  maxLength={100}
-                  onKeyDown={(e) => e.key === 'Enter' && addCustomSurgeon()}
-                />
-                <Button 
-                  onClick={addCustomSurgeon}
-                  disabled={customSurgeonName.trim().length < 2}
-                  variant="outline"
-                  size="sm"
-                >
-                  Add
-                </Button>
-              </div>
+              {selectedLeadDoctor && (
+                <div className="p-3 bg-primary/10 rounded-md">
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4 text-primary" />
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{selectedLeadDoctor.full_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedLeadDoctor.specialty} • {selectedLeadDoctor.total_missions} missions • {selectedLeadDoctor.success_rate}% success
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-            
-            {surgicalTeam.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {surgicalTeam.map((surgeon) => (
-                  <Badge key={surgeon.id} variant="secondary" className="gap-2">
-                    {surgeon.full_name}
-                    {surgeon.id.startsWith('custom-') && (
-                      <span className="text-xs text-muted-foreground">(Custom)</span>
+
+            {/* Surgical Team */}
+            <div className="space-y-2">
+              <Label>Surgical Team (Optional)</Label>
+              <div className="space-y-2">
+                {surgeonInputs.map((input, index) => (
+                  <div key={index} className="relative flex gap-2">
+                    <div className="flex-1 relative">
+                      <Input
+                        value={input}
+                        onChange={(e) => updateSurgeonInput(index, e.target.value)}
+                        onFocus={() => setActiveSurgeonInput(index)}
+                        placeholder="Search or add surgeon name..."
+                        maxLength={100}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && input.trim().length >= 2) {
+                            addCustomSurgeon(index);
+                          }
+                        }}
+                      />
+                      {surgeonSuggestions.length > 0 && activeSurgeonInput === index && input.length >= 2 && (
+                        <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-auto">
+                          {surgeonSuggestions.map((surgeon) => (
+                            <button
+                              key={surgeon.id}
+                              onClick={() => addSurgeon(surgeon, index)}
+                              className="w-full p-3 text-left hover:bg-accent/50 transition-colors"
+                              disabled={surgicalTeam.some(s => s.id === surgeon.id)}
+                            >
+                              <p className="font-medium text-sm">{surgeon.full_name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {surgeon.specialty} • {surgeon.total_missions} missions
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {index === surgeonInputs.length - 1 ? (
+                      <Button 
+                        onClick={addSurgeonInput}
+                        variant="outline"
+                        size="icon"
+                        className="flex-shrink-0"
+                      >
+                        <Users className="w-4 h-4" />
+                      </Button>
+                    ) : (
+                      <Button 
+                        onClick={() => removeSurgeonInput(index)}
+                        variant="ghost"
+                        size="icon"
+                        className="flex-shrink-0"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
                     )}
-                    <button
-                      onClick={() => removeSurgeon(surgeon.id)}
-                      className="hover:text-destructive"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </Badge>
+                  </div>
                 ))}
               </div>
-            )}
+              
+              {surgicalTeam.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {surgicalTeam.map((surgeon) => (
+                    <Badge key={surgeon.id} variant="secondary" className="gap-2">
+                      {surgeon.full_name}
+                      {surgeon.id.startsWith('custom-') && (
+                        <span className="text-xs text-muted-foreground">(New)</span>
+                      )}
+                      <button
+                        onClick={() => removeSurgeon(surgeon.id)}
+                        className="hover:text-destructive"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
+          {/* Coordinator */}
           <div className="space-y-2">
             <Label>Transplant Coordinator (Optional)</Label>
             <div className="relative">
