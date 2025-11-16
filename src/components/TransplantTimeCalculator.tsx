@@ -768,18 +768,47 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               
               <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-lg p-6">
                 <div className="grid md:grid-cols-3 gap-6">
-                  <div className="text-center space-y-2">
+                  <div className="text-center space-y-3">
                     <Clock className="w-8 h-8 mx-auto text-primary" />
                     <div className="text-sm text-muted-foreground">Total Trip Time</div>
                     <div className="text-4xl font-bold text-primary">
                       {formatDuration(tripResult.totalTime)}
                     </div>
+                    <div className="space-y-1 pt-2 border-t border-primary/20">
+                      <div className="text-xs text-muted-foreground">
+                        Time to Pickup: <span className="font-semibold text-foreground">
+                          {formatDuration(tripResult.segments[0]?.duration || 0)}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Time to Delivery: <span className="font-semibold text-foreground">
+                          {formatDuration(tripResult.segments[tripResult.segments.length - 1]?.duration || 0)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-center space-y-2">
+                  <div className="text-center space-y-3">
                     <Target className="w-8 h-8 mx-auto text-green-600" />
                     <div className="text-sm text-muted-foreground">Estimated Arrival</div>
                     <div className="text-3xl font-bold">
                       {format(tripResult.arrivalTime, 'h:mm a')}
+                    </div>
+                    <div className="space-y-1 pt-2 border-t border-green-600/20">
+                      <div className="text-xs text-muted-foreground">
+                        Pickup: <span className="font-semibold text-foreground">
+                          {format(
+                            new Date(departureDate.getFullYear(), departureDate.getMonth(), departureDate.getDate(), 
+                              parseInt(departureTime.split(':')[0]), parseInt(departureTime.split(':')[1])).getTime() + 
+                              (tripResult.segments[0]?.duration || 0) * 60000,
+                            'h:mm a'
+                          )}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Delivery: <span className="font-semibold text-foreground">
+                          {format(tripResult.arrivalTime, 'h:mm a')}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <div className="text-center space-y-2">
@@ -804,6 +833,9 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                     </div>
                     <div className="text-sm font-medium">
                       {tripResult.route?.pickupAirport?.name || ''}
+                    </div>
+                    <div className="text-xs text-muted-foreground max-w-[250px] mx-auto">
+                      {tripResult.route?.pickupAirport?.address || ''}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {tripResult.route?.pickupAirport?.distance_from_pickup !== undefined && 
@@ -878,7 +910,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
           </div>
 
           {/* Leg-by-Leg Summary - Collapsible */}
-          <Collapsible defaultOpen={false}>
+          <Collapsible defaultOpen={true}>
             <Card>
               <CollapsibleTrigger className="w-full">
                 <CardHeader className="pb-3 hover:bg-muted/50 transition-colors">
