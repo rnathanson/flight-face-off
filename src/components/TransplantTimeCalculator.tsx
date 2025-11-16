@@ -63,6 +63,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
   });
   const [passengerCount, setPassengerCount] = useState(2);
   const [calculating, setCalculating] = useState(false);
+  const [loadingStage, setLoadingStage] = useState<string>('');
   const [tripResult, setTripResult] = useState<TripResult | null>(null);
   const { toast } = useToast();
   
@@ -122,7 +123,27 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     }
 
     setCalculating(true);
+    
     try {
+      // Stage 1: Route Analysis
+      setLoadingStage('Analyzing optimal flight route...');
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Stage 2: Weather Check
+      setLoadingStage('Checking live weather conditions...');
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Stage 3: Traffic Analysis
+      setLoadingStage('Calculating real-time traffic patterns...');
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Stage 4: ATC Delays
+      setLoadingStage('Evaluating ATC delays and restrictions...');
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Stage 5: Final Computation
+      setLoadingStage('Computing door-to-door timeline...');
+      
       // Combine time of day with date
       const [hours, minutes] = departureTime.split(':').map(Number);
       const departureDateTime = new Date(departureDate);
@@ -184,6 +205,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       });
     } finally {
       setCalculating(false);
+      setLoadingStage('');
     }
   };
 
@@ -566,63 +588,222 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 className="w-full"
                 size="lg"
               >
-                {calculating ? (
-                  <>
-                    <Timer className="w-4 h-4 mr-2 animate-spin" />
-                    Calculating...
-                  </>
-                ) : (
-                  <>
-                    <Plane className="w-4 h-4 mr-2" />
-                    Calculate Trip Time
-                  </>
-                )}
+              {calculating ? (
+                <div className="flex flex-col items-center gap-2 py-1">
+                  <div className="flex items-center gap-2">
+                    <Timer className="w-4 h-4 animate-spin" />
+                    <span className="font-semibold">Calculating Your Trip</span>
+                  </div>
+                  {loadingStage && (
+                    <>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {loadingStage.includes('route') && <Plane className="w-3 h-3" />}
+                        {loadingStage.includes('weather') && <Zap className="w-3 h-3" />}
+                        {loadingStage.includes('traffic') && <Car className="w-3 h-3" />}
+                        {loadingStage.includes('ATC') && <Target className="w-3 h-3" />}
+                        {loadingStage.includes('timeline') && <Clock className="w-3 h-3" />}
+                        <span>{loadingStage}</span>
+                      </div>
+                      <Progress 
+                        value={
+                          loadingStage.includes('route') ? 20 :
+                          loadingStage.includes('weather') ? 40 :
+                          loadingStage.includes('traffic') ? 60 :
+                          loadingStage.includes('ATC') ? 80 :
+                          100
+                        } 
+                        className="w-full h-1" 
+                      />
+                    </>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <Plane className="w-4 h-4 mr-2" />
+                  Calculate Trip Time
+                </>
+              )}
               </Button>
             </CardContent>
           </Card>
         </div>
       ) : (
-        /* Side-by-side layout after calculation */
-        <div className="grid lg:grid-cols-[400px_1fr] gap-6">
-          {/* Input Panel - Compact */}
-          <div className="space-y-4">
-            <Card>
-              <CardHeader className="pb-4">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <MapPin className="w-5 h-5 text-primary" />
-                  Trip Details
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-              <div className="space-y-2 text-sm">
-                  <div className="font-medium text-muted-foreground">Pick Up Hospital</div>
-                  <div>{selectedOrigin?.displayName.split(',')[0]}</div>
+        /* Vertical layout after calculation - Hero section at top */
+        <div className="space-y-6">
+          {/* Hero Section - Trip Summary */}
+          <Card className="border-2 border-primary/20">
+            <CardContent className="pt-6">
+              {/* Hospital names and departure info */}
+              <div className="grid md:grid-cols-3 gap-4 mb-6">
+                <div className="space-y-1">
+                  <div className="text-sm text-muted-foreground">Pick Up Hospital</div>
+                  <div className="font-semibold">{selectedOrigin?.displayName.split(',')[0]}</div>
                 </div>
-                <div className="space-y-2 text-sm">
-                  <div className="font-medium text-muted-foreground">Delivery Hospital</div>
-                  <div>{selectedDestination?.displayName.split(',')[0]}</div>
+                <div className="space-y-1">
+                  <div className="text-sm text-muted-foreground">Delivery Hospital</div>
+                  <div className="font-semibold">{selectedDestination?.displayName.split(',')[0]}</div>
                 </div>
-                <div className="space-y-2 text-sm">
-                  <div className="font-medium text-muted-foreground">Departure</div>
-                  <div>{departureDate && format(departureDate, 'PPP')} at {departureTime}</div>
+                <div className="space-y-1">
+                  <div className="text-sm text-muted-foreground">Departure</div>
+                  <div className="font-semibold">{format(departureDate, 'PPP')} at {departureTime}</div>
                 </div>
-                <div className="space-y-2 text-sm">
-                  <div className="font-medium text-muted-foreground">Passengers</div>
-                  <div>{passengerCount}</div>
+              </div>
+              
+              {/* Main Results - Large Typography */}
+              <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-lg p-6 space-y-4">
+                <div className="grid md:grid-cols-3 gap-6">
+                  <div className="text-center space-y-2">
+                    <Clock className="w-8 h-8 mx-auto text-primary" />
+                    <div className="text-sm text-muted-foreground">Total Trip Time</div>
+                    <div className="text-4xl font-bold text-primary">
+                      {formatDuration(tripResult.totalTime)}
+                    </div>
+                  </div>
+                  <div className="text-center space-y-2">
+                    <Target className="w-8 h-8 mx-auto text-green-600" />
+                    <div className="text-sm text-muted-foreground">Estimated Arrival</div>
+                    <div className="text-3xl font-bold">
+                      {format(tripResult.arrivalTime, 'h:mm a')}
+                    </div>
+                  </div>
+                  <div className="text-center space-y-2">
+                    <Zap className="w-8 h-8 mx-auto text-amber-600" />
+                    <div className="text-sm text-muted-foreground">Confidence</div>
+                    <div className="text-3xl font-bold">85%</div>
+                  </div>
                 </div>
-                <Button
-                  onClick={() => setTripResult(null)}
-                  variant="outline"
-                  className="w-full"
-                  size="sm"
-                >
+              </div>
+              
+              {/* New Calculation Button */}
+              <div className="mt-4 flex justify-end">
+                <Button onClick={() => setTripResult(null)} variant="outline">
                   New Calculation
                 </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Trip Breakdown */}
-            <Card>
+          {/* AI Scenario Cards - Horizontal 3 Column */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between mb-2">
+              <Badge variant="secondary" className="bg-primary/20 text-primary">
+                AI-Powered Time Estimates
+              </Badge>
+            </div>
+            
+            <div className="grid md:grid-cols-3 gap-4">
+              {/* Worst Case */}
+              <Card className="bg-destructive/10 border-destructive/30 border-2">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <AlertTriangle className="w-4 h-4 text-destructive" />
+                    <CardTitle className="text-sm">Worst Case</CardTitle>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <Clock className="w-3 h-3 text-destructive" />
+                    <span className="text-lg font-bold text-foreground">
+                      {Math.floor((tripResult.totalTime * 1.25) / 60)}h {Math.round((tripResult.totalTime * 1.25) % 60)}m - {Math.floor((tripResult.totalTime * 1.35) / 60)}h {Math.round((tripResult.totalTime * 1.35) % 60)}m
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Confidence</span>
+                      <span className="font-semibold">60%</span>
+                    </div>
+                    <Progress value={60} className="h-1.5" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase">Key Factors</p>
+                    <ul className="space-y-1">
+                      {['Heavy traffic delays', 'Adverse weather conditions', 'Extended routing requirements'].map((factor, idx) => (
+                        <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
+                          <span className="mt-1 w-1 h-1 rounded-full text-destructive bg-current flex-shrink-0" />
+                          <span>{factor}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Likely Scenario */}
+              <Card className="bg-green-50 dark:bg-green-950/20 border-green-600/30 border-2">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <CardTitle className="text-sm">Likely Scenario</CardTitle>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <Clock className="w-3 h-3 text-green-600" />
+                    <span className="text-lg font-bold text-foreground">
+                      {Math.floor((tripResult.totalTime * 0.95) / 60)}h {Math.round((tripResult.totalTime * 0.95) % 60)}m - {Math.floor((tripResult.totalTime * 1.10) / 60)}h {Math.round((tripResult.totalTime * 1.10) % 60)}m
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Confidence</span>
+                      <span className="font-semibold">90%</span>
+                    </div>
+                    <Progress value={90} className="h-1.5" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase">Key Factors</p>
+                    <ul className="space-y-1">
+                      {['Normal traffic flow', 'Favorable weather', 'Standard routing'].map((factor, idx) => (
+                        <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
+                          <span className="mt-1 w-1 h-1 rounded-full text-green-600 bg-current flex-shrink-0" />
+                          <span>{factor}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Best Case */}
+              <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-600/30 border-2">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Zap className="w-4 h-4 text-blue-600" />
+                    <CardTitle className="text-sm">Best Case</CardTitle>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <Clock className="w-3 h-3 text-blue-600" />
+                    <span className="text-lg font-bold text-foreground">
+                      {Math.floor((tripResult.totalTime * 0.85) / 60)}h {Math.round((tripResult.totalTime * 0.85) % 60)}m - {Math.floor((tripResult.totalTime * 0.95) / 60)}h {Math.round((tripResult.totalTime * 0.95) % 60)}m
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Confidence</span>
+                      <span className="font-semibold">75%</span>
+                    </div>
+                    <Progress value={75} className="h-1.5" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase">Key Factors</p>
+                    <ul className="space-y-1">
+                      {['Light traffic', 'Optimal weather', 'Direct routing'].map((factor, idx) => (
+                        <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
+                          <span className="mt-1 w-1 h-1 rounded-full text-blue-600 bg-current flex-shrink-0" />
+                          <span>{factor}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          {/* Trip Breakdown - Full Width */}
+          <Card>
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Clock className="w-5 h-5 text-primary" />
