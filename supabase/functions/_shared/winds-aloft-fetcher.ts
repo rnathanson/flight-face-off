@@ -46,22 +46,8 @@ function getStationCode(icao: string): string | null {
   return STATION_CODES[icao] || icao.replace('K', '').toUpperCase();
 }
 
-// Determine valid forecast cycle based on current UTC time and NOAA "FOR USE" windows
-function getValidForecastCycle(): string {
-  const now = new Date();
-  const hour = now.getUTCHours();
-  
-  // NOAA publishes at 00, 06, 12, 18 with specific "FOR USE" windows:
-  // 00Z: FOR USE 2000–0200Z (previous day 8pm - 2am)
-  // 06Z: FOR USE 0200–0900Z (2am - 9am)
-  // 12Z: FOR USE 0900–1500Z (9am - 3pm)
-  // 18Z: FOR USE 1500–2100Z (3pm - 9pm)
-  
-  if (hour >= 2 && hour < 9) return '06';
-  if (hour >= 9 && hour < 15) return '12';
-  if (hour >= 15 && hour < 21) return '18';
-  return '00'; // 21Z - 02Z uses 00Z
-}
+// Use 6-hour forecast (fcst parameter represents hours ahead, not cycle time)
+// Valid values: '06', '12', '24' for 6-hour, 12-hour, or 24-hour forecasts
 
 /**
  * Fetch winds aloft from NOAA Aviation Weather API
@@ -82,11 +68,11 @@ export async function fetchWindsAloft(
   try {
     const region = determineRegion(lat, lng);
     const level = altitudeFt >= 18000 ? 'high' : 'low';
-    const fcst = getValidForecastCycle();
+    const fcst = '06'; // 6-hour forecast (most current data)
     
     let url = `https://aviationweather.gov/api/data/windtemp?region=${region}&level=${level}&fcst=${fcst}`;
     
-    console.log(`Fetching NOAA winds aloft: region=${region}, level=${level}, fcst=${fcst}Z, alt=${altitudeFt}ft, airport=${nearestAirport || 'none'}`);
+    console.log(`Fetching NOAA winds aloft: region=${region}, level=${level}, fcst=${fcst}hr, alt=${altitudeFt}ft, airport=${nearestAirport || 'none'}`);
     
     let response = await fetch(url, {
       headers: { 'Accept': 'text/plain' }
@@ -303,11 +289,11 @@ async function fetchLowLevelWinds(
 ): Promise<WindsAloftData | null> {
   try {
     const region = determineRegion(lat, lng);
-    const fcst = getValidForecastCycle();
+    const fcst = '06'; // 6-hour forecast (most current data)
     
     let url = `https://aviationweather.gov/api/data/windtemp?region=${region}&level=low&fcst=${fcst}`;
     
-    console.log(`Fetching NOAA low-level winds: region=${region}, fcst=${fcst}Z, alt=${altitudeFt}ft`);
+    console.log(`Fetching NOAA low-level winds: region=${region}, fcst=${fcst}hr, alt=${altitudeFt}ft`);
     
     let response = await fetch(url, {
       headers: { 'Accept': 'text/plain' }
