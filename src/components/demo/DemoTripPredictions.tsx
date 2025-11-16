@@ -505,7 +505,7 @@ export const DemoTripPredictions = ({
             {/* Compact Success Rate Counter - Top Right */}
             {livePrediction && (
               <div className="flex flex-col items-end gap-1 min-w-[120px]">
-                <div className="text-xs text-muted-foreground font-medium mb-0.5">Predictive Success Rate</div>
+                <div className="text-xs text-muted-foreground font-medium mb-0.5">Predicted Success Rate</div>
                 <div className={`text-4xl font-bold leading-none ${
                   livePrediction.overallPrediction >= 85 ? 'text-success' :
                   livePrediction.overallPrediction >= 70 ? 'text-warning' :
