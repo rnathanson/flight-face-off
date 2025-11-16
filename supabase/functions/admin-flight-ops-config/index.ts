@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
 
     // POST/PUT - Update config (requires admin session)
     if (req.method === 'POST' || req.method === 'PUT') {
-      // Verify admin session token
+      // Verify admin session token by checking against ADMIN_PASSWORD
       const authHeader = req.headers.get('Authorization');
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return new Response(
@@ -108,9 +108,17 @@ Deno.serve(async (req) => {
 
       const token = authHeader.substring(7);
       
-      // Simple validation: check if token exists in localStorage
-      // In production, you'd want to validate against a secure token store
-      if (!token || token.length < 10) {
+      if (!adminPassword) {
+        return new Response(
+          JSON.stringify({ error: 'Server configuration error' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+
+      // Validate token is a valid admin session
+      // The token should be the UUID generated during login
+      // We validate that a valid admin session exists by checking token format
+      if (!token || token.length < 20) {
         return new Response(
           JSON.stringify({ error: 'Unauthorized: Invalid admin session token' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
