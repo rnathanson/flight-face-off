@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -776,93 +776,44 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               <CollapsibleContent>
                 <CardContent>
                   <div className="space-y-4">
-                    {tripResult.segments.map((segment, index) => (
-                      <div 
-                        key={index}
-                        className="p-4 rounded-lg border border-border bg-background hover:bg-muted/50 transition-all"
-                        style={{
-                          borderLeft: `4px solid ${segment.type === 'flight' ? '#3b82f6' : '#10b981'}`
-                        }}
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              {segment.type === 'flight' ? (
-                                <Plane className="w-4 h-4 text-muted-foreground" />
-                              ) : (
-                                <Car className="w-4 h-4 text-muted-foreground" />
-                              )}
-                              <span className="font-semibold text-sm uppercase tracking-wide">
-                                {segment.type === 'flight' ? 'Flight' : 'Ground Transport'}
-                              </span>
-                              <Badge variant="outline" className="text-xs">
-                                Leg {index + 1}
-                              </Badge>
+                    {tripResult.segments.map((segment, index) => {
+                      const isPickupHospital = segment.to.toLowerCase().includes('pickup hospital');
+                      const isDeliveryHospital = segment.to.toLowerCase().includes('delivery hospital');
+                      
+                      // Calculate time to pickup for subtotal after pickup hospital segment
+                      let timeToPickupSubtotal = null;
+                      if (isPickupHospital) {
+                        const timeToPickup = tripResult.segments
+                          .slice(0, index + 1)
+                          .reduce((sum, seg) => sum + seg.duration, 0);
+                        timeToPickupSubtotal = (
+                          <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg my-3">
+                            <div className="flex items-center gap-2">
+                              <Timer className="w-4 h-4 text-muted-foreground" />
+                              <span className="font-medium text-sm">Time to Pick Up</span>
                             </div>
-                            
-                            <div className="flex items-center gap-2 text-base font-medium mb-1">
-                              <span className="text-foreground">{segment.from}</span>
-                              <span className="text-muted-foreground">→</span>
-                              <span className="text-foreground">{segment.to}</span>
+                            <div className="text-base font-semibold text-foreground">
+                              {formatDuration(timeToPickup)}
                             </div>
                           </div>
-                          
-                          <div className="text-right space-y-1">
-                            <div className="flex items-center gap-2 justify-end">
-                              <Clock className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-lg font-bold text-foreground">
-                                {formatDuration(segment.duration)}
-                              </span>
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {segment.distance.toFixed(1)} {segment.type === 'flight' ? 'nm' : 'mi'}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    
-                    {/* Subtotals */}
-                    <div className="space-y-3 pt-3 border-t border-border">
-                      {/* Time to Pickup Subtotal */}
-                      {(() => {
-                        // Find the index where we reach the pickup hospital
-                        let pickupIndex = tripResult.segments.findIndex(seg => 
-                          seg.to.toLowerCase().includes('pickup hospital')
                         );
-                        if (pickupIndex >= 0) {
-                          const timeToPickup = tripResult.segments
-                            .slice(0, pickupIndex + 1)
-                            .reduce((sum, seg) => sum + seg.duration, 0);
-                          return (
-                            <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                              <div className="flex items-center gap-2">
-                                <Timer className="w-4 h-4 text-muted-foreground" />
-                                <span className="font-medium text-sm">FRG to Pick Up Location</span>
-                              </div>
-                              <div className="text-base font-semibold text-foreground">
-                                {formatDuration(timeToPickup)}
-                              </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
-
-                      {/* Time from Pickup to Delivery Subtotal */}
-                      {(() => {
-                        let pickupIndex = tripResult.segments.findIndex(seg => 
+                      }
+                      
+                      // Calculate time from pickup to delivery for subtotal after delivery hospital segment
+                      let pickupToDeliverySubtotal = null;
+                      if (isDeliveryHospital) {
+                        const pickupIndex = tripResult.segments.findIndex(seg => 
                           seg.to.toLowerCase().includes('pickup hospital')
                         );
                         if (pickupIndex >= 0) {
                           const timeToDeliver = tripResult.segments
-                            .slice(pickupIndex + 1)
+                            .slice(pickupIndex + 1, index + 1)
                             .reduce((sum, seg) => sum + seg.duration, 0);
-                          return (
-                            <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                          pickupToDeliverySubtotal = (
+                            <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg my-3">
                               <div className="flex items-center gap-2">
                                 <Timer className="w-4 h-4 text-muted-foreground" />
-                                <span className="font-medium text-sm">Pick Up Location to Delivery Location</span>
+                                <span className="font-medium text-sm">Time from Pick Up to Delivery</span>
                               </div>
                               <div className="text-base font-semibold text-foreground">
                                 {formatDuration(timeToDeliver)}
@@ -870,9 +821,57 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                             </div>
                           );
                         }
-                        return null;
-                      })()}
-                    </div>
+                      }
+                      
+                      return (
+                        <React.Fragment key={index}>
+                          <div 
+                            className="p-4 rounded-lg border border-border bg-background hover:bg-muted/50 transition-all"
+                            style={{
+                              borderLeft: `4px solid ${segment.type === 'flight' ? '#3b82f6' : '#10b981'}`
+                            }}
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  {segment.type === 'flight' ? (
+                                    <Plane className="w-4 h-4 text-muted-foreground" />
+                                  ) : (
+                                    <Car className="w-4 h-4 text-muted-foreground" />
+                                  )}
+                                  <span className="font-semibold text-sm uppercase tracking-wide">
+                                    {segment.type === 'flight' ? 'Flight' : 'Ground Transport'}
+                                  </span>
+                                  <Badge variant="outline" className="text-xs">
+                                    Leg {index + 1}
+                                  </Badge>
+                                </div>
+                                
+                                <div className="flex items-center gap-2 text-base font-medium mb-1">
+                                  <span className="text-foreground">{segment.from}</span>
+                                  <span className="text-muted-foreground">→</span>
+                                  <span className="text-foreground">{segment.to}</span>
+                                </div>
+                              </div>
+                              
+                              <div className="text-right space-y-1">
+                                <div className="flex items-center gap-2 justify-end">
+                                  <Clock className="w-4 h-4 text-muted-foreground" />
+                                  <span className="text-lg font-bold text-foreground">
+                                    {formatDuration(segment.duration)}
+                                  </span>
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  {segment.distance.toFixed(1)} {segment.type === 'flight' ? 'nm' : 'mi'}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          {timeToPickupSubtotal}
+                          {pickupToDeliverySubtotal}
+                        </React.Fragment>
+                      );
+                    })}
                     
                     {/* Total Summary */}
                     <div className="pt-4 border-t-2 border-border">
