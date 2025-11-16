@@ -16,7 +16,7 @@ const DEFAULT_CONFIG = {
   minimum_visibility_sm: 1.0,
   cruise_speed_ktas: 440,
   climb_rate_fpm: 3000,
-  descent_rate_fpm: 2000,
+  descent_rate_fpm: 1500,
   speed_below_fl100_kias: 250,
   speed_above_fl100_kias: 280,
   altitude_rules: {
