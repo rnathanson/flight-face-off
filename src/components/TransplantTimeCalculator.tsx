@@ -788,31 +788,48 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
 
           {/* Chief Pilot Approval Modal */}
           <Dialog open={showApprovalModal} onOpenChange={setShowApprovalModal}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Chief Pilot Approval Required</DialogTitle>
-              </DialogHeader>
-              <DialogDescription className="py-4">
-                This trip has conditions that fall outside standard operational guidelines and requires additional review by the Chief Pilot before dispatch.
-              </DialogDescription>
-              <div className="py-2">
-                <p className="text-sm text-muted-foreground">
-                  The flight plan has been calculated and is available for review below. Please submit this trip for Chief Pilot approval to proceed.
-                </p>
-              </div>
-              <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => setShowApprovalModal(false)}>
-                  Dismiss
-                </Button>
-                <Button onClick={() => {
-                  toast({
-                    title: "Submitted for Review",
-                    description: "This trip has been sent to the Chief Pilot for approval.",
-                  });
-                  setShowApprovalModal(false);
-                }}>
-                  Submit for Review
-                </Button>
+            <DialogContent className="sm:max-w-md">
+              <div className="flex flex-col items-center justify-center py-6 space-y-4">
+                {/* Icon */}
+                <div className="relative">
+                  <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl animate-pulse" />
+                  <div className="relative bg-background border-4 border-primary/30 rounded-full p-4">
+                    <AlertTriangle className="w-12 h-12 text-primary animate-pulse" />
+                  </div>
+                </div>
+
+                {/* Title */}
+                <DialogHeader className="text-center space-y-2">
+                  <DialogTitle className="text-2xl font-bold">
+                    Approval Required
+                  </DialogTitle>
+                  <DialogDescription className="text-base">
+                    This trip requires Chief Pilot review
+                  </DialogDescription>
+                </DialogHeader>
+
+                {/* Buttons */}
+                <div className="flex gap-3 w-full pt-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowApprovalModal(false)}
+                    className="flex-1"
+                  >
+                    Dismiss
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      toast({
+                        title: "Submitted for Review",
+                        description: "Trip sent to Chief Pilot",
+                      });
+                      setShowApprovalModal(false);
+                    }}
+                    className="flex-1"
+                  >
+                    Submit for Review
+                  </Button>
+                </div>
               </div>
             </DialogContent>
           </Dialog>
