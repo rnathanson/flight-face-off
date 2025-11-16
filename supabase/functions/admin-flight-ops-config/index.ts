@@ -28,6 +28,7 @@ const DEFAULT_CONFIG = {
   taxi_time_private_fbo_min: 5,
   taxi_time_major_airport_min: 20,
   taxi_time_per_airport_min: 5,
+  ground_handling_time_min: 15,
   takeoff_landing_buffer_min: 15,
   max_range_nm: 2000,
   fuel_capacity_lbs: 6560,
