@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { fetchAndParseAirNav } from '../_shared/airnav-parser.ts';
 import { parseMETAR } from '../_shared/metar-parser.ts';
+import { fetchTAFWithFallback } from '../_shared/checkwx-fetcher.ts';
+import { parseTAFPeriods, findRelevantTafPeriod } from '../_shared/taf-period-parser.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -54,7 +56,25 @@ interface QualifiedAirport {
 
 // Extract wind from METAR/TAF string
 function extractWind(weatherData: string): WindData | null {
-  const match = weatherData.match(/(\d{3})(\d{2,3})(G(\d{2,3}))?KT/);
+  // Handle variable winds
+  const vrbMatch = weatherData.match(/\bVRB(\d{2,3})(?:G(\d{2,3}))?KT\b/);
+  if (vrbMatch) {
+    console.log(`✓ Variable winds detected: VRB${vrbMatch[1]}KT`);
+    return {
+      direction: -1, // Flag as variable
+      speed: parseInt(vrbMatch[1]),
+      gust: vrbMatch[2] ? parseInt(vrbMatch[2]) : undefined
+    };
+  }
+
+  // Handle calm winds
+  if (/\b00000KT\b/.test(weatherData)) {
+    console.log('✓ Calm winds detected: 00000KT');
+    return { direction: 0, speed: 0 };
+  }
+
+  // Standard winds
+  const match = weatherData.match(/\b(\d{3})(\d{2,3})(?:G(\d{2,3}))?KT\b/);
   if (!match) {
     console.log(`⚠️ Wind pattern not found in: ${weatherData.substring(0, 100)}`);
     return null;
@@ -63,7 +83,7 @@ function extractWind(weatherData: string): WindData | null {
   const result = {
     direction: parseInt(match[1]),
     speed: parseInt(match[2]),
-    gust: match[4] ? parseInt(match[4]) : undefined
+    gust: match[3] ? parseInt(match[3]) : undefined
   };
   console.log(`✓ Extracted wind:`, result);
   return result;
@@ -97,9 +117,34 @@ function analyzeBestRunway(wind: WindData, runways: any[]): RunwayWindAnalysis |
     return null;
   }
   
-  const windSpeed = wind.gust || wind.speed; // Use gust if present
+  // Use gust if present (conservative approach)
+  const windSpeed = wind.gust || wind.speed;
   console.log(`🌬️  Analyzing ${runways.length} runways for wind: ${wind.direction}° at ${wind.speed}kt${wind.gust ? ` gusting ${wind.gust}kt` : ''}`);
   
+  // Handle variable winds - worst case crosswind = full wind speed
+  if (wind.direction === -1) {
+    console.log(`⚠️ Variable winds: using worst-case crosswind = ${windSpeed}kt`);
+    const bestRunway = runways[0]; // Just pick first qualifying runway
+    return {
+      runway: bestRunway.name,
+      totalWind: windSpeed,
+      crosswind: windSpeed, // Worst case
+      headwind: 0
+    };
+  }
+
+  // Calm winds - no crosswind concern
+  if (wind.speed === 0) {
+    console.log(`✓ Calm winds: no crosswind concern`);
+    return {
+      runway: runways[0].name,
+      totalWind: 0,
+      crosswind: 0,
+      headwind: 0
+    };
+  }
+  
+  // Standard crosswind calculation
   let bestAnalysis: RunwayWindAnalysis | null = null;
   let lowestCrosswind = Infinity;
   
@@ -268,47 +313,72 @@ serve(async (req) => {
         }
       }
 
-      // Use TAF for forecast weather (preferred for arrivals), fallback to METAR
-      const weatherData = airnavData.taf || airnavData.metar;
+      // Use new 3-tier TAF fetcher with CheckWX fallback
+      console.log(`\n🔍 Fetching weather for ${airport.code}...`);
+      const tafData = await fetchTAFWithFallback(airport.code);
+      
+      if (!tafData) {
+        console.log(`❌ No weather data available for ${airport.code} after all fallbacks`);
+        qualifications.weather_ok = false;
+        qualifications.passed = false;
+        warnings.push('Unable to obtain TAF or METAR - cannot verify weather limits');
+        rejectedAirports.push({
+          code: airport.code,
+          name: airnavData.name || airport.name,
+          lat: airnavData.lat || airport.lat,
+          lng: airnavData.lng || airport.lng,
+          distance_nm: airport.distance_nm,
+          elevation_ft: airnavData.elevation_ft || 0,
+          qualifications,
+          warnings
+        });
+        continue;
+      }
+
+      console.log(`✓ Weather from ${tafData.source_airport} (${tafData.distance_nm}nm)`);
+
+      // Parse TAF periods and select relevant one based on arrival time
+      const tafPeriods = parseTAFPeriods(tafData.raw);
+      const estimatedFlightMinutes = 60; // Rough estimate for arrival time
+      const arrivalTime = new Date(Date.now() + estimatedFlightMinutes * 60000);
+      const relevantPeriod = findRelevantTafPeriod(tafPeriods, arrivalTime);
+
       let windAnalysis: RunwayWindAnalysis | null = null;
 
-      console.log(`\n🔍 Weather data for ${airport.code}:`, {
-        hasMETAR: !!airnavData.metar,
-        hasTAF: !!airnavData.taf,
-        usingTAF: !!airnavData.taf,
-        rawWeather: weatherData?.raw?.substring(0, 100) || 'No weather data'
-      });
-
-      if (weatherData) {
-        const weatherParsed = parseMETAR(weatherData.raw);
-        if (weatherParsed) {
-          // Check IFR conditions
-          if (weatherParsed.flightCategory === 'IFR' || weatherParsed.flightCategory === 'LIFR') {
-            // Check IFR requirements
-            if (config.ifr_requires_instrument_approach) {
-              const hasApproach = airnavData.has_ils || airnavData.has_rnav;
-              if (!hasApproach) {
-                qualifications.approach_ok = false;
-                qualifications.passed = false;
-                warnings.push('IFR conditions but no instrument approach available');
-              }
+      if (relevantPeriod) {
+        // Check IFR conditions from TAF period
+        if (relevantPeriod.ceiling && relevantPeriod.ceiling < config.minimum_ceiling_ft) {
+          console.log(`❌ Forecast ceiling ${relevantPeriod.ceiling}ft < ${config.minimum_ceiling_ft}ft minimum`);
+          
+          // Check if airport has instrument approach
+          if (config.ifr_requires_instrument_approach) {
+            const hasApproach = airnavData.has_ils || airnavData.has_rnav;
+            if (!hasApproach) {
+              qualifications.approach_ok = false;
+              qualifications.passed = false;
+              warnings.push('IFR forecast but no instrument approach available');
             }
+          }
+          
+          qualifications.weather_ok = false;
+          qualifications.passed = false;
+          warnings.push(`Forecast ceiling ${relevantPeriod.ceiling}ft below minimum ${config.minimum_ceiling_ft}ft`);
+        }
 
-            if (weatherParsed.ceiling !== null && weatherParsed.ceiling < config.minimum_ceiling_ft) {
+        // Check visibility from TAF period
+        if (relevantPeriod.visibility) {
+          const visMatch = relevantPeriod.visibility.match(/([0-9\/]+)SM/);
+          if (visMatch) {
+            const visMiles = eval(visMatch[1]); // Handle fractions like "1/2"
+            if (visMiles < config.minimum_visibility_sm) {
               qualifications.weather_ok = false;
               qualifications.passed = false;
-              warnings.push(`Ceiling ${weatherParsed.ceiling}ft below minimum ${config.minimum_ceiling_ft}ft`);
-            }
-
-            if (weatherParsed.visibility < config.minimum_visibility_sm) {
-              qualifications.weather_ok = false;
-              qualifications.passed = false;
-              warnings.push(`Visibility ${weatherParsed.visibility}SM below minimum ${config.minimum_visibility_sm}SM`);
+              warnings.push(`Forecast visibility ${visMiles}SM below minimum ${config.minimum_visibility_sm}SM`);
             }
           }
         }
 
-        // Check wind limits if we have qualifying runways
+        // Check wind limits
         console.log(`\n🛬 Wind checking for ${airport.code}:`, {
           hasQualifyingRunways: qualifyingRunways.length > 0,
           runwayCount: qualifyingRunways.length,
@@ -316,59 +386,58 @@ serve(async (req) => {
           maxCrosswindLimit: config.max_crosswind_kt
         });
 
-        if (qualifyingRunways.length > 0) {
-          const windData = extractWind(weatherData.raw);
+        if (qualifyingRunways.length > 0 && relevantPeriod.wind) {
+          const windData = {
+            direction: relevantPeriod.wind.direction === 'VRB' ? -1 : relevantPeriod.wind.direction,
+            speed: relevantPeriod.wind.speed,
+            gust: relevantPeriod.wind.gust
+          };
           
-          console.log(`Wind extraction result for ${airport.code}:`, {
-            windDataFound: !!windData,
-            windData: windData
-          });
+          console.log(`Wind from TAF period for ${airport.code}:`, windData);
 
-          if (windData) {
-            windAnalysis = analyzeBestRunway(windData, qualifyingRunways);
+          windAnalysis = analyzeBestRunway(windData, qualifyingRunways);
+          
+          if (windAnalysis) {
+            console.log(`\n📊 Wind analysis for ${airport.code}:`, {
+              runway: windAnalysis.runway,
+              totalWind: windAnalysis.totalWind,
+              crosswind: windAnalysis.crosswind,
+              headwind: windAnalysis.headwind,
+              maxWindLimit: config.max_wind_kt,
+              maxCrosswindLimit: config.max_crosswind_kt,
+              exceedsWindLimit: windAnalysis.totalWind > config.max_wind_kt,
+              exceedsCrosswindLimit: windAnalysis.crosswind > config.max_crosswind_kt
+            });
+
+            // Check total wind limit
+            if (windAnalysis.totalWind > config.max_wind_kt) {
+              qualifications.wind_ok = false;
+              qualifications.passed = false;
+              warnings.push(`Wind ${windAnalysis.totalWind}kt exceeds limit of ${config.max_wind_kt}kt (best runway: ${windAnalysis.runway})`);
+              console.log(`❌ Wind ${windAnalysis.totalWind}kt exceeds limit of ${config.max_wind_kt}kt`);
+            }
             
-            if (windAnalysis) {
-              console.log(`\n📊 Wind analysis for ${airport.code}:`, {
-                runway: windAnalysis.runway,
-                totalWind: windAnalysis.totalWind,
-                crosswind: windAnalysis.crosswind,
-                headwind: windAnalysis.headwind,
-                maxWindLimit: config.max_wind_kt,
-                maxCrosswindLimit: config.max_crosswind_kt,
-                exceedsWindLimit: windAnalysis.totalWind > config.max_wind_kt,
-                exceedsCrosswindLimit: windAnalysis.crosswind > config.max_crosswind_kt
-              });
+            // Check crosswind limit
+            if (windAnalysis.crosswind > config.max_crosswind_kt) {
+              qualifications.wind_ok = false;
+              qualifications.passed = false;
+              warnings.push(`Crosswind ${windAnalysis.crosswind}kt exceeds limit of ${config.max_crosswind_kt}kt on runway ${windAnalysis.runway}`);
+              console.log(`❌ Crosswind ${windAnalysis.crosswind}kt exceeds limit of ${config.max_crosswind_kt}kt`);
+            }
 
-              // Check total wind limit
-              if (windAnalysis.totalWind > config.max_wind_kt) {
-                qualifications.wind_ok = false;
-                qualifications.passed = false;
-                warnings.push(`Wind ${windAnalysis.totalWind}kt exceeds limit of ${config.max_wind_kt}kt (best runway: ${windAnalysis.runway})`);
-                console.log(`❌ Wind ${windAnalysis.totalWind}kt exceeds limit of ${config.max_wind_kt}kt`);
-              }
-              
-              // Check crosswind limit
-              if (windAnalysis.crosswind > config.max_crosswind_kt) {
-                qualifications.wind_ok = false;
-                qualifications.passed = false;
-                warnings.push(`Crosswind ${windAnalysis.crosswind}kt exceeds limit of ${config.max_crosswind_kt}kt on runway ${windAnalysis.runway}`);
-                console.log(`❌ Crosswind ${windAnalysis.crosswind}kt exceeds limit of ${config.max_crosswind_kt}kt`);
-              }
-
-              if (windAnalysis.totalWind <= config.max_wind_kt && windAnalysis.crosswind <= config.max_crosswind_kt) {
-                console.log(`✅ Wind within limits for ${airport.code}`);
-              }
-            } else {
-              console.log(`⚠️ No wind analysis possible for ${airport.code} despite having wind data`);
+            if (windAnalysis.totalWind <= config.max_wind_kt && windAnalysis.crosswind <= config.max_crosswind_kt) {
+              console.log(`✅ Wind within limits for ${airport.code}`);
             }
           } else {
-            console.log(`⚠️ Could not extract wind data from weather string for ${airport.code}`);
+            console.log(`⚠️ No wind analysis possible for ${airport.code} despite having wind data`);
           }
-        } else {
+        } else if (qualifyingRunways.length === 0) {
           console.log(`⚠️ No qualifying runways to check wind for ${airport.code}`);
+        } else {
+          console.log(`⚠️ No wind data in TAF period for ${airport.code}`);
         }
       } else {
-        console.log(`⚠️ No weather data (METAR/TAF) available for ${airport.code}`);
+        console.log(`⚠️ No relevant TAF period found for ${airport.code}`);
       }
 
       const qualifiedAirport: QualifiedAirport = {
