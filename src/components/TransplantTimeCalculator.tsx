@@ -9,7 +9,8 @@ import { LocationAutocomplete } from '@/components/LocationAutocomplete';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
-import { CalendarIcon, MapPin, Plane, Zap, Clock, Car, Timer, AlertTriangle, CheckCircle, Target, ChevronDown } from 'lucide-react';
+import { CalendarIcon, MapPin, Plane, Zap, Clock, Car, Timer, AlertTriangle, CheckCircle, Target, ChevronDown, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { GeocodeResult } from '@/lib/geocoding';
@@ -70,6 +71,44 @@ interface TripResult {
       leg1: WindsAloftData | null;
       leg4: WindsAloftData | null;
     };
+  };
+  airportRejections?: {
+    pickup?: {
+      location: string;
+      nearestAirport: {
+        code: string;
+        name: string;
+      };
+      reasons: string[];
+      windData: {
+        runway: string;
+        totalWind: number;
+        crosswind: number;
+        headwind: number;
+        maxWindLimit: number;
+        maxCrosswindLimit: number;
+        exceedsWindLimit: boolean;
+        exceedsCrosswindLimit: boolean;
+      };
+    } | null;
+    delivery?: {
+      location: string;
+      nearestAirport: {
+        code: string;
+        name: string;
+      };
+      reasons: string[];
+      windData: {
+        runway: string;
+        totalWind: number;
+        crosswind: number;
+        headwind: number;
+        maxWindLimit: number;
+        maxCrosswindLimit: number;
+        exceedsWindLimit: boolean;
+        exceedsCrosswindLimit: boolean;
+      };
+    } | null;
   };
 }
 
@@ -769,6 +808,61 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               </div>
             </CardContent>
           </Card>
+
+          {/* Wind Rejection Warnings */}
+          {tripResult.airportRejections?.pickup && (
+            <Alert variant="destructive" className="mt-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Pickup Airport Rejected Due to Wind Limits</AlertTitle>
+              <AlertDescription>
+                <div className="space-y-1 mt-2">
+                  <div className="font-semibold">
+                    {tripResult.airportRejections.pickup.nearestAirport.code} - {tripResult.airportRejections.pickup.nearestAirport.name}
+                  </div>
+                  <div className="text-sm space-y-0.5">
+                    <div>Best Runway: {tripResult.airportRejections.pickup.windData.runway}</div>
+                    <div>Total Wind: {tripResult.airportRejections.pickup.windData.totalWind}kt (Crosswind: {tripResult.airportRejections.pickup.windData.crosswind}kt, Headwind: {tripResult.airportRejections.pickup.windData.headwind}kt)</div>
+                    <div className="font-semibold text-destructive">
+                      {tripResult.airportRejections.pickup.windData.exceedsWindLimit && 
+                        `Exceeds wind limit: ${tripResult.airportRejections.pickup.windData.maxWindLimit}kt`}
+                      {tripResult.airportRejections.pickup.windData.exceedsCrosswindLimit && 
+                        ` • Exceeds crosswind limit: ${tripResult.airportRejections.pickup.windData.maxCrosswindLimit}kt`}
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    Ground transportation is being used instead.
+                  </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {tripResult.airportRejections?.delivery && (
+            <Alert variant="destructive" className="mt-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Delivery Airport Rejected Due to Wind Limits</AlertTitle>
+              <AlertDescription>
+                <div className="space-y-1 mt-2">
+                  <div className="font-semibold">
+                    {tripResult.airportRejections.delivery.nearestAirport.code} - {tripResult.airportRejections.delivery.nearestAirport.name}
+                  </div>
+                  <div className="text-sm space-y-0.5">
+                    <div>Best Runway: {tripResult.airportRejections.delivery.windData.runway}</div>
+                    <div>Total Wind: {tripResult.airportRejections.delivery.windData.totalWind}kt (Crosswind: {tripResult.airportRejections.delivery.windData.crosswind}kt, Headwind: {tripResult.airportRejections.delivery.windData.headwind}kt)</div>
+                    <div className="font-semibold text-destructive">
+                      {tripResult.airportRejections.delivery.windData.exceedsWindLimit && 
+                        `Exceeds wind limit: ${tripResult.airportRejections.delivery.windData.maxWindLimit}kt`}
+                      {tripResult.airportRejections.delivery.windData.exceedsCrosswindLimit && 
+                        ` • Exceeds crosswind limit: ${tripResult.airportRejections.delivery.windData.maxCrosswindLimit}kt`}
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    Ground transportation is being used instead.
+                  </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
 
 
           <div className="border-t pt-4 mt-4">
