@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Plane, Settings, CloudRain, Heart } from "lucide-react";
+import { Plane, Settings, CloudRain, Heart, Wind } from "lucide-react";
 
 export function FlightOpsConfigPanel() {
   const [config, setConfig] = useState<any>(null);
@@ -182,6 +182,56 @@ export function FlightOpsConfigPanel() {
                 onChange={(e) => updateField('minimum_visibility_sm', parseFloat(e.target.value))}
               />
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Wind Limits */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Wind className="h-5 w-5" />
+            Wind Limits
+          </CardTitle>
+          <CardDescription>
+            Maximum wind and crosswind thresholds (including gusts)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="max_wind">Max Wind (knots)</Label>
+              <Input
+                id="max_wind"
+                type="number"
+                value={config.max_wind_kt || 35}
+                onChange={(e) => updateField('max_wind_kt', parseInt(e.target.value))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Total wind speed including gusts
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="max_crosswind">Max Crosswind (knots)</Label>
+              <Input
+                id="max_crosswind"
+                type="number"
+                value={config.max_crosswind_kt || 15}
+                onChange={(e) => updateField('max_crosswind_kt', parseInt(e.target.value))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Crosswind component including gusts
+              </p>
+            </div>
+          </div>
+          <div className="text-sm text-muted-foreground p-3 bg-muted rounded-lg">
+            <p className="font-semibold mb-2">How wind limits work:</p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>System checks TAF forecast at arrival airports</li>
+              <li>Calculates crosswind for best available runway</li>
+              <li>Airports exceeding limits are <strong>rejected</strong></li>
+              <li>Only suitable airports within limits are selected</li>
+            </ul>
           </div>
         </CardContent>
       </Card>

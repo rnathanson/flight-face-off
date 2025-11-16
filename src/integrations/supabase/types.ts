@@ -283,7 +283,9 @@ export type Database = {
           ground_handling_time_min: number
           id: string
           ifr_requires_instrument_approach: boolean
+          max_crosswind_kt: number | null
           max_range_nm: number
+          max_wind_kt: number | null
           min_runway_length_ft: number
           min_runway_width_ft: number
           minimum_ceiling_ft: number
@@ -314,7 +316,9 @@ export type Database = {
           ground_handling_time_min?: number
           id?: string
           ifr_requires_instrument_approach?: boolean
+          max_crosswind_kt?: number | null
           max_range_nm?: number
+          max_wind_kt?: number | null
           min_runway_length_ft?: number
           min_runway_width_ft?: number
           minimum_ceiling_ft?: number
@@ -345,7 +349,9 @@ export type Database = {
           ground_handling_time_min?: number
           id?: string
           ifr_requires_instrument_approach?: boolean
+          max_crosswind_kt?: number | null
           max_range_nm?: number
+          max_wind_kt?: number | null
           min_runway_length_ft?: number
           min_runway_width_ft?: number
           minimum_ceiling_ft?: number

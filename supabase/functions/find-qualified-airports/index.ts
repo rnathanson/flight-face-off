@@ -8,6 +8,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface WindData {
+  direction: number;
+  speed: number;
+  gust?: number;
+}
+
+interface RunwayWindAnalysis {
+  runway: string;
+  crosswind: number;
+  headwind: number;
+  totalWind: number;
+}
+
 interface QualifiedAirport {
   code: string;
   name: string;
@@ -22,6 +35,7 @@ interface QualifiedAirport {
     lighting_ok: boolean;
     weather_ok: boolean;
     approach_ok: boolean;
+    wind_ok: boolean;
   };
   warnings: string[];
   best_runway?: {
@@ -30,6 +44,75 @@ interface QualifiedAirport {
     width_ft: number;
     surface: string;
   };
+  windAnalysis?: {
+    runway: string;
+    crosswind: number;
+    headwind: number;
+    totalWind: number;
+  };
+}
+
+// Extract wind from METAR/TAF string
+function extractWind(weatherData: string): WindData | null {
+  const match = weatherData.match(/(\d{3})(\d{2,3})(G(\d{2,3}))?KT/);
+  if (!match) return null;
+  
+  return {
+    direction: parseInt(match[1]),
+    speed: parseInt(match[2]),
+    gust: match[4] ? parseInt(match[4]) : undefined
+  };
+}
+
+// Calculate crosswind component
+function calculateCrosswind(windSpeed: number, windDir: number, runwayHeading: number): number {
+  const angleDiff = Math.abs(windDir - runwayHeading);
+  const angleRad = (angleDiff * Math.PI) / 180;
+  return Math.abs(Math.round(windSpeed * Math.sin(angleRad)));
+}
+
+// Calculate headwind component (negative = tailwind)
+function calculateHeadwind(windSpeed: number, windDir: number, runwayHeading: number): number {
+  const angleDiff = Math.abs(windDir - runwayHeading);
+  const angleRad = (angleDiff * Math.PI) / 180;
+  return Math.round(windSpeed * Math.cos(angleRad));
+}
+
+// Get runway heading from runway name (e.g., "14" -> 140, "01L" -> 10)
+function getRunwayHeading(runwayName: string): number {
+  const digits = runwayName.match(/\d+/)?.[0];
+  if (!digits) return 0;
+  return parseInt(digits) * 10;
+}
+
+// Find best runway considering crosswind
+function analyzeBestRunway(wind: WindData, runways: any[]): RunwayWindAnalysis | null {
+  if (runways.length === 0) return null;
+  
+  const windSpeed = wind.gust || wind.speed; // Use gust if present
+  
+  let bestAnalysis: RunwayWindAnalysis | null = null;
+  let lowestCrosswind = Infinity;
+  
+  for (const runway of runways) {
+    const heading = getRunwayHeading(runway.name);
+    const crosswind = calculateCrosswind(windSpeed, wind.direction, heading);
+    const headwind = calculateHeadwind(windSpeed, wind.direction, heading);
+    
+    const analysis: RunwayWindAnalysis = {
+      runway: runway.name,
+      crosswind,
+      headwind,
+      totalWind: windSpeed
+    };
+    
+    if (crosswind < lowestCrosswind) {
+      lowestCrosswind = crosswind;
+      bestAnalysis = analysis;
+    }
+  }
+  
+  return bestAnalysis;
 }
 
 serve(async (req) => {
@@ -128,7 +211,8 @@ serve(async (req) => {
         surface_ok: false,
         lighting_ok: false,
         weather_ok: true,
-        approach_ok: true
+        approach_ok: true,
+        wind_ok: true
       };
 
       const warnings: string[] = [];
@@ -169,11 +253,15 @@ serve(async (req) => {
         }
       }
 
-      // Check weather if available
-      if (airnavData.metar) {
-        const metarParsed = parseMETAR(airnavData.metar.raw);
-        if (metarParsed) {
-          if (metarParsed.flightCategory === 'IFR' || metarParsed.flightCategory === 'LIFR') {
+      // Use TAF for forecast weather (preferred for arrivals), fallback to METAR
+      const weatherData = airnavData.taf || airnavData.metar;
+      let windAnalysis: RunwayWindAnalysis | null = null;
+
+      if (weatherData) {
+        const weatherParsed = parseMETAR(weatherData.raw);
+        if (weatherParsed) {
+          // Check IFR conditions
+          if (weatherParsed.flightCategory === 'IFR' || weatherParsed.flightCategory === 'LIFR') {
             // Check IFR requirements
             if (config.ifr_requires_instrument_approach) {
               const hasApproach = airnavData.has_ils || airnavData.has_rnav;
@@ -184,16 +272,40 @@ serve(async (req) => {
               }
             }
 
-            if (metarParsed.ceiling !== null && metarParsed.ceiling < config.minimum_ceiling_ft) {
+            if (weatherParsed.ceiling !== null && weatherParsed.ceiling < config.minimum_ceiling_ft) {
               qualifications.weather_ok = false;
               qualifications.passed = false;
-              warnings.push(`Ceiling ${metarParsed.ceiling}ft below minimum ${config.minimum_ceiling_ft}ft`);
+              warnings.push(`Ceiling ${weatherParsed.ceiling}ft below minimum ${config.minimum_ceiling_ft}ft`);
             }
 
-            if (metarParsed.visibility < config.minimum_visibility_sm) {
+            if (weatherParsed.visibility < config.minimum_visibility_sm) {
               qualifications.weather_ok = false;
               qualifications.passed = false;
-              warnings.push(`Visibility ${metarParsed.visibility}SM below minimum ${config.minimum_visibility_sm}SM`);
+              warnings.push(`Visibility ${weatherParsed.visibility}SM below minimum ${config.minimum_visibility_sm}SM`);
+            }
+          }
+        }
+
+        // Check wind limits if we have qualifying runways
+        if (qualifyingRunways.length > 0) {
+          const windData = extractWind(weatherData.raw);
+          if (windData) {
+            windAnalysis = analyzeBestRunway(windData, qualifyingRunways);
+            
+            if (windAnalysis) {
+              // Check total wind limit
+              if (windAnalysis.totalWind > config.max_wind_kt) {
+                qualifications.wind_ok = false;
+                qualifications.passed = false;
+                warnings.push(`Wind ${windAnalysis.totalWind}kt exceeds limit of ${config.max_wind_kt}kt (best runway: ${windAnalysis.runway})`);
+              }
+              
+              // Check crosswind limit
+              if (windAnalysis.crosswind > config.max_crosswind_kt) {
+                qualifications.wind_ok = false;
+                qualifications.passed = false;
+                warnings.push(`Crosswind ${windAnalysis.crosswind}kt exceeds limit of ${config.max_crosswind_kt}kt on runway ${windAnalysis.runway}`);
+              }
             }
           }
         }
@@ -208,7 +320,13 @@ serve(async (req) => {
         elevation_ft: airnavData.elevation_ft || 0,
         qualifications,
         warnings,
-        best_runway: qualifyingRunways.length > 0 ? qualifyingRunways[0] : undefined
+        best_runway: qualifyingRunways.length > 0 ? qualifyingRunways[0] : undefined,
+        windAnalysis: windAnalysis ? {
+          runway: windAnalysis.runway,
+          crosswind: windAnalysis.crosswind,
+          headwind: windAnalysis.headwind,
+          totalWind: windAnalysis.totalWind
+        } : undefined
       };
 
       if (qualifications.passed) {
