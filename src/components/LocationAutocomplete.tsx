@@ -126,14 +126,14 @@ export function LocationAutocomplete({
                   <div className="flex items-start gap-3">
                     <MapPin className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-1" />
                     <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-base mb-0.5">
+                        {suggestion.name || suggestion.address}
+                      </div>
                       {suggestion.name && (
-                        <div className="font-semibold text-base mb-1">
-                          {suggestion.name}
+                        <div className="text-xs text-muted-foreground">
+                          {suggestion.address}
                         </div>
                       )}
-                      <div className={`text-sm ${suggestion.name ? 'text-muted-foreground' : ''}`}>
-                        {suggestion.address}
-                      </div>
                     </div>
                   </div>
                 </button>
