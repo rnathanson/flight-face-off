@@ -412,7 +412,7 @@ export const DemoTripPredictions = ({
         return;
       }
 
-      if (!tripData) {
+      if (!tripData || !tripData.totalTime) {
         toast({
           title: "Calculation Error",
           description: "No trip data returned",
@@ -423,9 +423,9 @@ export const DemoTripPredictions = ({
       }
 
       console.log('Trip calculation complete:', {
-        totalTime: tripData.totalTimeMinutes,
-        pickupAirport: tripData.pickupAirport?.code,
-        destinationAirport: tripData.destinationAirport?.code
+        totalTime: tripData.totalTime,
+        pickupAirport: tripData.route?.pickupAirport?.code,
+        destinationAirport: tripData.route?.destinationAirport?.code
       });
 
       // Store trip calculation for display
@@ -433,20 +433,20 @@ export const DemoTripPredictions = ({
         origin: selectedOrigin,
         destination: selectedDestination,
         originAirport: {
-          code: tripData.pickupAirport?.code || 'UNKNOWN',
-          name: tripData.pickupAirport?.name || 'Unknown',
-          lat: tripData.pickupAirport?.lat || 0,
-          lng: tripData.pickupAirport?.lng || 0,
-          distance_nm: tripData.pickupGroundDistance || 0
+          code: tripData.route.pickupAirport?.code || 'UNKNOWN',
+          name: tripData.route.pickupAirport?.name || 'Unknown',
+          lat: tripData.route.pickupAirport?.lat || 0,
+          lng: tripData.route.pickupAirport?.lng || 0,
+          distance_nm: tripData.route.pickupAirport?.distance_from_pickup || 0
         },
         destAirport: {
-          code: tripData.destinationAirport?.code || 'UNKNOWN',
-          name: tripData.destinationAirport?.name || 'Unknown',
-          lat: tripData.destinationAirport?.lat || 0,
-          lng: tripData.destinationAirport?.lng || 0,
-          distance_nm: tripData.deliveryGroundDistance || 0
+          code: tripData.route.destinationAirport?.code || 'UNKNOWN',
+          name: tripData.route.destinationAirport?.name || 'Unknown',
+          lat: tripData.route.destinationAirport?.lat || 0,
+          lng: tripData.route.destinationAirport?.lng || 0,
+          distance_nm: tripData.route.destinationAirport?.distance_from_delivery || 0
         },
-        baseTime: tripData.totalTimeMinutes
+        baseTime: tripData.totalTime
       });
 
       // Calculate mission success using accurate trip time
@@ -459,7 +459,7 @@ export const DemoTripPredictions = ({
           surgicalTeamIds: surgicalTeam.map(s => s.id),
           coordinatorId: selectedCoordinator?.id,
           organType,
-          estimatedTimeMinutes: tripData.totalTimeMinutes, // Use real trip time
+          estimatedTimeMinutes: tripData.totalTime, // Use real trip time
           originHospital: selectedOrigin.displayName,
           destinationHospital: selectedDestination.displayName
         }
@@ -1237,7 +1237,7 @@ export const DemoTripPredictions = ({
                 </div>
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>Procurement</span>
-                  <span>{(tripCalc.baseTime / 60).toFixed(1)}h transport</span>
+                  <span>{tripCalc.baseTime ? (tripCalc.baseTime / 60).toFixed(1) : '0'}h transport</span>
                   <span>{successAnalysis.missionType.max_viability_hours}h max</span>
                 </div>
               </div>
@@ -1302,7 +1302,9 @@ export const DemoTripPredictions = ({
               <div className="p-3 bg-accent/10 rounded-md">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Total Estimated Time</span>
-                  <span className="text-lg font-bold text-primary">{Math.floor(tripCalc.baseTime / 60)}h {tripCalc.baseTime % 60}m</span>
+                  <span className="text-lg font-bold text-primary">
+                    {tripCalc.baseTime ? `${Math.floor(tripCalc.baseTime / 60)}h ${tripCalc.baseTime % 60}m` : 'Calculating...'}
+                  </span>
                 </div>
               </div>
             </CardContent>
