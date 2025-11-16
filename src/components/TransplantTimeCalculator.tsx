@@ -577,12 +577,9 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold mb-2">Aviation Transplant Logistics</h1>
-        <p className="text-lg text-muted-foreground mb-2">
-          Advanced logistics planning for time-critical organ delivery
-        </p>
-        <p className="text-sm text-muted-foreground/70">
-          Powered by real-time weather intelligence, traffic analysis, and FAA routing optimization
+        <h1 className="text-4xl font-bold mb-3">Medical Transport Time Calculator</h1>
+        <p className="text-lg text-muted-foreground">
+          AI-powered trip planning with real-time weather, traffic, and routing intelligence
         </p>
       </div>
 
