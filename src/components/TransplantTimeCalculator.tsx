@@ -708,45 +708,45 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             
             <div className="grid md:grid-cols-3 gap-3">
               {/* Conservative Estimate */}
-              <div className="border-2 rounded-sm bg-card border-amber-500/30 bg-amber-50/5">
-                <div className="px-4 py-3 border-b bg-amber-500/10">
+              <div className="border rounded-sm bg-card">
+                <div className="px-4 py-3 border-b bg-muted/20">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-amber-700 uppercase tracking-wide">Conservative</span>
-                    <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Conservative</span>
+                    <div className="h-1 w-1 rounded-full bg-muted-foreground/40" />
                   </div>
                 </div>
                 <div className="px-4 py-4">
-                  <div className="text-2xl font-semibold text-amber-700">
+                  <div className="text-2xl font-semibold text-foreground">
                     {Math.floor((tripResult.totalTime * 1.35) / 60)}h {Math.round((tripResult.totalTime * 1.35) % 60)}m
                   </div>
                 </div>
               </div>
 
               {/* Expected Estimate */}
-              <div className="border-2 rounded-sm bg-card border-blue-500/30 bg-blue-50/5">
-                <div className="px-4 py-3 border-b bg-blue-500/10">
+              <div className="border-2 rounded-sm bg-card border-primary/40">
+                <div className="px-4 py-3 border-b bg-primary/5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-blue-700 uppercase tracking-wide">Expected</span>
-                    <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                    <span className="text-xs font-medium text-primary uppercase tracking-wide">Expected</span>
+                    <div className="h-1 w-1 rounded-full bg-primary" />
                   </div>
                 </div>
                 <div className="px-4 py-4">
-                  <div className="text-2xl font-semibold text-blue-700">
+                  <div className="text-2xl font-semibold text-foreground">
                     {Math.floor(tripResult.totalTime / 60)}h {Math.round(tripResult.totalTime % 60)}m
                   </div>
                 </div>
               </div>
 
               {/* Optimistic Estimate */}
-              <div className="border-2 rounded-sm bg-card border-green-500/30 bg-green-50/5">
-                <div className="px-4 py-3 border-b bg-green-500/10">
+              <div className="border rounded-sm bg-card">
+                <div className="px-4 py-3 border-b bg-muted/20">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-green-700 uppercase tracking-wide">Optimistic</span>
-                    <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Optimistic</span>
+                    <div className="h-1 w-1 rounded-full bg-muted-foreground/40" />
                   </div>
                 </div>
                 <div className="px-4 py-4">
-                  <div className="text-2xl font-semibold text-green-700">
+                  <div className="text-2xl font-semibold text-foreground">
                     {Math.floor((tripResult.totalTime * 0.85) / 60)}h {Math.round((tripResult.totalTime * 0.85) % 60)}m
                   </div>
                 </div>

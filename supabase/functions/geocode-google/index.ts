@@ -104,16 +104,20 @@ serve(async (req) => {
 
       const result = detailsData.result;
       
-      // Use Google's place name unless it's just the street address
+      // Determine if we have a named place or just an address
       const addressFirstPart = result.formatted_address?.split(',')[0].trim();
-      const placeName = result.name && result.name !== addressFirstPart
+      const hasPlaceName = result.name && result.name !== addressFirstPart;
+      
+      // If we have a business/place name, use it. Otherwise use the address first part
+      const placeName = hasPlaceName 
         ? result.name
         : addressFirstPart || prediction.description.split(',')[0];
       
+      // Always provide both name and full address for comprehensive display
       return {
         name: placeName,
         address: result.formatted_address,
-        display_name: placeName,
+        display_name: result.formatted_address, // Use full address as display_name for clarity
         lat: result.geometry.location.lat.toString(),
         lon: result.geometry.location.lng.toString(),
         place_id: prediction.place_id,
@@ -160,13 +164,19 @@ async function geocodingFallback(query: string, limit: number) {
     throw new Error(`Google Geocoding error: ${data.status}`);
   }
 
-  const results = data.results.slice(0, limit).map(result => ({
-    address: result.formatted_address,
-    display_name: result.formatted_address,
-    lat: result.geometry.location.lat.toString(),
-    lon: result.geometry.location.lng.toString(),
-    place_id: result.place_id,
-  }));
+  const results = data.results.slice(0, limit).map(result => {
+    // For geocoding results, use the first part of the address as the name
+    const addressFirstPart = result.formatted_address?.split(',')[0].trim();
+    
+    return {
+      name: addressFirstPart,
+      address: result.formatted_address,
+      display_name: result.formatted_address,
+      lat: result.geometry.location.lat.toString(),
+      lon: result.geometry.location.lng.toString(),
+      place_id: result.place_id,
+    };
+  });
 
   return new Response(
     JSON.stringify(results),
