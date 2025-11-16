@@ -479,26 +479,26 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               </p>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Origin Hospital */}
+              {/* Pick Up Hospital */}
               <div className="space-y-2">
                 <LocationAutocomplete
                   value={originHospital}
                   onChange={setOriginHospital}
                   onLocationSelect={setSelectedOrigin}
                   placeholder="Enter hospital name or address"
-                  label="Origin Hospital"
+                  label="Pick Up Hospital"
                   selectedLocation={selectedOrigin}
                 />
               </div>
 
-              {/* Destination Hospital */}
+              {/* Delivery Hospital */}
               <div className="space-y-2">
                 <LocationAutocomplete
                   value={destinationHospital}
                   onChange={setDestinationHospital}
                   onLocationSelect={setSelectedDestination}
                   placeholder="Enter hospital name or address"
-                  label="Destination Hospital"
+                  label="Delivery Hospital"
                   selectedLocation={selectedDestination}
                 />
               </div>
