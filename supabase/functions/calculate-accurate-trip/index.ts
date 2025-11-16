@@ -43,10 +43,17 @@ serve(async (req) => {
     };
 
     // Get flight ops config
-    const { data: config } = await supabase
+    const { data: config, error: configError } = await supabase
       .from('flight_ops_config')
       .select('*')
       .single();
+
+    if (configError || !config) {
+      console.error('Failed to load flight ops config:', configError);
+      throw new Error('Flight operations configuration not found');
+    }
+
+    console.log(`Using config: cruise=${config.cruise_speed_ktas}kts, climb=${config.climb_rate_fpm}fpm, descent=${config.descent_rate_fpm}fpm`);
 
     // Calculate distances from KFRG (50nm threshold for Long Island)
     console.log('Pickup Location:', { lat: pickupLocation.lat, lng: pickupLocation.lng, display: pickupLocation.displayName });
@@ -640,8 +647,11 @@ async function calculateFlightTime(
   
   const cruiseDistanceNM = Math.max(0, distanceNM * 1.05 - climbNM - descentNM);
   // Negative headwind = tailwind, which increases groundspeed
-  const cruiseGroundSpeed = Math.max(50, config.cruise_speed_ktas - headwind); // Clamp to minimum 50 kt
+  const cruiseSpeed = config.cruise_speed_ktas || 440; // Fallback to PC-24 default
+  const cruiseGroundSpeed = Math.max(50, cruiseSpeed - headwind); // Clamp to minimum 50 kt
   const cruiseTimeMin = cruiseDistanceNM / cruiseGroundSpeed * 60;
+  
+  console.log(`Flight time calc: cruise=${cruiseSpeed}kts, headwind=${headwind.toFixed(1)}kt, GS=${cruiseGroundSpeed.toFixed(1)}kt, dist=${cruiseDistanceNM.toFixed(1)}nm, time=${cruiseTimeMin.toFixed(1)}min`);
   
   const taxiTime = config.taxi_time_regional_airport_min;
   const bufferTime = config.takeoff_landing_buffer_min;
