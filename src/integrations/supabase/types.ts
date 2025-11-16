@@ -280,6 +280,7 @@ export type Database = {
           descent_rate_fpm: number
           fuel_burn_cruise_lbs_per_hr: number
           fuel_capacity_lbs: number
+          ground_handling_time_min: number
           id: string
           ifr_requires_instrument_approach: boolean
           max_range_nm: number
@@ -287,6 +288,7 @@ export type Database = {
           min_runway_width_ft: number
           minimum_ceiling_ft: number
           minimum_visibility_sm: number
+          organ_viability_hours: Json
           requires_lighting: boolean
           requires_paved_surface: boolean
           reserve_fuel_minutes: number
@@ -309,6 +311,7 @@ export type Database = {
           descent_rate_fpm?: number
           fuel_burn_cruise_lbs_per_hr?: number
           fuel_capacity_lbs?: number
+          ground_handling_time_min?: number
           id?: string
           ifr_requires_instrument_approach?: boolean
           max_range_nm?: number
@@ -316,6 +319,7 @@ export type Database = {
           min_runway_width_ft?: number
           minimum_ceiling_ft?: number
           minimum_visibility_sm?: number
+          organ_viability_hours?: Json
           requires_lighting?: boolean
           requires_paved_surface?: boolean
           reserve_fuel_minutes?: number
@@ -338,6 +342,7 @@ export type Database = {
           descent_rate_fpm?: number
           fuel_burn_cruise_lbs_per_hr?: number
           fuel_capacity_lbs?: number
+          ground_handling_time_min?: number
           id?: string
           ifr_requires_instrument_approach?: boolean
           max_range_nm?: number
@@ -345,6 +350,7 @@ export type Database = {
           min_runway_width_ft?: number
           minimum_ceiling_ft?: number
           minimum_visibility_sm?: number
+          organ_viability_hours?: Json
           requires_lighting?: boolean
           requires_paved_surface?: boolean
           reserve_fuel_minutes?: number

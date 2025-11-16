@@ -34,7 +34,14 @@ const DEFAULT_CONFIG = {
   fuel_burn_cruise_lbs_per_hr: 900,
   reserve_fuel_minutes: 45,
   acceptable_surfaces: ['ASPH', 'CONC'],
-  acceptable_approaches: ['ILS', 'RNAV', 'LOC', 'VOR']
+  acceptable_approaches: ['ILS', 'RNAV', 'LOC', 'VOR'],
+  organ_viability_hours: {
+    heart: { min: 4, max: 6 },
+    lungs: { min: 4, max: 6 },
+    liver: { min: 8, max: 12 },
+    pancreas: { min: 0, max: 12 },
+    kidneys: { min: 24, max: 36 }
+  }
 };
 
 Deno.serve(async (req) => {
