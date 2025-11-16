@@ -79,6 +79,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
   const [calculating, setCalculating] = useState(false);
   const [loadingStage, setLoadingStage] = useState<string>('');
   const [tripResult, setTripResult] = useState<TripResult | null>(null);
+  const [preferredPickupAirport, setPreferredPickupAirport] = useState<string>('');
+  const [preferredDestinationAirport, setPreferredDestinationAirport] = useState<string>('');
+  const [showPickupAirportPrefs, setShowPickupAirportPrefs] = useState(false);
+  const [showDestinationAirportPrefs, setShowDestinationAirportPrefs] = useState(false);
   const { toast } = useToast();
   
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -221,7 +225,9 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
           pickupLocation: { lat: selectedOrigin.lat, lng: selectedOrigin.lon },
           deliveryLocation: { lat: selectedDestination.lat, lng: selectedDestination.lon },
           departureDateTime: departureDateTime.toISOString(),
-          passengers: passengerCount
+          passengers: passengerCount,
+          preferredPickupAirport: preferredPickupAirport || undefined,
+          preferredDestinationAirport: preferredDestinationAirport || undefined
         }
       });
 
@@ -557,6 +563,66 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                   selectedLocation={selectedDestination}
                 />
               </div>
+
+              <Collapsible
+                open={showPickupAirportPrefs}
+                onOpenChange={setShowPickupAirportPrefs}
+                className="space-y-2"
+              >
+                <CollapsibleTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-between text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Plane className="w-4 h-4" />
+                      Airport Preferences (Optional)
+                    </span>
+                    <ChevronDown className={cn(
+                      "w-4 h-4 transition-transform",
+                      showPickupAirportPrefs && "transform rotate-180"
+                    )} />
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4 pt-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="pickup-airport" className="text-sm text-muted-foreground">
+                      Preferred Pickup Airport
+                    </Label>
+                    <input
+                      id="pickup-airport"
+                      type="text"
+                      value={preferredPickupAirport}
+                      onChange={(e) => setPreferredPickupAirport(e.target.value.toUpperCase())}
+                      placeholder="e.g., KRDU, KJFK"
+                      maxLength={4}
+                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm uppercase"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Enter a 4-letter airport code (ICAO format). Leave blank for automatic selection.
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="destination-airport" className="text-sm text-muted-foreground">
+                      Preferred Destination Airport
+                    </Label>
+                    <input
+                      id="destination-airport"
+                      type="text"
+                      value={preferredDestinationAirport}
+                      onChange={(e) => setPreferredDestinationAirport(e.target.value.toUpperCase())}
+                      placeholder="e.g., KRDU, KJFK"
+                      maxLength={4}
+                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm uppercase"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Enter a 4-letter airport code (ICAO format). Leave blank for automatic selection.
+                    </p>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

@@ -24,7 +24,9 @@ serve(async (req) => {
       pickupLocation,
       deliveryLocation,
       departureDateTime,
-      passengers = 4
+      passengers = 4,
+      preferredPickupAirport,
+      preferredDestinationAirport
     } = await req.json();
 
     console.log('Calculating 5-leg trip from KFRG home base...');
@@ -63,30 +65,84 @@ serve(async (req) => {
     let pickupAirport = KFRG;
     let destinationAirport = KFRG;
 
-    // If pickup is NOT on Long Island, find nearest qualified airport
-    if (!isPickupOnLongIsland) {
-      const pickupAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
-        body: { location: pickupLocation, maxDistance: 50 }
-      });
-      const pickupAirports = pickupAirportsResponse.data?.qualified || [];
-      if (pickupAirports.length > 0) {
-        pickupAirport = pickupAirports[0];
+    // Check if user specified a preferred pickup airport
+    if (preferredPickupAirport) {
+      console.log(`User specified preferred pickup airport: ${preferredPickupAirport}`);
+      const { data: airportData } = await supabase
+        .from('airports')
+        .select('*')
+        .eq('icao_code', preferredPickupAirport.toUpperCase())
+        .single();
+      
+      if (airportData) {
+        pickupAirport = {
+          code: airportData.icao_code,
+          name: airportData.name,
+          lat: airportData.lat,
+          lng: airportData.lng,
+          elevation_ft: airportData.elevation_ft,
+          best_runway: 'N/A'
+        };
+        console.log(`Using preferred pickup airport: ${pickupAirport.code} (${pickupAirport.name})`);
+      } else {
+        console.log(`Preferred pickup airport ${preferredPickupAirport} not found in database, using automatic selection`);
       }
     }
 
-    // If delivery is NOT on Long Island, find nearest qualified airport  
-    // BUT if delivery IS on Long Island, destination airport should ALWAYS be KFRG
-    if (!isDeliveryOnLongIsland) {
-      const deliveryAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
-        body: { location: deliveryLocation, maxDistance: 50 }
-      });
-      const deliveryAirports = deliveryAirportsResponse.data?.qualified || [];
-      if (deliveryAirports.length > 0) {
-        destinationAirport = deliveryAirports[0];
+    // If no preferred airport or not found, use automatic selection
+    if (!preferredPickupAirport || pickupAirport.code === KFRG.code) {
+      // If pickup is NOT on Long Island, find nearest qualified airport
+      if (!isPickupOnLongIsland) {
+        const pickupAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
+          body: { location: pickupLocation, maxDistance: 50 }
+        });
+        const pickupAirports = pickupAirportsResponse.data?.qualified || [];
+        if (pickupAirports.length > 0) {
+          pickupAirport = pickupAirports[0];
+        }
       }
-    } else {
-      // Delivery IS on Long Island, so destination airport is KFRG
-      destinationAirport = KFRG;
+    }
+
+    // Check if user specified a preferred destination airport
+    if (preferredDestinationAirport) {
+      console.log(`User specified preferred destination airport: ${preferredDestinationAirport}`);
+      const { data: airportData } = await supabase
+        .from('airports')
+        .select('*')
+        .eq('icao_code', preferredDestinationAirport.toUpperCase())
+        .single();
+      
+      if (airportData) {
+        destinationAirport = {
+          code: airportData.icao_code,
+          name: airportData.name,
+          lat: airportData.lat,
+          lng: airportData.lng,
+          elevation_ft: airportData.elevation_ft,
+          best_runway: 'N/A'
+        };
+        console.log(`Using preferred destination airport: ${destinationAirport.code} (${destinationAirport.name})`);
+      } else {
+        console.log(`Preferred destination airport ${preferredDestinationAirport} not found in database, using automatic selection`);
+      }
+    }
+
+    // If no preferred airport or not found, use automatic selection
+    if (!preferredDestinationAirport || destinationAirport.code === KFRG.code) {
+      // If delivery is NOT on Long Island, find nearest qualified airport  
+      // BUT if delivery IS on Long Island, destination airport should ALWAYS be KFRG
+      if (!isDeliveryOnLongIsland) {
+        const deliveryAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
+          body: { location: deliveryLocation, maxDistance: 50 }
+        });
+        const deliveryAirports = deliveryAirportsResponse.data?.qualified || [];
+        if (deliveryAirports.length > 0) {
+          destinationAirport = deliveryAirports[0];
+        }
+      } else {
+        // Delivery IS on Long Island, so destination airport is KFRG
+        destinationAirport = KFRG;
+      }
     }
 
     console.log(`Selected Airports - Pickup: ${pickupAirport.code} (${pickupAirport.name}), Destination: ${destinationAirport.code} (${destinationAirport.name})`);
