@@ -1,30 +1,29 @@
-import { useState, useRef, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useEffect, useRef } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { LocationAutocomplete } from '@/components/LocationAutocomplete';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Slider } from '@/components/ui/slider';
-import { CalendarIcon, MapPin, Plane, Zap, Clock, Car, Timer, AlertTriangle, CheckCircle, Target } from 'lucide-react';
-import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { Plane, MapPin, Clock, Calendar, Users, Timer, Zap, Car, Target, Hospital, Navigation } from 'lucide-react';
 import { GeocodeResult } from '@/lib/geocoding';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
+import { format, addMinutes } from 'date-fns';
 
 interface TripSegment {
-  type: 'ground' | 'flight';
+  type: 'flight' | 'ground' | 'hospital_stay';
   from: string;
   to: string;
   duration: number;
   distance: number;
+  route?: string;
   traffic?: string;
-  polyline?: number[][];
+  polyline?: string;
+  note?: string;
 }
 
 interface Airport {
@@ -32,715 +31,596 @@ interface Airport {
   name: string;
   lat: number;
   lng: number;
-  distance_nm?: number;
 }
 
 interface TripResult {
   segments: TripSegment[];
   totalTime: number;
-  arrivalTime: Date;
-  route: {
-    origin: GeocodeResult;
-    destination: GeocodeResult;
-    originAirport: Airport;
-    destAirport: Airport;
-  };
+  arrivalTime: string;
+  advisories: string[];
+  pickupAirport: Airport;
+  destinationAirport: Airport;
+  pickupLocation: GeocodeResult;
+  deliveryLocation: GeocodeResult;
+  departureTime: string;
 }
 
 interface TransplantTimeCalculatorProps {
-  onAIPlatformClick?: (tripData: any) => void;
+  onAIPlatformClick?: () => void;
 }
 
-export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCalculatorProps) {
-  const [originHospital, setOriginHospital] = useState('');
-  const [destinationHospital, setDestinationHospital] = useState('');
+export const TransplantTimeCalculator = ({ onAIPlatformClick }: TransplantTimeCalculatorProps) => {
+  const [origin, setOrigin] = useState('');
+  const [destination, setDestination] = useState('');
   const [selectedOrigin, setSelectedOrigin] = useState<GeocodeResult | null>(null);
   const [selectedDestination, setSelectedDestination] = useState<GeocodeResult | null>(null);
-  const [departureDate, setDepartureDate] = useState<Date>(new Date());
-  const [departureTime, setDepartureTime] = useState(() => {
-    const now = new Date();
-    return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-  });
-  const [passengerCount, setPassengerCount] = useState(2);
+  const [departureDate, setDepartureDate] = useState('');
+  const [departureTime, setDepartureTime] = useState('');
+  const [passengers, setPassengers] = useState('4');
   const [calculating, setCalculating] = useState(false);
-  const [loadingStage, setLoadingStage] = useState<string>('');
+  const [loadingStage, setLoadingStage] = useState(0);
   const [tripResult, setTripResult] = useState<TripResult | null>(null);
-  const { toast } = useToast();
-  
-  const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<mapboxgl.Map | null>(null);
   const [mapboxToken, setMapboxToken] = useState<string>('');
 
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const map = useRef<mapboxgl.Map | null>(null);
+
+  const { toast } = useToast();
+
   useEffect(() => {
-    const fetchToken = async () => {
+    const fetchMapboxToken = async () => {
       try {
         const { data, error } = await supabase.functions.invoke('get-mapbox-token');
         if (error) throw error;
         setMapboxToken(data.token);
       } catch (error) {
-        console.error('Error fetching Mapbox token:', error);
+        console.error('Failed to fetch Mapbox token:', error);
       }
     };
-    fetchToken();
+    fetchMapboxToken();
+
+    const today = new Date();
+    setDepartureDate(format(today, 'yyyy-MM-dd'));
+    setDepartureTime(format(today, 'HH:mm'));
   }, []);
 
   const formatDuration = (minutes: number): string => {
     const hours = Math.floor(minutes / 60);
-    const mins = Math.round(minutes % 60);
-    return `${hours}h ${mins}m`;
+    const mins = minutes % 60;
+    if (hours > 0) {
+      return `${hours}h ${mins}m`;
+    }
+    return `${mins}m`;
   };
+
+  const loadingStages = [
+    { message: 'Analyzing optimal flight route...', icon: Plane },
+    { message: 'Analyzing weather patterns...', icon: Zap },
+    { message: 'Analyzing traffic patterns...', icon: Car },
+    { message: 'Calculating ground transport...', icon: Target },
+    { message: 'Finalizing time estimates...', icon: Clock }
+  ];
 
   const calculateTrip = async () => {
     if (!selectedOrigin || !selectedDestination) {
       toast({
-        title: 'Missing Information',
-        description: 'Please fill in all required fields',
-        variant: 'destructive',
+        title: "Missing Information",
+        description: "Please select both pickup and delivery locations",
+        variant: "destructive"
       });
       return;
     }
 
     setCalculating(true);
-    
+    setLoadingStage(0);
+
+    // Simulate intelligent loading stages
+    const stageInterval = setInterval(() => {
+      setLoadingStage(prev => {
+        if (prev >= 4) {
+          clearInterval(stageInterval);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 800);
+
     try {
-      setLoadingStage('Analyzing optimal flight route...');
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      setLoadingStage('Checking live weather conditions...');
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      setLoadingStage('Calculating real-time traffic patterns...');
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      setLoadingStage('Evaluating ATC delays and restrictions...');
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      setLoadingStage('Computing door-to-door timeline...');
-      
-      const [hours, minutes] = departureTime.split(':').map(Number);
-      const departureDateTime = new Date(departureDate);
-      departureDateTime.setHours(hours, minutes, 0, 0);
+      const departureDateTime = `${departureDate}T${departureTime}:00`;
 
       const { data, error } = await supabase.functions.invoke('calculate-accurate-trip', {
         body: {
-          pickupLocation: { lat: selectedOrigin.lat, lng: selectedOrigin.lon },
-          deliveryLocation: { lat: selectedDestination.lat, lng: selectedDestination.lon },
-          departureDateTime: departureDateTime.toISOString(),
-          passengers: passengerCount
+          pickupLocation: selectedOrigin,
+          deliveryLocation: selectedDestination,
+          departureDateTime,
+          passengers: parseInt(passengers)
         }
       });
 
-      if (error) {
-        console.error('Error calculating trip:', error);
-        throw error;
+      clearInterval(stageInterval);
+
+      if (error) throw error;
+
+      setTripResult({
+        ...data,
+        pickupLocation: selectedOrigin,
+        deliveryLocation: selectedDestination,
+        departureTime: departureDateTime
+      });
+
+      toast({
+        title: "Trip Calculated",
+        description: `Total time: ${formatDuration(data.totalTime)}`
+      });
+
+      // Initialize map after calculation
+      if (mapboxToken && data) {
+        setTimeout(() => initializeMap(data), 100);
       }
-
-      const result: TripResult = {
-        segments: data.segments,
-        totalTime: data.totalTime,
-        arrivalTime: new Date(data.arrivalTime),
-        route: {
-          origin: selectedOrigin,
-          destination: selectedDestination,
-          originAirport: data.route.departureAirport,
-          destAirport: data.route.arrivalAirport,
-        }
-      };
-
-      setTripResult(result);
-      
-      setTimeout(() => {
-        if (mapboxToken && mapContainer.current && !map.current) {
-          initializeMap(result);
-        } else if (map.current && mapboxToken) {
-          updateMap(result, data.segments);
-        }
-      }, 100);
-      
-      toast({
-        title: 'Trip Calculated',
-        description: `Total time: ${formatDuration(result.totalTime)}`,
-      });
     } catch (error) {
-      console.error('Trip calculation error:', error);
+      console.error('Calculation error:', error);
       toast({
-        title: 'Calculation Error',
-        description: error instanceof Error ? error.message : 'Failed to calculate trip',
-        variant: 'destructive',
+        title: "Calculation Failed",
+        description: "Unable to calculate trip time. Please try again.",
+        variant: "destructive"
       });
     } finally {
       setCalculating(false);
-      setLoadingStage('');
+      setLoadingStage(0);
     }
   };
 
   const initializeMap = (result: TripResult) => {
     if (!mapContainer.current || !mapboxToken) return;
 
-    mapboxgl.accessToken = mapboxToken;
+    if (map.current) {
+      map.current.remove();
+    }
 
-    const { origin, destination, originAirport, destAirport } = result.route;
-    
-    const centerLng = (origin.lon + destination.lon) / 2;
-    const centerLat = (origin.lat + destination.lat) / 2;
+    mapboxgl.accessToken = mapboxToken;
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/light-v11',
-      center: [centerLng, centerLat],
-      zoom: 6,
-      attributionControl: false,
+      center: [-73.4134, 40.7289],
+      zoom: 6
     });
-
-    map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
     map.current.on('load', () => {
       updateMap(result);
     });
   };
 
-  const updateMap = (result: TripResult, segments?: TripSegment[]) => {
+  const updateMap = (result: TripResult) => {
     if (!map.current) return;
 
-    ['route-base', 'route-animated', 'route-ground-1', 'route-ground-2', 'route-ground-3', 'route-ground-4', 'route-ground-5'].forEach((id) => {
-      if (map.current?.getLayer(id)) map.current.removeLayer(id);
-      if (map.current?.getSource(id)) map.current.removeSource(id);
-    });
+    const KFRG = { lng: -73.4134, lat: 40.7289 };
 
-    document.querySelectorAll('.mapboxgl-marker').forEach((el) => el.remove());
-
-    const { origin, destination, originAirport, destAirport } = result.route;
-
-    const KFRG = { lat: 40.728889, lng: -73.413333 };
-
+    // Add markers
     new mapboxgl.Marker({ color: '#3b82f6' })
       .setLngLat([KFRG.lng, KFRG.lat])
-      .setPopup(new mapboxgl.Popup().setHTML('<h3>KFRG - Home Base</h3>'))
+      .setPopup(new mapboxgl.Popup().setHTML('<strong>KFRG Home Base</strong>'))
       .addTo(map.current);
 
     new mapboxgl.Marker({ color: '#10b981' })
-      .setLngLat([originAirport.lng, originAirport.lat])
-      .setPopup(new mapboxgl.Popup().setHTML(`<h3>${originAirport.code}</h3><p>${originAirport.name}</p>`))
-      .addTo(map.current);
-
-    new mapboxgl.Marker({ color: '#10b981' })
-      .setLngLat([origin.lon, origin.lat])
-      .setPopup(new mapboxgl.Popup().setHTML(`<h3>Pickup Hospital</h3><p>${origin.displayName.split(',')[0]}</p>`))
+      .setLngLat([result.pickupAirport.lng, result.pickupAirport.lat])
+      .setPopup(new mapboxgl.Popup().setHTML(`<strong>${result.pickupAirport.code}</strong><br/>${result.pickupAirport.name}`))
       .addTo(map.current);
 
     new mapboxgl.Marker({ color: '#ef4444' })
-      .setLngLat([destination.lon, destination.lat])
-      .setPopup(new mapboxgl.Popup().setHTML(`<h3>Delivery Hospital</h3><p>${destination.displayName.split(',')[0]}</p>`))
+      .setLngLat([result.pickupLocation.lon, result.pickupLocation.lat])
+      .setPopup(new mapboxgl.Popup().setHTML('<strong>Pickup Hospital</strong>'))
       .addTo(map.current);
 
-    if (destAirport.code !== 'KFRG') {
-      new mapboxgl.Marker({ color: '#ef4444' })
-        .setLngLat([destAirport.lng, destAirport.lat])
-        .setPopup(new mapboxgl.Popup().setHTML(`<h3>${destAirport.code}</h3><p>${destAirport.name}</p>`))
-        .addTo(map.current);
-    }
+    new mapboxgl.Marker({ color: '#8b5cf6' })
+      .setLngLat([result.destinationAirport.lng, result.destinationAirport.lat])
+      .setPopup(new mapboxgl.Popup().setHTML(`<strong>${result.destinationAirport.code}</strong><br/>${result.destinationAirport.name}`))
+      .addTo(map.current);
 
-    map.current.addSource('route-base', {
-      type: 'geojson',
-      data: {
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'LineString',
-          coordinates: [
-            [KFRG.lng, KFRG.lat],
-            [originAirport.lng, originAirport.lat]
-          ]
-        }
-      }
-    });
+    new mapboxgl.Marker({ color: '#f59e0b' })
+      .setLngLat([result.deliveryLocation.lon, result.deliveryLocation.lat])
+      .setPopup(new mapboxgl.Popup().setHTML('<strong>Delivery Hospital</strong>'))
+      .addTo(map.current);
 
-    map.current.addLayer({
-      id: 'route-base',
-      type: 'line',
-      source: 'route-base',
-      layout: {
-        'line-join': 'round',
-        'line-cap': 'round'
-      },
-      paint: {
-        'line-color': '#3b82f6',
-        'line-width': 3,
-        'line-dasharray': [2, 2]
-      }
-    });
+    // Draw routes
+    const flightSegments = result.segments.filter(s => s.type === 'flight');
+    flightSegments.forEach((segment, index) => {
+      const coords = segment.from.includes('KFRG') 
+        ? [[KFRG.lng, KFRG.lat], [result.pickupAirport.lng, result.pickupAirport.lat]]
+        : [[result.pickupAirport.lng, result.pickupAirport.lat], [result.destinationAirport.lng, result.destinationAirport.lat]];
 
-    if (segments && segments.length >= 4) {
-      map.current.addSource('route-animated', {
+      map.current?.addSource(`flight-${index}`, {
         type: 'geojson',
         data: {
           type: 'Feature',
           properties: {},
           geometry: {
             type: 'LineString',
-            coordinates: [
-              [originAirport.lng, originAirport.lat],
-              [destAirport.lng, destAirport.lat]
-            ]
+            coordinates: coords
           }
         }
       });
 
-      map.current.addLayer({
-        id: 'route-animated',
+      map.current?.addLayer({
+        id: `flight-${index}`,
         type: 'line',
-        source: 'route-animated',
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round'
-        },
+        source: `flight-${index}`,
+        layout: {},
         paint: {
           'line-color': '#3b82f6',
           'line-width': 3,
           'line-dasharray': [2, 2]
         }
       });
-    }
+    });
 
-    if (segments) {
-      segments.forEach((segment, index) => {
-        if (segment.type === 'ground' && segment.polyline) {
-          const sourceId = `route-ground-${index + 1}`;
-          
-          map.current?.addSource(sourceId, {
-            type: 'geojson',
-            data: {
-              type: 'Feature',
-              properties: {},
-              geometry: {
-                type: 'LineString',
-                coordinates: segment.polyline
-              }
-            }
-          });
+    // Fit bounds
+    const bounds = new mapboxgl.LngLatBounds();
+    bounds.extend([KFRG.lng, KFRG.lat]);
+    bounds.extend([result.pickupAirport.lng, result.pickupAirport.lat]);
+    bounds.extend([result.pickupLocation.lon, result.pickupLocation.lat]);
+    bounds.extend([result.destinationAirport.lng, result.destinationAirport.lat]);
+    bounds.extend([result.deliveryLocation.lon, result.deliveryLocation.lat]);
 
-          map.current?.addLayer({
-            id: sourceId,
-            type: 'line',
-            source: sourceId,
-            layout: {
-              'line-join': 'round',
-              'line-cap': 'round'
-            },
-            paint: {
-              'line-color': index === 1 || index === 2 ? '#10b981' : '#ef4444',
-              'line-width': 3
-            }
-          });
-        }
+    map.current?.fitBounds(bounds, { padding: 100 });
+  };
+
+  const TimelineStep = ({ 
+    time, 
+    icon: Icon, 
+    location, 
+    legType, 
+    duration, 
+    distance,
+    isFinal,
+    note
+  }: { 
+    time: Date; 
+    icon: any; 
+    location: string; 
+    legType?: string; 
+    duration?: string; 
+    distance?: string;
+    isFinal?: boolean;
+    note?: string;
+  }) => (
+    <div className="flex items-start gap-4">
+      <div className="flex flex-col items-center min-w-[80px]">
+        <div className="text-sm font-semibold text-foreground">
+          {format(time, 'hh:mm a')}
+        </div>
+        <div className="mt-2 p-2 rounded-full bg-primary/10">
+          <Icon className="h-5 w-5 text-primary" />
+        </div>
+        {!isFinal && (
+          <div className="w-0.5 h-16 bg-border my-2" />
+        )}
+      </div>
+      <div className="flex-1 pb-6">
+        <div className="font-semibold text-foreground">{location}</div>
+        {note && (
+          <div className="text-sm text-muted-foreground italic mt-1">
+            {note}
+          </div>
+        )}
+        {legType && (
+          <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
+            <span>{legType}</span>
+            <span>•</span>
+            <span>{duration}</span>
+            {distance && distance !== '0 mi' && (
+              <>
+                <span>•</span>
+                <span>{distance}</span>
+              </>
+            )}
+          </div>
+        )}
+        {isFinal && (
+          <Badge className="mt-2 bg-primary">
+            Final Arrival
+          </Badge>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderTimeline = () => {
+    if (!tripResult) return null;
+
+    const departureDateTime = new Date(tripResult.departureTime);
+    const steps = [];
+    let currentTime = departureDateTime;
+
+    // Start at KFRG or first airport
+    const isStartingFromKFRG = tripResult.segments.some(s => 
+      s.type === 'flight' && s.from.includes('KFRG')
+    );
+
+    if (isStartingFromKFRG) {
+      steps.push({
+        time: currentTime,
+        icon: Navigation,
+        location: 'KFRG (Home Base)',
+        legType: undefined,
+        duration: undefined,
+        distance: undefined
       });
     }
 
-    const bounds = new mapboxgl.LngLatBounds();
-    bounds.extend([KFRG.lng, KFRG.lat]);
-    bounds.extend([originAirport.lng, originAirport.lat]);
-    bounds.extend([origin.lon, origin.lat]);
-    bounds.extend([destination.lon, destination.lat]);
-    bounds.extend([destAirport.lng, destAirport.lat]);
+    // Process each segment
+    tripResult.segments.forEach((segment, index) => {
+      currentTime = addMinutes(currentTime, segment.duration);
 
-    map.current.fitBounds(bounds, {
-      padding: 100,
-      duration: 1000
+      const segmentIcon = 
+        segment.type === 'flight' ? Plane :
+        segment.type === 'hospital_stay' ? Hospital :
+        Car;
+
+      const legTypeLabel = 
+        segment.type === 'flight' ? 'Flight' :
+        segment.type === 'hospital_stay' ? 'Hospital Stay' :
+        'Ground Transport';
+
+      const distanceLabel = segment.distance > 0 
+        ? (segment.type === 'flight' ? `${Math.round(segment.distance)} nm` : `${segment.distance} mi`)
+        : undefined;
+
+      steps.push({
+        time: currentTime,
+        icon: segmentIcon,
+        location: segment.to,
+        legType: legTypeLabel,
+        duration: formatDuration(segment.duration),
+        distance: distanceLabel,
+        isFinal: index === tripResult.segments.length - 1,
+        note: segment.note
+      });
     });
+
+    return (
+      <div className="space-y-2">
+        {steps.map((step, index) => (
+          <TimelineStep key={index} {...step} />
+        ))}
+      </div>
+    );
   };
 
-  return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
-      <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold mb-3">Medical Transport Time Calculator</h1>
-        <p className="text-lg text-muted-foreground">
-          AI-powered trip planning with real-time weather, traffic, and routing intelligence
-        </p>
-      </div>
+  if (!tripResult) {
+    return (
+      <div className="container mx-auto p-6 max-w-4xl">
+        <Card>
+          <CardContent className="p-8">
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold text-foreground mb-2">Medical Transport Time Calculator</h2>
+              <p className="text-muted-foreground">Calculate accurate organ transport times with real flight routes and traffic analysis</p>
+            </div>
 
-      {!tripResult ? (
-        <div className="max-w-2xl mx-auto">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Plane className="w-6 h-6 text-primary" />
-                Calculate Trip Time
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid gap-6">
-                <LocationAutocomplete
-                  value={originHospital}
-                  onChange={setOriginHospital}
-                  onLocationSelect={(location) => {
-                    setSelectedOrigin(location);
-                    setOriginHospital(location.displayName);
-                  }}
-                  placeholder="Enter hospital name or address"
-                  label="Pick Up Hospital"
-                  selectedLocation={selectedOrigin}
-                />
-                <LocationAutocomplete
-                  value={destinationHospital}
-                  onChange={setDestinationHospital}
-                  onLocationSelect={(location) => {
-                    setSelectedDestination(location);
-                    setDestinationHospital(location.displayName);
-                  }}
-                  placeholder="Enter hospital name or address"
-                  label="Delivery Hospital"
-                  selectedLocation={selectedDestination}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-6">
+              <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label>Departure Date</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          'w-full justify-start text-left font-normal',
-                          !departureDate && 'text-muted-foreground'
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {departureDate ? format(departureDate, 'PPP') : 'Pick date'}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={departureDate}
-                        onSelect={(date) => date && setDepartureDate(date)}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <Label htmlFor="origin" className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Pickup Hospital Location
+                  </Label>
+                  <LocationAutocomplete
+                    value={origin}
+                    onChange={setOrigin}
+                    onLocationSelect={setSelectedOrigin}
+                    placeholder="Enter pickup hospital address..."
+                    label=""
+                  />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="time">Departure Time</Label>
-                  <div className="relative">
-                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <input
-                      id="time"
-                      type="time"
-                      value={departureTime}
-                      onChange={(e) => setDepartureTime(e.target.value)}
-                      className="w-full h-10 pl-10 pr-3 rounded-md border border-input bg-background text-sm"
-                    />
-                  </div>
+                  <Label htmlFor="destination" className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Delivery Hospital Location
+                  </Label>
+                  <LocationAutocomplete
+                    value={destination}
+                    onChange={setDestination}
+                    onLocationSelect={setSelectedDestination}
+                    placeholder="Enter delivery hospital address..."
+                    label=""
+                  />
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Passengers: {passengerCount}</Label>
-                <Slider
-                  value={[passengerCount]}
-                  onValueChange={(value) => setPassengerCount(value[0])}
-                  min={1}
-                  max={8}
-                  step={1}
-                  className="w-full"
-                />
+              <div className="grid md:grid-cols-3 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="departure-date" className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Departure Date
+                  </Label>
+                  <Input
+                    id="departure-date"
+                    type="date"
+                    value={departureDate}
+                    onChange={(e) => setDepartureDate(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="departure-time" className="flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    Departure Time
+                  </Label>
+                  <Input
+                    id="departure-time"
+                    type="time"
+                    value={departureTime}
+                    onChange={(e) => setDepartureTime(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="passengers" className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Passengers
+                  </Label>
+                  <Input
+                    id="passengers"
+                    type="number"
+                    min="1"
+                    max="6"
+                    value={passengers}
+                    onChange={(e) => setPassengers(e.target.value)}
+                  />
+                </div>
               </div>
 
-              <Button
-                onClick={calculateTrip}
+              <Button 
+                onClick={calculateTrip} 
                 disabled={calculating || !selectedOrigin || !selectedDestination}
-                className="w-full"
                 size="lg"
+                className="w-full"
               >
                 {calculating ? (
-                  <div className="flex flex-col items-center gap-2 py-1">
-                    <div className="flex items-center gap-2">
-                      <Timer className="w-4 h-4 animate-spin" />
-                      <span className="font-semibold">Calculating Your Trip</span>
+                  <div className="flex items-center gap-3">
+                    <Timer className="h-5 w-5 animate-pulse" />
+                    <div className="flex flex-col items-start gap-1">
+                      <div className="flex items-center gap-2">
+                        {(() => {
+                          const StageIcon = loadingStages[loadingStage].icon;
+                          return <StageIcon className="h-4 w-4" />;
+                        })()}
+                        <span>{loadingStages[loadingStage].message}</span>
+                      </div>
+                      <Progress value={(loadingStage + 1) * 20} className="h-1 w-64" />
                     </div>
-                    {loadingStage && (
-                      <>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          {loadingStage.includes('route') && <Plane className="w-3 h-3" />}
-                          {loadingStage.includes('weather') && <Zap className="w-3 h-3" />}
-                          {loadingStage.includes('traffic') && <Car className="w-3 h-3" />}
-                          {loadingStage.includes('ATC') && <Target className="w-3 h-3" />}
-                          {loadingStage.includes('timeline') && <Clock className="w-3 h-3" />}
-                          <span>{loadingStage}</span>
-                        </div>
-                        <Progress 
-                          value={
-                            loadingStage.includes('route') ? 20 :
-                            loadingStage.includes('weather') ? 40 :
-                            loadingStage.includes('traffic') ? 60 :
-                            loadingStage.includes('ATC') ? 80 :
-                            100
-                          } 
-                          className="w-full h-1" 
-                        />
-                      </>
-                    )}
                   </div>
                 ) : (
                   <>
-                    <Plane className="w-4 h-4 mr-2" />
+                    <Clock className="mr-2 h-5 w-5" />
                     Calculate Trip Time
                   </>
                 )}
               </Button>
-            </CardContent>
-          </Card>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          <Card className="border-2 border-primary/20">
-            <CardContent className="pt-6">
-              <div className="grid md:grid-cols-3 gap-4 mb-6">
-                <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground">Pick Up Hospital</div>
-                  <div className="font-semibold">{selectedOrigin?.displayName.split(',')[0]}</div>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground">Delivery Hospital</div>
-                  <div className="font-semibold">{selectedDestination?.displayName.split(',')[0]}</div>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground">Departure</div>
-                  <div className="font-semibold">{format(departureDate, 'PPP')} at {departureTime}</div>
-                </div>
-              </div>
-              
-              <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-lg p-6 space-y-4">
-                <div className="grid md:grid-cols-3 gap-6">
-                  <div className="text-center space-y-2">
-                    <Clock className="w-8 h-8 mx-auto text-primary" />
-                    <div className="text-sm text-muted-foreground">Total Trip Time</div>
-                    <div className="text-4xl font-bold text-primary">
-                      {formatDuration(tripResult.totalTime)}
-                    </div>
-                  </div>
-                  <div className="text-center space-y-2">
-                    <Target className="w-8 h-8 mx-auto text-green-600" />
-                    <div className="text-sm text-muted-foreground">Estimated Arrival</div>
-                    <div className="text-3xl font-bold">
-                      {format(tripResult.arrivalTime, 'h:mm a')}
-                    </div>
-                  </div>
-                  <div className="text-center space-y-2">
-                    <Zap className="w-8 h-8 mx-auto text-amber-600" />
-                    <div className="text-sm text-muted-foreground">Confidence</div>
-                    <div className="text-3xl font-bold">85%</div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-4 flex justify-end">
-                <Button onClick={() => setTripResult(null)} variant="outline">
-                  New Calculation
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between mb-2">
-              <Badge variant="secondary" className="bg-primary/20 text-primary">
-                AI-Powered Time Estimates
-              </Badge>
             </div>
-            
-            <div className="grid md:grid-cols-3 gap-4">
-              <Card className="bg-destructive/10 border-destructive/30 border-2">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2 mb-1">
-                    <AlertTriangle className="w-4 h-4 text-destructive" />
-                    <CardTitle className="text-sm">Worst Case</CardTitle>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <Clock className="w-3 h-3 text-destructive" />
-                    <span className="text-lg font-bold text-foreground">
-                      {Math.floor((tripResult.totalTime * 1.25) / 60)}h {Math.round((tripResult.totalTime * 1.25) % 60)}m - {Math.floor((tripResult.totalTime * 1.35) / 60)}h {Math.round((tripResult.totalTime * 1.35) % 60)}m
-                    </span>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Confidence</span>
-                      <span className="font-semibold">60%</span>
-                    </div>
-                    <Progress value={60} className="h-1.5" />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase">Key Factors</p>
-                    <ul className="space-y-1">
-                      {['Heavy traffic delays', 'Adverse weather conditions', 'Extended routing requirements'].map((factor, idx) => (
-                        <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
-                          <span className="mt-1 w-1 h-1 rounded-full text-destructive bg-current flex-shrink-0" />
-                          <span>{factor}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </CardContent>
-              </Card>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
-              <Card className="bg-green-50 dark:bg-green-950/20 border-green-600/30 border-2">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2 mb-1">
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                    <CardTitle className="text-sm">Likely Scenario</CardTitle>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <Clock className="w-3 h-3 text-green-600" />
-                    <span className="text-lg font-bold text-foreground">
-                      {Math.floor((tripResult.totalTime * 0.95) / 60)}h {Math.round((tripResult.totalTime * 0.95) % 60)}m - {Math.floor((tripResult.totalTime * 1.10) / 60)}h {Math.round((tripResult.totalTime * 1.10) % 60)}m
-                    </span>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Confidence</span>
-                      <span className="font-semibold">90%</span>
-                    </div>
-                    <Progress value={90} className="h-1.5" />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase">Key Factors</p>
-                    <ul className="space-y-1">
-                      {['Normal traffic flow', 'Favorable weather', 'Standard routing'].map((factor, idx) => (
-                        <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
-                          <span className="mt-1 w-1 h-1 rounded-full text-green-600 bg-current flex-shrink-0" />
-                          <span>{factor}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-600/30 border-2">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Zap className="w-4 h-4 text-blue-600" />
-                    <CardTitle className="text-sm">Best Case</CardTitle>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <Clock className="w-3 h-3 text-blue-600" />
-                    <span className="text-lg font-bold text-foreground">
-                      {Math.floor((tripResult.totalTime * 0.85) / 60)}h {Math.round((tripResult.totalTime * 0.85) % 60)}m - {Math.floor((tripResult.totalTime * 0.95) / 60)}h {Math.round((tripResult.totalTime * 0.95) % 60)}m
-                    </span>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Confidence</span>
-                      <span className="font-semibold">75%</span>
-                    </div>
-                    <Progress value={75} className="h-1.5" />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase">Key Factors</p>
-                    <ul className="space-y-1">
-                      {['Light traffic', 'Optimal weather', 'Direct routing'].map((factor, idx) => (
-                        <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
-                          <span className="mt-1 w-1 h-1 rounded-full text-blue-600 bg-current flex-shrink-0" />
-                          <span>{factor}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </CardContent>
-              </Card>
+  return (
+    <div className="container mx-auto p-6 max-w-7xl space-y-6">
+      {/* Hero Results Section */}
+      <Card className="bg-primary/5 border-primary/20">
+        <CardContent className="p-8">
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                Pick Up Hospital
+              </div>
+              <div className="font-semibold text-foreground">{tripResult.pickupLocation.displayName}</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                Delivery Hospital
+              </div>
+              <div className="font-semibold text-foreground">{tripResult.deliveryLocation.displayName}</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Departure Time
+              </div>
+              <div className="font-semibold text-foreground">
+                {format(new Date(tripResult.departureTime), 'MMM d, yyyy h:mm a')}
+              </div>
             </div>
           </div>
 
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Clock className="w-6 h-6 text-primary" />
-                Trip Breakdown
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {tripResult.segments.map((segment, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-4 p-4 rounded-lg bg-muted/50 border border-border"
-                >
-                  <div className="p-2 rounded-full bg-background">
-                    {segment.type === 'ground' ? (
-                      <Car className="w-5 h-5 text-primary" />
-                    ) : (
-                      <Plane className="w-5 h-5 text-green-600" />
-                    )}
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <div className="font-semibold">
-                      {segment.type === 'ground' ? 'Ground Transport' : 'Flight'}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {segment.from} → {segment.to}
-                    </div>
-                  </div>
-                  <div className="text-right space-y-1">
-                    <div className="font-bold text-lg">
-                      {formatDuration(segment.duration)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {segment.distance.toFixed(0)} {segment.type === 'ground' ? 'mi' : 'nm'}
-                    </div>
-                  </div>
-                </div>
-              ))}
+          <div className="grid md:grid-cols-2 gap-6 mt-8 pt-6 border-t border-border">
+            <div>
+              <div className="text-sm text-muted-foreground mb-2">Total Trip Time</div>
+              <div className="text-4xl font-bold text-primary">{formatDuration(tripResult.totalTime)}</div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground mb-2">Estimated Arrival at Delivery Hospital</div>
+              <div className="text-4xl font-bold text-foreground">
+                {format(new Date(tripResult.arrivalTime), 'h:mm a')}
+              </div>
+              <div className="text-sm text-muted-foreground mt-1">
+                {format(new Date(tripResult.arrivalTime), 'MMM d, yyyy')}
+              </div>
+            </div>
+          </div>
 
-              {onAIPlatformClick && (
-                <div className="pt-3 border-t border-border">
-                  <Button
-                    onClick={() =>
-                      onAIPlatformClick({
-                        origin: selectedOrigin,
-                        destination: selectedDestination,
-                        originHospital,
-                        destinationHospital,
-                        departureDate,
-                        departureTime,
-                        passengerCount,
-                        totalTime: tripResult.totalTime,
-                        arrivalTime: tripResult.arrivalTime,
-                        originAirport: tripResult.route.originAirport,
-                        destAirport: tripResult.route.destAirport,
-                        segments: tripResult.segments,
-                      })
-                    }
-                    variant="default"
-                    className="w-full"
-                    size="lg"
-                  >
-                    <Zap className="w-4 h-4 mr-2" />
-                    View AI Intelligence Platform
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {tripResult.advisories && tripResult.advisories.length > 0 && (
+            <div className="mt-6 pt-6 border-t border-border">
+              <div className="text-sm font-semibold mb-2">Advisories:</div>
+              <div className="space-y-1">
+                {tripResult.advisories.map((advisory, index) => (
+                  <div key={index} className="text-sm text-muted-foreground">• {advisory}</div>
+                ))}
+              </div>
+            </div>
+          )}
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <MapPin className="w-6 h-6 text-primary" />
-                Interactive Route Map
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div ref={mapContainer} className="h-[500px] w-full rounded-b-lg" />
-            </CardContent>
-          </Card>
-        </div>
-      )}
+          <div className="flex gap-4 mt-6">
+            <Button onClick={() => setTripResult(null)} variant="outline">
+              Calculate New Trip
+            </Button>
+            {onAIPlatformClick && (
+              <Button onClick={onAIPlatformClick} variant="default">
+                View AI Intelligence Platform
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* Trip Breakdown - Compact Timeline */}
+        <Card>
+          <CardContent className="p-6">
+            <h3 className="text-xl font-semibold mb-6 flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Trip Timeline
+            </h3>
+            {renderTimeline()}
+          </CardContent>
+        </Card>
+
+        {/* Map Section */}
+        <Card>
+          <CardContent className="p-6">
+            <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Navigation className="h-5 w-5" />
+              Route Visualization
+            </h3>
+            <div ref={mapContainer} className="w-full h-[500px] rounded-lg" />
+            <div className="mt-4 flex flex-wrap gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                <span>Home Base</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                <span>Pickup Airport</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                <span>Pickup Hospital</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                <span>Destination Airport</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                <span>Delivery Hospital</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
-}
+};
