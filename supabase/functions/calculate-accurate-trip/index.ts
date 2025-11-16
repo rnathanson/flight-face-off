@@ -85,6 +85,8 @@ serve(async (req) => {
     let approvalReasons: string[] = [];
     let pickupAirportApprovalData: any = null;
     let deliveryAirportApprovalData: any = null;
+    let pickupAirportSelection: any = null;
+    let deliveryAirportSelection: any = null;
 
     // Check if user specified a preferred pickup airport
     let usingPreferredPickupAirport = false;
@@ -135,6 +137,7 @@ serve(async (req) => {
       });
       
       const airportSelection = pickupAirportsResponse.data;
+      pickupAirportSelection = airportSelection; // Store for chief pilot approval details
       
       if (airportSelection?.selectedAirport) {
         pickupAirport = airportSelection.selectedAirport;
@@ -153,6 +156,12 @@ serve(async (req) => {
             approvalReasons.push(...pickupAirportApprovalData.violatedGuidelines.map((g: string) => `pickup_${g}`));
           }
         }
+      } else if (airportSelection?.airports && airportSelection.airports.length > 0) {
+        // Fallback: use the first airport from the list (shouldn't happen after fix above)
+        console.log('⚠️ WARNING: No selectedAirport but airports available - using first option');
+        pickupAirport = airportSelection.airports[0];
+        requiresChiefPilotApproval = true;
+        approvalReasons.push('pickup_no_qualified_airports');
       }
     }
 
@@ -216,6 +225,7 @@ serve(async (req) => {
         });
         
         const deliverySelection = deliveryAirportsResponse.data;
+        deliveryAirportSelection = deliverySelection; // Store for chief pilot approval details
         
         if (deliverySelection?.selectedAirport) {
           destinationAirport = deliverySelection.selectedAirport;
@@ -232,6 +242,12 @@ serve(async (req) => {
               approvalReasons.push(...deliveryAirportApprovalData.violatedGuidelines.map((g: string) => `delivery_${g}`));
             }
           }
+        } else if (deliverySelection?.airports && deliverySelection.airports.length > 0) {
+          // Fallback: use the first airport from the list (shouldn't happen after fix above)
+          console.log('⚠️ WARNING: No selectedAirport but airports available - using first option');
+          destinationAirport = deliverySelection.airports[0];
+          requiresChiefPilotApproval = true;
+          approvalReasons.push('delivery_no_qualified_airports');
         }
       } else {
         // Delivery IS on Long Island, so destination airport is KFRG
@@ -652,12 +668,24 @@ serve(async (req) => {
         pickupAirport: pickupAirportApprovalData ? {
           code: pickupAirportApprovalData.code,
           name: pickupAirportApprovalData.name,
-          requiresApproval: pickupAirportApprovalData.requiresChiefPilotApproval
+          requiresApproval: pickupAirportApprovalData.requiresChiefPilotApproval,
+          violatedGuidelines: pickupAirportApprovalData.violatedGuidelines || [],
+          wouldHaveSelected: pickupAirportSelection?.closestRejected ? {
+            code: pickupAirportSelection.closestRejected.code,
+            name: pickupAirportSelection.closestRejected.name,
+            reasons: pickupAirportSelection.closestRejected.rejectionReasons
+          } : null
         } : null,
         deliveryAirport: deliveryAirportApprovalData ? {
           code: deliveryAirportApprovalData.code,
           name: deliveryAirportApprovalData.name,
-          requiresApproval: deliveryAirportApprovalData.requiresChiefPilotApproval
+          requiresApproval: deliveryAirportApprovalData.requiresChiefPilotApproval,
+          violatedGuidelines: deliveryAirportApprovalData.violatedGuidelines || [],
+          wouldHaveSelected: deliveryAirportSelection?.closestRejected ? {
+            code: deliveryAirportSelection.closestRejected.code,
+            name: deliveryAirportSelection.closestRejected.name,
+            reasons: deliveryAirportSelection.closestRejected.rejectionReasons
+          } : null
         } : null
       }
     };
