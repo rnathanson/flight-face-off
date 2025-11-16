@@ -92,7 +92,7 @@ serve(async (req) => {
     // Step 2: Get details for each place
     const predictions = autocompleteData.predictions.slice(0, limit);
     const detailsPromises = predictions.map(async (prediction) => {
-      const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${prediction.place_id}&fields=name,formatted_address,geometry,types&key=${GOOGLE_MAPS_KEY}`;
+      const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${prediction.place_id}&fields=name,formatted_address,geometry,types,business_status&key=${GOOGLE_MAPS_KEY}`;
       
       const detailsResponse = await fetch(detailsUrl);
       const detailsData: PlaceDetailsResult = await detailsResponse.json();
@@ -104,10 +104,20 @@ serve(async (req) => {
 
       const result = detailsData.result;
       
+      // Determine if this is a meaningful place name or just an address
+      const isEstablishment = result.types?.some(type => 
+        ['hospital', 'health', 'establishment', 'point_of_interest', 'doctor', 'pharmacy', 'medical_center'].some(medical => type.includes(medical))
+      );
+      
+      // Use the structured name if it's a real place, otherwise use the description which might have the place name
+      const placeName = isEstablishment && result.name !== result.formatted_address?.split(',')[0] 
+        ? result.name 
+        : prediction.description.split(',')[0];
+      
       return {
-        name: result.name,
+        name: placeName,
         address: result.formatted_address,
-        display_name: `${result.name}\n${result.formatted_address}`,
+        display_name: `${placeName}\n${result.formatted_address}`,
         lat: result.geometry.location.lat.toString(),
         lon: result.geometry.location.lng.toString(),
         place_id: prediction.place_id,
