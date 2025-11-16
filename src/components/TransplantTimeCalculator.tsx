@@ -9,6 +9,7 @@ import { LocationAutocomplete } from '@/components/LocationAutocomplete';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CalendarIcon, MapPin, Plane, Zap, Clock, Car, Timer, AlertTriangle, CheckCircle, Target, ChevronDown, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { format } from 'date-fns';
@@ -103,7 +104,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
   const [showPickupAirportPrefs, setShowPickupAirportPrefs] = useState(false);
   const [showDestinationAirportPrefs, setShowDestinationAirportPrefs] = useState(false);
   const [showAirportInputs, setShowAirportInputs] = useState(false);
-  const [showApprovalModal, setShowApprovalModal] = useState(false);
   const { toast } = useToast();
   
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -124,15 +124,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     fetchToken();
   }, []);
 
-  // Resize map when modal closes
-  useEffect(() => {
-    if (!showApprovalModal && map.current) {
-      console.log('Modal closed, resizing map');
-      setTimeout(() => {
-        map.current?.resize();
-      }, 100);
-    }
-  }, [showApprovalModal]);
 
   const formatDuration = (minutes: number): string => {
     const hours = Math.floor(minutes / 60);
@@ -286,13 +277,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
 
       setTripResult(result);
       
-      // Show approval modal if required
-      if (result.chiefPilotApproval?.required) {
-        setShowApprovalModal(true);
-      }
-      
       // Initialize map after a delay to ensure container is rendered
-      // If modal is shown, wait for it to potentially be dismissed
       setTimeout(() => {
         if (mapboxToken && mapContainer.current) {
           if (!map.current) {
@@ -750,32 +735,28 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         <div className="space-y-6">
           <Card className="border-2 border-primary/20">
             <CardContent className="pt-6">
-              <div className="grid md:grid-cols-3 gap-4 mb-6">
-                <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground">Pick Up Hospital</div>
-                  <div className="font-bold text-base">
+              <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 border-b pb-6 mb-6">
+                <div className="flex items-center gap-2">
+                  <div className="text-sm text-muted-foreground">From:</div>
+                  <div className="font-semibold text-sm">
                     {selectedOrigin?.displayName?.split(',')[0] || originHospital.split(',')[0]}
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    {selectedOrigin?.address || originHospital.split(',').slice(1).join(',')}
-                  </div>
                 </div>
-                <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground">Delivery Hospital</div>
-                  <div className="font-bold text-base">
+                <div className="text-muted-foreground">→</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-sm text-muted-foreground">To:</div>
+                  <div className="font-semibold text-sm">
                     {selectedDestination?.displayName?.split(',')[0] || destinationHospital.split(',')[0]}
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    {selectedDestination?.address || destinationHospital.split(',').slice(1).join(',')}
-                  </div>
                 </div>
-                <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground">Departure</div>
-                  <div className="font-semibold">{format(departureDate, 'PPP')} at {departureTime}</div>
+                <div className="text-muted-foreground">•</div>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
+                  <div className="text-sm font-medium">{format(departureDate, 'MMM d')} at {departureTime}</div>
                 </div>
               </div>
               
-              <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-lg p-6 space-y-4">
+              <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-lg p-6">
                 <div className="grid md:grid-cols-3 gap-6">
                   <div className="text-center space-y-2">
                     <Clock className="w-8 h-8 mx-auto text-primary" />
@@ -792,24 +773,30 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                     </div>
                   </div>
                   <div className="text-center space-y-2">
-                    <Plane className="w-8 h-8 mx-auto text-blue-600" />
+                    <div className="flex items-center justify-center gap-2">
+                      <Plane className="w-8 h-8 text-blue-600" />
+                      {tripResult.chiefPilotApproval?.required && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <AlertTriangle className="w-5 h-5 text-amber-500" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-sm">Chief pilot approval required</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </div>
                     <div className="text-sm text-muted-foreground">Pickup Airport</div>
                     <div className="text-2xl font-bold">
                       {tripResult.route?.pickupAirport?.code || 'N/A'}
                     </div>
-                    <div className="text-xs font-medium">
-                      {tripResult.route?.pickupAirport?.name || 'Airport'}
+                    <div className="text-xs text-muted-foreground">
+                      {tripResult.route?.pickupAirport?.distance_from_pickup !== undefined && 
+                        `${tripResult.route.pickupAirport.distance_from_pickup.toFixed(1)} nm from pickup`
+                      }
                     </div>
-                    {tripResult.route?.pickupAirport?.address && (
-                      <div className="text-xs text-muted-foreground line-clamp-2 max-w-[200px] mx-auto">
-                        {tripResult.route.pickupAirport.address}
-                      </div>
-                    )}
-                    {tripResult.route?.pickupAirport?.distance_from_pickup !== undefined && (
-                      <div className="text-xs text-muted-foreground">
-                        {tripResult.route.pickupAirport.distance_from_pickup.toFixed(1)} nm from pickup
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -822,53 +809,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             </CardContent>
           </Card>
 
-          {/* Chief Pilot Approval Modal */}
-          <Dialog open={showApprovalModal} onOpenChange={setShowApprovalModal}>
-            <DialogContent className="sm:max-w-md">
-              <div className="flex flex-col items-center gap-6 py-8">
-                {/* Warning Icon (matching loading spinner style) */}
-                <div className="relative">
-                  <div className="w-16 h-16 border-4 border-primary/20 rounded-full flex items-center justify-center">
-                    <AlertTriangle className="w-8 h-8 text-primary" strokeWidth={2.5} />
-                  </div>
-                </div>
-                
-                {/* Title and Description */}
-                <div className="text-center space-y-2">
-                  <h3 className="text-lg font-semibold">Review Required</h3>
-                  <p className="text-sm text-muted-foreground">
-                    This trip is outside of normal guidelines
-                  </p>
-                </div>
-
-                {/* Progress Bar (static, full) */}
-                <Progress value={100} className="w-full max-w-xs" />
-
-                {/* Buttons */}
-                <div className="flex gap-3 w-full max-w-xs">
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setShowApprovalModal(false)}
-                    className="flex-1"
-                  >
-                    Dismiss
-                  </Button>
-                  <Button 
-                    onClick={() => {
-                      toast({
-                        title: "Submitted for Review",
-                        description: "Trip sent to Chief Pilot",
-                      });
-                      setShowApprovalModal(false);
-                    }}
-                    className="flex-1"
-                  >
-                    Submit for Review
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
 
 
           <div className="border-t pt-4 mt-4">
