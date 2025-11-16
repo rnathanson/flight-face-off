@@ -102,38 +102,39 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
   const [coordinatorSearch, setCoordinatorSearch] = useState('');
   const [selectedCoordinator, setSelectedCoordinator] = useState<MedicalPersonnel | null>(null);
   const [coordinatorSuggestions, setCoordinatorSuggestions] = useState<MedicalPersonnel[]>([]);
-  const [assignedCrew, setAssignedCrew] = useState<CrewMember[]>([]);
+  const [availableCrew, setAvailableCrew] = useState<CrewMember[]>([]);
+  const [selectedCrew, setSelectedCrew] = useState<CrewMember[]>([]);
   const [successAnalysis, setSuccessAnalysis] = useState<SuccessAnalysis | null>(null);
+  const [caseNumber, setCaseNumber] = useState('');
+  const [caseData, setCaseData] = useState<any>(null);
+  const [loadingCase, setLoadingCase] = useState(false);
+  const [customSurgeonName, setCustomSurgeonName] = useState('');
   
   const { toast } = useToast();
 
-  // Fetch mission types on mount
+  // Fetch mission types and available crew on mount
   useEffect(() => {
-    const fetchMissionTypes = async () => {
-      const { data } = await supabase
+    const fetchData = async () => {
+      const { data: missionData } = await supabase
         .from('mission_types')
         .select('*')
         .order('organ_type');
-      if (data) {
-        setMissionTypes(data);
+      if (missionData) {
+        setMissionTypes(missionData);
       }
-    };
-    fetchMissionTypes();
-  }, []);
 
-  // Auto-assign 2 pilots when component loads
-  useEffect(() => {
-    const assignPilots = async () => {
-      const { data } = await supabase
+      const { data: crewData } = await supabase
         .from('crew_members')
         .select('*')
-        .order('success_rate', { ascending: false })
-        .limit(2);
-      if (data && data.length === 2) {
-        setAssignedCrew(data);
+        .order('full_name');
+      if (crewData) {
+        setAvailableCrew(crewData);
+        // Pre-select top 2 by success rate
+        const topCrew = [...crewData].sort((a, b) => b.success_rate - a.success_rate).slice(0, 2);
+        setSelectedCrew(topCrew);
       }
     };
-    assignPilots();
+    fetchData();
   }, []);
 
   // Search medical personnel with debounce
@@ -283,7 +284,7 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
 
       const { data: analysis } = await supabase.functions.invoke('calculate-mission-success', {
         body: {
-          crewMemberIds: assignedCrew.map(c => c.id),
+          crewMemberIds: selectedCrew.map(c => c.id),
           leadDoctorId: selectedLeadDoctor.id,
           surgicalTeamIds: surgicalTeam.map(s => s.id),
           coordinatorId: selectedCoordinator?.id,
@@ -322,8 +323,90 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
     }
   };
 
+  const addCustomSurgeon = () => {
+    const trimmedName = customSurgeonName.trim();
+    if (trimmedName.length < 2 || trimmedName.length > 100) {
+      toast({
+        title: "Invalid Name",
+        description: "Surgeon name must be between 2 and 100 characters",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const customSurgeon: MedicalPersonnel = {
+      id: `custom-${Date.now()}`,
+      full_name: trimmedName,
+      role: 'surgeon',
+      specialty: 'General Surgery',
+      total_missions: 0,
+      success_rate: 90,
+    };
+
+    setSurgicalTeam([...surgicalTeam, customSurgeon]);
+    setCustomSurgeonName('');
+    toast({
+      title: "Surgeon Added",
+      description: `${trimmedName} has been added to the surgical team`,
+    });
+  };
+
   const removeSurgeon = (id: string) => {
     setSurgicalTeam(surgicalTeam.filter(s => s.id !== id));
+  };
+
+  const toggleCrewSelection = (crew: CrewMember) => {
+    if (selectedCrew.find(c => c.id === crew.id)) {
+      setSelectedCrew(selectedCrew.filter(c => c.id !== crew.id));
+    } else if (selectedCrew.length < 2) {
+      setSelectedCrew([...selectedCrew, crew]);
+    } else {
+      toast({
+        title: "Maximum Crew Size",
+        description: "You can only select 2 pilots per mission",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const lookupCaseNumber = () => {
+    const trimmedCase = caseNumber.trim();
+    if (trimmedCase.length < 3 || trimmedCase.length > 20) {
+      toast({
+        title: "Invalid Case Number",
+        description: "Case number must be between 3 and 20 characters",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoadingCase(true);
+    
+    // Simulate CRM lookup with fake data
+    setTimeout(() => {
+      const mockData = {
+        caseNumber: trimmedCase,
+        patientId: `PT-${Math.floor(Math.random() * 10000)}`,
+        organType: ['heart', 'liver', 'lungs', 'kidneys', 'pancreas'][Math.floor(Math.random() * 5)],
+        priority: ['Standard', 'Urgent', 'Critical'][Math.floor(Math.random() * 3)],
+        insurance: ['Medicare', 'Blue Cross', 'Aetna', 'UnitedHealthcare'][Math.floor(Math.random() * 4)],
+        policyNumber: `POL-${Math.floor(Math.random() * 100000)}`,
+        originHospital: 'Northwell Health - Lenox Hill Hospital',
+        destinationHospital: 'Johns Hopkins Hospital',
+        leadPhysician: 'Dr. Sarah Chen',
+        coordinatorNotes: 'Patient is stable. Time-sensitive case. Insurance pre-authorized for air transport.',
+        previousTransports: Math.floor(Math.random() * 3),
+      };
+      
+      setCaseData(mockData);
+      setOrganType(mockData.organType);
+      setLoadingCase(false);
+      
+      toast({
+        title: "Case Retrieved",
+        description: `Case ${trimmedCase} loaded successfully from CRM`,
+      });
+    }, 1200);
   };
 
   const selectedMissionType = missionTypes.find(mt => mt.organ_type === organType);
@@ -341,6 +424,69 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Case Number Lookup */}
+          <div className="space-y-2">
+            <Label>Case Number (Optional - CRM Integration)</Label>
+            <div className="flex gap-2">
+              <Input
+                value={caseNumber}
+                onChange={(e) => setCaseNumber(e.target.value.toUpperCase())}
+                placeholder="Enter case number (e.g., TXP-2024-001)"
+                maxLength={20}
+                onKeyDown={(e) => e.key === 'Enter' && lookupCaseNumber()}
+              />
+              <Button 
+                onClick={lookupCaseNumber}
+                disabled={loadingCase || caseNumber.length < 3}
+                variant="secondary"
+              >
+                {loadingCase ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  'Lookup'
+                )}
+              </Button>
+            </div>
+            {caseData && (
+              <div className="mt-3 p-4 bg-accent/10 rounded-md border border-accent/20 space-y-2 animate-fade-in">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-semibold text-sm flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-success" />
+                    Case Details Retrieved
+                  </h4>
+                  <Badge variant={caseData.priority === 'Critical' ? 'destructive' : caseData.priority === 'Urgent' ? 'secondary' : 'default'}>
+                    {caseData.priority}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Patient ID:</span>
+                    <p className="font-medium">{caseData.patientId}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Organ Type:</span>
+                    <p className="font-medium capitalize">{caseData.organType}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Insurance:</span>
+                    <p className="font-medium">{caseData.insurance}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Policy #:</span>
+                    <p className="font-medium">{caseData.policyNumber}</p>
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-accent/20">
+                  <span className="text-muted-foreground text-xs">Coordinator Notes:</span>
+                  <p className="text-sm mt-1">{caseData.coordinatorNotes}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Origin Hospital</Label>
@@ -400,27 +546,49 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
             )}
           </div>
 
-          {assignedCrew.length === 2 && (
-            <div className="space-y-2">
-              <Label>Flight Crew</Label>
-              <div className="flex gap-2">
-                {assignedCrew.map((crew) => (
-                  <div key={crew.id} className="flex-1 p-3 bg-accent/10 rounded-md">
+          {/* Flight Crew Selection */}
+          <div className="space-y-2">
+            <Label>Flight Crew (Select 2 Pilots)</Label>
+            <div className="grid md:grid-cols-2 gap-2">
+              {availableCrew.map((crew) => {
+                const isSelected = selectedCrew.find(c => c.id === crew.id);
+                return (
+                  <button
+                    key={crew.id}
+                    onClick={() => toggleCrewSelection(crew)}
+                    className={cn(
+                      "p-3 rounded-md border-2 text-left transition-all hover:scale-[1.02]",
+                      isSelected 
+                        ? "border-primary bg-primary/10" 
+                        : "border-border bg-card hover:border-primary/50"
+                    )}
+                  >
                     <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-primary" />
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">Captain {crew.full_name}</p>
+                      {isSelected ? (
+                        <CheckCircle className="w-4 h-4 text-primary flex-shrink-0" />
+                      ) : (
+                        <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">
+                          Captain {crew.full_name}
+                          {crew.is_chief_pilot && " 🛡️"}
+                        </p>
                         <p className="text-xs text-muted-foreground">
-                          {crew.is_chief_pilot && "Chief Pilot • "}
                           {crew.total_missions} missions • {crew.success_rate}% success
                         </p>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  </button>
+                );
+              })}
             </div>
-          )}
+            {selectedCrew.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {selectedCrew.length}/2 pilots selected
+              </p>
+            )}
+          </div>
 
           <div className="space-y-2">
             <Label>Lead Doctor</Label>
@@ -471,35 +639,60 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
 
           <div className="space-y-2">
             <Label>Surgical Team (Optional)</Label>
-            <div className="relative">
-              <Input
-                value={surgeonSearch}
-                onChange={(e) => setSurgeonSearch(e.target.value)}
-                placeholder="Search for surgeon to add..."
-              />
-              {surgeonSuggestions.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-auto">
-                  {surgeonSuggestions.map((surgeon) => (
-                    <button
-                      key={surgeon.id}
-                      onClick={() => addSurgeon(surgeon)}
-                      className="w-full p-3 text-left hover:bg-accent/50 transition-colors"
-                      disabled={surgicalTeam.some(s => s.id === surgeon.id)}
-                    >
-                      <p className="font-medium text-sm">{surgeon.full_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {surgeon.specialty} • {surgeon.total_missions} missions • {surgeon.success_rate}% success
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              )}
+            <div className="space-y-3">
+              <div className="relative">
+                <Input
+                  value={surgeonSearch}
+                  onChange={(e) => setSurgeonSearch(e.target.value)}
+                  placeholder="Search for surgeon in database..."
+                />
+                {surgeonSuggestions.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-auto">
+                    {surgeonSuggestions.map((surgeon) => (
+                      <button
+                        key={surgeon.id}
+                        onClick={() => addSurgeon(surgeon)}
+                        className="w-full p-3 text-left hover:bg-accent/50 transition-colors"
+                        disabled={surgicalTeam.some(s => s.id === surgeon.id)}
+                      >
+                        <p className="font-medium text-sm">{surgeon.full_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {surgeon.specialty} • {surgeon.total_missions} missions • {surgeon.success_rate}% success
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              {/* Add Custom Surgeon */}
+              <div className="flex gap-2">
+                <Input
+                  value={customSurgeonName}
+                  onChange={(e) => setCustomSurgeonName(e.target.value)}
+                  placeholder="Or add surgeon not in database..."
+                  maxLength={100}
+                  onKeyDown={(e) => e.key === 'Enter' && addCustomSurgeon()}
+                />
+                <Button 
+                  onClick={addCustomSurgeon}
+                  disabled={customSurgeonName.trim().length < 2}
+                  variant="outline"
+                  size="sm"
+                >
+                  Add
+                </Button>
+              </div>
             </div>
+            
             {surgicalTeam.length > 0 && (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 mt-2">
                 {surgicalTeam.map((surgeon) => (
                   <Badge key={surgeon.id} variant="secondary" className="gap-2">
                     {surgeon.full_name}
+                    {surgeon.id.startsWith('custom-') && (
+                      <span className="text-xs text-muted-foreground">(Custom)</span>
+                    )}
                     <button
                       onClick={() => removeSurgeon(surgeon.id)}
                       className="hover:text-destructive"
@@ -561,7 +754,7 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
 
           <Button 
             onClick={handleCalculate} 
-            disabled={calculating || !selectedOrigin || !selectedDestination || !organType || !selectedLeadDoctor}
+            disabled={calculating || !selectedOrigin || !selectedDestination || !organType || !selectedLeadDoctor || selectedCrew.length !== 2}
             className="w-full"
             size="lg"
           >
