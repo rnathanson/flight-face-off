@@ -28,6 +28,15 @@ interface TripSegment {
   traffic?: string;
   polyline?: number[][];
   hasTrafficData?: boolean;
+  route?: string;
+  cruiseAltitude?: number;
+  headwind?: number;
+  windsAloft?: {
+    direction: number;
+    speed: number;
+    altitude: number;
+    station: string;
+  } | null;
 }
 
 interface Airport {
@@ -852,6 +861,30 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                                   <span className="text-muted-foreground">→</span>
                                   <span className="text-foreground">{segment.to}</span>
                                 </div>
+                                
+                                {/* Flight-specific details: cruise altitude and winds */}
+                                {segment.type === 'flight' && segment.cruiseAltitude && (
+                                  <div className="mt-2 space-y-1">
+                                    <div className="text-xs text-muted-foreground">
+                                      Cruise: {Math.round(segment.cruiseAltitude / 100)} FL{Math.round(segment.cruiseAltitude / 100)}
+                                    </div>
+                                    {segment.windsAloft && (
+                                      <div className="text-xs text-muted-foreground">
+                                        Winds: {segment.windsAloft.direction}° @ {segment.windsAloft.speed}kt
+                                        {segment.headwind > 0 && (
+                                          <span className="ml-1 text-amber-500">
+                                            ({segment.headwind.toFixed(0)}kt headwind)
+                                          </span>
+                                        )}
+                                        {segment.headwind < 0 && (
+                                          <span className="ml-1 text-emerald-500">
+                                            ({Math.abs(segment.headwind).toFixed(0)}kt tailwind)
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                               
                               <div className="text-right space-y-1">

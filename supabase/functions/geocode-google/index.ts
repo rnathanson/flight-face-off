@@ -124,7 +124,20 @@ serve(async (req) => {
 
           let nearbyPlace = null;
           if (nearbyHospital.status === 'OK' && nearbyHospital.results && nearbyHospital.results.length > 0) {
-            nearbyPlace = nearbyHospital.results[0];
+            // Prioritize the main hospital name (shortest name that contains "hospital")
+            // This helps prefer "North Shore University Hospital" over "Katz Women's Hospital at North Shore University Hospital"
+            const hospitals = nearbyHospital.results
+              .filter((p: any) => /hospital/i.test(p.name))
+              .sort((a: any, b: any) => {
+                // Prefer "University Hospital" or main campus names
+                const aIsMain = /university hospital|medical center|general hospital|regional hospital/i.test(a.name);
+                const bIsMain = /university hospital|medical center|general hospital|regional hospital/i.test(b.name);
+                if (aIsMain && !bIsMain) return -1;
+                if (bIsMain && !aIsMain) return 1;
+                // Otherwise prefer shorter names (likely main campus)
+                return a.name.length - b.name.length;
+              });
+            nearbyPlace = hospitals[0] || nearbyHospital.results[0];
           } else {
             // Fallback: try keyword-based medical search
             const nearMedicalUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&keyword=medical%20center|hospital|clinic|health&key=${GOOGLE_MAPS_KEY}`;

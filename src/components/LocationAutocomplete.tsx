@@ -120,8 +120,8 @@ export function LocationAutocomplete({
         )}
         
         {showSuggestions && suggestions.length > 0 && (
-          <Card className="absolute z-50 w-full mt-2 max-h-[32rem] overflow-auto shadow-elevated">
-            <div className="divide-y">
+          <Card className="absolute z-50 w-full mt-2 shadow-elevated overflow-hidden">
+            <div className="max-h-[32rem] overflow-y-auto divide-y">
               {suggestions.map((suggestion) => (
                 <button
                   key={suggestion.placeId}
