@@ -410,21 +410,19 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     }
 
     if (segments && segments.length >= 4 && pickupAirport && destAirport) {
-      // Add first flight leg label (KFRG to pickup airport)
-      const firstFlightMidpoint = calculateMidpoint([
-        [KFRG.lng, KFRG.lat],
-        [pickupAirport.lng, pickupAirport.lat]
-      ]);
-      if (firstFlightMidpoint) {
-        const firstFlightSegment: TripSegment = {
-          type: 'flight',
-          from: 'KFRG',
-          to: pickupAirport.code,
-          duration: segments[0].duration,
-          distance: segments[0].distance
-        };
-        const label = createSegmentLabel(firstFlightSegment, 0, firstFlightMidpoint);
-        if (label) label.addTo(map.current);
+      // Find the first flight segment (KFRG to pickup airport)
+      const firstFlightSegment = segments.find(s => s.type === 'flight');
+      
+      if (firstFlightSegment) {
+        // Add first flight leg label (KFRG to pickup airport)
+        const firstFlightMidpoint = calculateMidpoint([
+          [KFRG.lng, KFRG.lat],
+          [pickupAirport.lng, pickupAirport.lat]
+        ]);
+        if (firstFlightMidpoint) {
+          const label = createSegmentLabel(firstFlightSegment, 1, firstFlightMidpoint);
+          if (label) label.addTo(map.current);
+        }
       }
 
       map.current.addSource('route-animated', {
@@ -457,21 +455,21 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         }
       });
 
-      // Add main flight leg label (pickup airport to dest airport)
-      const mainFlightMidpoint = calculateMidpoint([
-        [pickupAirport.lng, pickupAirport.lat],
-        [destAirport.lng, destAirport.lat]
-      ]);
-      if (mainFlightMidpoint) {
-        const mainFlightSegment: TripSegment = {
-          type: 'flight',
-          from: pickupAirport.code,
-          to: destAirport.code,
-          duration: segments[3]?.duration || 0,
-          distance: segments[3]?.distance || 0
-        };
-        const mainLabel = createSegmentLabel(mainFlightSegment, 3, mainFlightMidpoint);
-        if (mainLabel) mainLabel.addTo(map.current);
+      // Find the main flight segment (pickup airport to dest airport)
+      const mainFlightSegment = segments.filter(s => s.type === 'flight')[1];
+      
+      if (mainFlightSegment) {
+        // Add main flight leg label (pickup airport to dest airport)
+        const mainFlightMidpoint = calculateMidpoint([
+          [pickupAirport.lng, pickupAirport.lat],
+          [destAirport.lng, destAirport.lat]
+        ]);
+        if (mainFlightMidpoint) {
+          // Calculate the leg number for the main flight (should be leg 2 if there are 2 flights)
+          const flightCount = segments.filter((s, i) => s.type === 'flight' && segments.indexOf(mainFlightSegment) >= i).length;
+          const mainLabel = createSegmentLabel(mainFlightSegment, flightCount, mainFlightMidpoint);
+          if (mainLabel) mainLabel.addTo(map.current);
+        }
       }
     }
 
