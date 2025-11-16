@@ -42,9 +42,10 @@ serve(async (req) => {
       leadDoctorId,
       surgicalTeamIds = [],
       coordinatorId,
+      totalTimeMinutes, // Real trip time from calculate-accurate-trip
+      distance, // Keep for backwards compatibility
       originAirportCode,
       destAirportCode,
-      distance,
       originHospital,
       destHospital,
     } = await req.json();
@@ -202,7 +203,18 @@ serve(async (req) => {
 
     // CRITICAL: Calculate viability penalty - this is the most important factor
     let viabilityPenaltyMultiplier = 1.0;
-    if (distance && organType) {
+    let estimatedHours = 0;
+    
+    // Use real trip time if provided, otherwise fall back to distance estimate
+    if (totalTimeMinutes && organType) {
+      estimatedHours = totalTimeMinutes / 60;
+      console.log(`Using real trip time: ${totalTimeMinutes} minutes = ${estimatedHours.toFixed(2)} hours`);
+    } else if (distance && organType) {
+      estimatedHours = distance / 440; // Fallback estimate using rough cruise speed
+      console.log(`Using distance estimate: ${distance} NM = ${estimatedHours.toFixed(2)} hours`);
+    }
+    
+    if (estimatedHours > 0 && organType) {
       const viabilityHours: Record<string, number> = {
         heart: 6,
         liver: 12,
@@ -212,7 +224,6 @@ serve(async (req) => {
       };
       
       const maxViableHours = viabilityHours[organType] || 12;
-      const estimatedHours = distance / 440; // Rough cruise speed
       const viabilityRatio = estimatedHours / maxViableHours;
       
       distanceComplexityScore = Math.max(0, 100 - (viabilityRatio * 100));
@@ -239,7 +250,8 @@ serve(async (req) => {
         viabilityPenaltyMultiplier = 0.15;
       }
       
-      logisticsInsights.routeComplexity = `${distance.toFixed(0)} NM distance, ~${estimatedHours.toFixed(1)} hours flight time (${(viabilityRatio * 100).toFixed(0)}% of ${organType} viability window)`;
+      const distanceText = distance ? `${distance.toFixed(0)} NM distance, ` : '';
+      logisticsInsights.routeComplexity = `${distanceText}~${estimatedHours.toFixed(1)} hours total trip time (${(viabilityRatio * 100).toFixed(0)}% of ${organType} viability window)`;
       logisticsInsights.viabilityPenalty = `${(viabilityPenaltyMultiplier * 100).toFixed(0)}% success multiplier due to viability constraints`;
     }
 
