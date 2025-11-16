@@ -11,8 +11,7 @@ import { Slider } from '@/components/ui/slider';
 import { CalendarIcon, MapPin, Plane, Zap, Clock, Car, Timer, AlertTriangle, CheckCircle, Target } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { GeocodeResult, geocodeAddress } from '@/lib/geocoding';
-import { getRouteDriving } from '@/lib/routing';
+import { GeocodeResult } from '@/lib/geocoding';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,9 +21,10 @@ interface TripSegment {
   type: 'ground' | 'flight';
   from: string;
   to: string;
-  duration: number; // minutes
-  distance: number; // miles for ground, nautical miles for flight
+  duration: number;
+  distance: number;
   traffic?: string;
+  polyline?: number[][];
 }
 
 interface Airport {
@@ -37,7 +37,7 @@ interface Airport {
 
 interface TripResult {
   segments: TripSegment[];
-  totalTime: number; // minutes
+  totalTime: number;
   arrivalTime: Date;
   route: {
     origin: GeocodeResult;
@@ -71,7 +71,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapboxToken, setMapboxToken] = useState<string>('');
 
-  // Fetch Mapbox token
   useEffect(() => {
     const fetchToken = async () => {
       try {
@@ -85,31 +84,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     fetchToken();
   }, []);
 
-  const findNearestAirport = async (lat: number, lng: number): Promise<Airport> => {
-    const { data, error } = await supabase.functions.invoke('find-nearest-airport', {
-      body: { lat, lng, maxDistance: 100 }
-    });
-
-    if (error || !data) {
-      throw new Error('Failed to find nearest airport');
-    }
-
-    return {
-      code: data.airport,
-      name: data.name,
-      lat: data.lat,
-      lng: data.lng,
-      distance_nm: data.distance_nm
-    };
-  };
-
-  const calculateFlightTime = (distanceNM: number): number => {
-    // PC-24 cruise speed: ~440 knots
-    // Add 15 minutes for taxi, takeoff, climb, descent, landing
-    const cruiseSpeed = 440; // knots
-    const flightTimeHours = distanceNM / cruiseSpeed;
-    const flightTimeMinutes = flightTimeHours * 60;
-    return Math.round(flightTimeMinutes + 15);
+  const formatDuration = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60);
+    const mins = Math.round(minutes % 60);
+    return `${hours}h ${mins}m`;
   };
 
   const calculateTrip = async () => {
@@ -125,33 +103,24 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     setCalculating(true);
     
     try {
-      // Stage 1: Route Analysis
       setLoadingStage('Analyzing optimal flight route...');
       await new Promise(resolve => setTimeout(resolve, 800));
       
-      // Stage 2: Weather Check
       setLoadingStage('Checking live weather conditions...');
       await new Promise(resolve => setTimeout(resolve, 800));
       
-      // Stage 3: Traffic Analysis
       setLoadingStage('Calculating real-time traffic patterns...');
       await new Promise(resolve => setTimeout(resolve, 800));
       
-      // Stage 4: ATC Delays
       setLoadingStage('Evaluating ATC delays and restrictions...');
       await new Promise(resolve => setTimeout(resolve, 800));
       
-      // Stage 5: Final Computation
       setLoadingStage('Computing door-to-door timeline...');
       
-      // Combine time of day with date
       const [hours, minutes] = departureTime.split(':').map(Number);
       const departureDateTime = new Date(departureDate);
       departureDateTime.setHours(hours, minutes, 0, 0);
 
-      console.log('Calling calculate-accurate-trip with three-leg routing...');
-      
-      // Call the enhanced edge function with new parameters
       const { data, error } = await supabase.functions.invoke('calculate-accurate-trip', {
         body: {
           pickupLocation: { lat: selectedOrigin.lat, lng: selectedOrigin.lon },
@@ -166,9 +135,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         throw error;
       }
 
-      console.log('Trip calculation result:', data);
-
-      // Map the response to our TripResult format
       const result: TripResult = {
         segments: data.segments,
         totalTime: data.totalTime,
@@ -183,7 +149,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
 
       setTripResult(result);
       
-      // Initialize or update map
       setTimeout(() => {
         if (mapboxToken && mapContainer.current && !map.current) {
           initializeMap(result);
@@ -216,7 +181,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
 
     const { origin, destination, originAirport, destAirport } = result.route;
     
-    // Calculate center and bounds
     const centerLng = (origin.lon + destination.lon) / 2;
     const centerLat = (origin.lat + destination.lat) / 2;
 
@@ -235,115 +199,47 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     });
   };
 
-  const updateMap = (result: TripResult, segments?: any[]) => {
+  const updateMap = (result: TripResult, segments?: TripSegment[]) => {
     if (!map.current) return;
 
-    // Remove existing layers and sources
-    ['route-base', 'route-animated', 'route-ground-1', 'route-ground-2'].forEach((id) => {
+    ['route-base', 'route-animated', 'route-ground-1', 'route-ground-2', 'route-ground-3', 'route-ground-4', 'route-ground-5'].forEach((id) => {
       if (map.current?.getLayer(id)) map.current.removeLayer(id);
       if (map.current?.getSource(id)) map.current.removeSource(id);
     });
 
-    // Remove existing markers
     document.querySelectorAll('.mapboxgl-marker').forEach((el) => el.remove());
 
     const { origin, destination, originAirport, destAirport } = result.route;
 
-    // Create custom animated markers
-    const createMarker = (color: string, label: string) => {
-      const el = document.createElement('div');
-      el.className = 'custom-marker';
-      el.style.cssText = `
-        background-color: ${color};
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        border: 3px solid white;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        animation: markerPop 0.5s ease-out;
-      `;
-      return el;
-    };
+    const KFRG = { lat: 40.728889, lng: -73.413333 };
 
-    // Add animated markers
-    setTimeout(() => {
-      new mapboxgl.Marker({ element: createMarker('#005587', 'Origin'), anchor: 'center' })
-        .setLngLat([origin.lon, origin.lat])
-        .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`
-          <div class="font-semibold">Origin Hospital</div>
-          <div class="text-sm">${origin.displayName.split(',')[0]}</div>
-        `))
-        .addTo(map.current!);
-    }, 100);
+    new mapboxgl.Marker({ color: '#3b82f6' })
+      .setLngLat([KFRG.lng, KFRG.lat])
+      .setPopup(new mapboxgl.Popup().setHTML('<h3>KFRG - Home Base</h3>'))
+      .addTo(map.current);
 
-    setTimeout(() => {
-      new mapboxgl.Marker({ element: createMarker('#FF9800', 'Departure'), anchor: 'center' })
-        .setLngLat([originAirport.lng, originAirport.lat])
-        .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`
-          <div class="font-semibold">${originAirport.code}</div>
-          <div class="text-sm">${originAirport.name}</div>
-        `))
-        .addTo(map.current!);
-    }, 300);
+    new mapboxgl.Marker({ color: '#10b981' })
+      .setLngLat([originAirport.lng, originAirport.lat])
+      .setPopup(new mapboxgl.Popup().setHTML(`<h3>${originAirport.code}</h3><p>${originAirport.name}</p>`))
+      .addTo(map.current);
 
-    setTimeout(() => {
-      new mapboxgl.Marker({ element: createMarker('#FF9800', 'Arrival'), anchor: 'center' })
+    new mapboxgl.Marker({ color: '#10b981' })
+      .setLngLat([origin.lon, origin.lat])
+      .setPopup(new mapboxgl.Popup().setHTML(`<h3>Pickup Hospital</h3><p>${origin.displayName.split(',')[0]}</p>`))
+      .addTo(map.current);
+
+    new mapboxgl.Marker({ color: '#ef4444' })
+      .setLngLat([destination.lon, destination.lat])
+      .setPopup(new mapboxgl.Popup().setHTML(`<h3>Delivery Hospital</h3><p>${destination.displayName.split(',')[0]}</p>`))
+      .addTo(map.current);
+
+    if (destAirport.code !== 'KFRG') {
+      new mapboxgl.Marker({ color: '#ef4444' })
         .setLngLat([destAirport.lng, destAirport.lat])
-        .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`
-          <div class="font-semibold">${destAirport.code}</div>
-          <div class="text-sm">${destAirport.name}</div>
-        `))
-        .addTo(map.current!);
-    }, 500);
+        .setPopup(new mapboxgl.Popup().setHTML(`<h3>${destAirport.code}</h3><p>${destAirport.name}</p>`))
+        .addTo(map.current);
+    }
 
-    setTimeout(() => {
-      new mapboxgl.Marker({ element: createMarker('#7CB342', 'Destination'), anchor: 'center' })
-        .setLngLat([destination.lon, destination.lat])
-        .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`
-          <div class="font-semibold">Destination Hospital</div>
-          <div class="text-sm">${destination.displayName.split(',')[0]}</div>
-        `))
-        .addTo(map.current!);
-    }, 700);
-
-    // Add ground route 1
-    map.current.addSource('route-ground-1', {
-      type: 'geojson',
-      data: {
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'LineString',
-          coordinates: [
-            [origin.lon, origin.lat],
-            [originAirport.lng, originAirport.lat],
-          ],
-        },
-      },
-    });
-
-    map.current.addLayer({
-      id: 'route-ground-1',
-      type: 'line',
-      source: 'route-ground-1',
-      layout: {
-        'line-join': 'round',
-        'line-cap': 'round',
-      },
-      paint: {
-        'line-color': '#005587',
-        'line-width': 3,
-        'line-dasharray': [2, 2],
-      },
-    });
-
-    // Add flight route with animation
-    const flightCoords = [
-      [originAirport.lng, originAirport.lat],
-      [destAirport.lng, destAirport.lat],
-    ];
-
-    // Base route (thinner, lighter)
     map.current.addSource('route-base', {
       type: 'geojson',
       data: {
@@ -351,9 +247,12 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         properties: {},
         geometry: {
           type: 'LineString',
-          coordinates: flightCoords,
-        },
-      },
+          coordinates: [
+            [KFRG.lng, KFRG.lat],
+            [originAirport.lng, originAirport.lat]
+          ]
+        }
+      }
     });
 
     map.current.addLayer({
@@ -362,170 +261,138 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       source: 'route-base',
       layout: {
         'line-join': 'round',
-        'line-cap': 'round',
+        'line-cap': 'round'
       },
       paint: {
-        'line-color': '#2196F3',
-        'line-width': 2,
-        'line-opacity': 0.3,
-      },
+        'line-color': '#3b82f6',
+        'line-width': 3,
+        'line-dasharray': [2, 2]
+      }
     });
 
-    // Animated route
-    map.current.addSource('route-animated', {
-      type: 'geojson',
-      data: {
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'LineString',
-          coordinates: [flightCoords[0]],
+    if (segments && segments.length >= 4) {
+      map.current.addSource('route-animated', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [originAirport.lng, originAirport.lat],
+              [destAirport.lng, destAirport.lat]
+            ]
+          }
+        }
+      });
+
+      map.current.addLayer({
+        id: 'route-animated',
+        type: 'line',
+        source: 'route-animated',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
         },
-      },
-    });
+        paint: {
+          'line-color': '#3b82f6',
+          'line-width': 3,
+          'line-dasharray': [2, 2]
+        }
+      });
+    }
 
-    map.current.addLayer({
-      id: 'route-animated',
-      type: 'line',
-      source: 'route-animated',
-      layout: {
-        'line-join': 'round',
-        'line-cap': 'round',
-      },
-      paint: {
-        'line-color': '#2196F3',
-        'line-width': 4,
-      },
-    });
-
-    // Animate the flight route
-    const animateRoute = () => {
-      const steps = 50;
-      let step = 0;
-
-      const animate = () => {
-        if (step <= steps) {
-          const progress = step / steps;
-          const lng = originAirport.lng + (destAirport.lng - originAirport.lng) * progress;
-          const lat = originAirport.lat + (destAirport.lat - originAirport.lat) * progress;
+    if (segments) {
+      segments.forEach((segment, index) => {
+        if (segment.type === 'ground' && segment.polyline) {
+          const sourceId = `route-ground-${index + 1}`;
           
-          const source = map.current?.getSource('route-animated') as mapboxgl.GeoJSONSource;
-          if (source) {
-            const coords = [];
-            for (let i = 0; i <= step; i++) {
-              const p = i / steps;
-              coords.push([
-                originAirport.lng + (destAirport.lng - originAirport.lng) * p,
-                originAirport.lat + (destAirport.lat - originAirport.lat) * p,
-              ]);
-            }
-            source.setData({
+          map.current?.addSource(sourceId, {
+            type: 'geojson',
+            data: {
               type: 'Feature',
               properties: {},
               geometry: {
                 type: 'LineString',
-                coordinates: coords,
-              },
-            });
-          }
-          step++;
-          requestAnimationFrame(animate);
+                coordinates: segment.polyline
+              }
+            }
+          });
+
+          map.current?.addLayer({
+            id: sourceId,
+            type: 'line',
+            source: sourceId,
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            paint: {
+              'line-color': index === 1 || index === 2 ? '#10b981' : '#ef4444',
+              'line-width': 3
+            }
+          });
         }
-      };
-      animate();
-    };
+      });
+    }
 
-    setTimeout(animateRoute, 800);
-
-    // Add ground route 2
-    map.current.addSource('route-ground-2', {
-      type: 'geojson',
-      data: {
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'LineString',
-          coordinates: [
-            [destAirport.lng, destAirport.lat],
-            [destination.lon, destination.lat],
-          ],
-        },
-      },
-    });
-
-    map.current.addLayer({
-      id: 'route-ground-2',
-      type: 'line',
-      source: 'route-ground-2',
-      layout: {
-        'line-join': 'round',
-        'line-cap': 'round',
-      },
-      paint: {
-        'line-color': '#005587',
-        'line-width': 3,
-        'line-dasharray': [2, 2],
-      },
-    });
-
-    // Fit bounds to show entire route
     const bounds = new mapboxgl.LngLatBounds();
+    bounds.extend([KFRG.lng, KFRG.lat]);
+    bounds.extend([originAirport.lng, originAirport.lat]);
     bounds.extend([origin.lon, origin.lat]);
     bounds.extend([destination.lon, destination.lat]);
-    bounds.extend([originAirport.lng, originAirport.lat]);
     bounds.extend([destAirport.lng, destAirport.lat]);
 
-    map.current.fitBounds(bounds, { padding: { top: 80, bottom: 80, left: 80, right: 80 }, duration: 1500 });
-  };
-
-  const formatDuration = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = Math.round(minutes % 60);
-    if (hours === 0) return `${mins} min`;
-    return `${hours}h ${mins}min`;
+    map.current.fitBounds(bounds, {
+      padding: 100,
+      duration: 1000
+    });
   };
 
   return (
-    <div className="w-full space-y-6 py-8">
+    <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <div className="mb-8 text-center">
+        <h1 className="text-4xl font-bold mb-3">Medical Transport Time Calculator</h1>
+        <p className="text-lg text-muted-foreground">
+          AI-powered trip planning with real-time weather, traffic, and routing intelligence
+        </p>
+      </div>
+
       {!tripResult ? (
-        /* Centered form before calculation */
         <div className="max-w-2xl mx-auto">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-2xl">
-                <MapPin className="w-6 h-6 text-primary" />
-                Plan Your Medical Transport
+              <CardTitle className="flex items-center gap-2">
+                <Plane className="w-6 h-6 text-primary" />
+                Calculate Trip Time
               </CardTitle>
-              <p className="text-muted-foreground mt-2">
-                Calculate door-to-door travel time with our private medical aviation service
-              </p>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Pick Up Hospital */}
-              <div className="space-y-2">
+              <div className="grid gap-6">
                 <LocationAutocomplete
                   value={originHospital}
                   onChange={setOriginHospital}
-                  onLocationSelect={setSelectedOrigin}
+                  onLocationSelect={(location) => {
+                    setSelectedOrigin(location);
+                    setOriginHospital(location.displayName);
+                  }}
                   placeholder="Enter hospital name or address"
                   label="Pick Up Hospital"
                   selectedLocation={selectedOrigin}
                 />
-              </div>
-
-              {/* Delivery Hospital */}
-              <div className="space-y-2">
                 <LocationAutocomplete
                   value={destinationHospital}
                   onChange={setDestinationHospital}
-                  onLocationSelect={setSelectedDestination}
+                  onLocationSelect={(location) => {
+                    setSelectedDestination(location);
+                    setDestinationHospital(location.displayName);
+                  }}
                   placeholder="Enter hospital name or address"
                   label="Delivery Hospital"
                   selectedLocation={selectedDestination}
                 />
               </div>
 
-              {/* Date & Time */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Departure Date</Label>
@@ -546,7 +413,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       <Calendar
                         mode="single"
                         selected={departureDate}
-                        onSelect={setDepartureDate}
+                        onSelect={(date) => date && setDepartureDate(date)}
                         initialFocus
                       />
                     </PopoverContent>
@@ -568,7 +435,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 </div>
               </div>
 
-              {/* Passenger Count */}
               <div className="space-y-2">
                 <Label>Passengers: {passengerCount}</Label>
                 <Slider
@@ -581,59 +447,55 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 />
               </div>
 
-              {/* Calculate Button */}
               <Button
                 onClick={calculateTrip}
                 disabled={calculating || !selectedOrigin || !selectedDestination}
                 className="w-full"
                 size="lg"
               >
-              {calculating ? (
-                <div className="flex flex-col items-center gap-2 py-1">
-                  <div className="flex items-center gap-2">
-                    <Timer className="w-4 h-4 animate-spin" />
-                    <span className="font-semibold">Calculating Your Trip</span>
+                {calculating ? (
+                  <div className="flex flex-col items-center gap-2 py-1">
+                    <div className="flex items-center gap-2">
+                      <Timer className="w-4 h-4 animate-spin" />
+                      <span className="font-semibold">Calculating Your Trip</span>
+                    </div>
+                    {loadingStage && (
+                      <>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          {loadingStage.includes('route') && <Plane className="w-3 h-3" />}
+                          {loadingStage.includes('weather') && <Zap className="w-3 h-3" />}
+                          {loadingStage.includes('traffic') && <Car className="w-3 h-3" />}
+                          {loadingStage.includes('ATC') && <Target className="w-3 h-3" />}
+                          {loadingStage.includes('timeline') && <Clock className="w-3 h-3" />}
+                          <span>{loadingStage}</span>
+                        </div>
+                        <Progress 
+                          value={
+                            loadingStage.includes('route') ? 20 :
+                            loadingStage.includes('weather') ? 40 :
+                            loadingStage.includes('traffic') ? 60 :
+                            loadingStage.includes('ATC') ? 80 :
+                            100
+                          } 
+                          className="w-full h-1" 
+                        />
+                      </>
+                    )}
                   </div>
-                  {loadingStage && (
-                    <>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        {loadingStage.includes('route') && <Plane className="w-3 h-3" />}
-                        {loadingStage.includes('weather') && <Zap className="w-3 h-3" />}
-                        {loadingStage.includes('traffic') && <Car className="w-3 h-3" />}
-                        {loadingStage.includes('ATC') && <Target className="w-3 h-3" />}
-                        {loadingStage.includes('timeline') && <Clock className="w-3 h-3" />}
-                        <span>{loadingStage}</span>
-                      </div>
-                      <Progress 
-                        value={
-                          loadingStage.includes('route') ? 20 :
-                          loadingStage.includes('weather') ? 40 :
-                          loadingStage.includes('traffic') ? 60 :
-                          loadingStage.includes('ATC') ? 80 :
-                          100
-                        } 
-                        className="w-full h-1" 
-                      />
-                    </>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <Plane className="w-4 h-4 mr-2" />
-                  Calculate Trip Time
-                </>
-              )}
+                ) : (
+                  <>
+                    <Plane className="w-4 h-4 mr-2" />
+                    Calculate Trip Time
+                  </>
+                )}
               </Button>
             </CardContent>
           </Card>
         </div>
       ) : (
-        /* Vertical layout after calculation - Hero section at top */
         <div className="space-y-6">
-          {/* Hero Section - Trip Summary */}
           <Card className="border-2 border-primary/20">
             <CardContent className="pt-6">
-              {/* Hospital names and departure info */}
               <div className="grid md:grid-cols-3 gap-4 mb-6">
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Pick Up Hospital</div>
@@ -649,7 +511,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 </div>
               </div>
               
-              {/* Main Results - Large Typography */}
               <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-lg p-6 space-y-4">
                 <div className="grid md:grid-cols-3 gap-6">
                   <div className="text-center space-y-2">
@@ -674,7 +535,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 </div>
               </div>
               
-              {/* New Calculation Button */}
               <div className="mt-4 flex justify-end">
                 <Button onClick={() => setTripResult(null)} variant="outline">
                   New Calculation
@@ -683,7 +543,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             </CardContent>
           </Card>
 
-          {/* AI Scenario Cards - Horizontal 3 Column */}
           <div className="space-y-3">
             <div className="flex items-center justify-between mb-2">
               <Badge variant="secondary" className="bg-primary/20 text-primary">
@@ -692,7 +551,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             </div>
             
             <div className="grid md:grid-cols-3 gap-4">
-              {/* Worst Case */}
               <Card className="bg-destructive/10 border-destructive/30 border-2">
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2 mb-1">
@@ -728,7 +586,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 </CardContent>
               </Card>
 
-              {/* Likely Scenario */}
               <Card className="bg-green-50 dark:bg-green-950/20 border-green-600/30 border-2">
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2 mb-1">
@@ -764,7 +621,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 </CardContent>
               </Card>
 
-              {/* Best Case */}
               <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-600/30 border-2">
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2 mb-1">
@@ -802,225 +658,85 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             </div>
           </div>
 
-          {/* Trip Breakdown - Full Width */}
           <Card>
-              <CardHeader className="pb-4">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Clock className="w-5 h-5 text-primary" />
-                  Trip Breakdown
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {tripResult.segments.map((segment, index) => (
-                  <div
-                    key={index}
-                    className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border border-border"
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <Clock className="w-6 h-6 text-primary" />
+                Trip Breakdown
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {tripResult.segments.map((segment, index) => (
+                <div
+                  key={index}
+                  className="flex items-center gap-4 p-4 rounded-lg bg-muted/50 border border-border"
+                >
+                  <div className="p-2 rounded-full bg-background">
+                    {segment.type === 'ground' ? (
+                      <Car className="w-5 h-5 text-primary" />
+                    ) : (
+                      <Plane className="w-5 h-5 text-green-600" />
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <div className="font-semibold">
+                      {segment.type === 'ground' ? 'Ground Transport' : 'Flight'}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {segment.from} → {segment.to}
+                    </div>
+                  </div>
+                  <div className="text-right space-y-1">
+                    <div className="font-bold text-lg">
+                      {formatDuration(segment.duration)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {segment.distance.toFixed(0)} {segment.type === 'ground' ? 'mi' : 'nm'}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {onAIPlatformClick && (
+                <div className="pt-3 border-t border-border">
+                  <Button
+                    onClick={() =>
+                      onAIPlatformClick({
+                        origin: selectedOrigin,
+                        destination: selectedDestination,
+                        originHospital,
+                        destinationHospital,
+                        departureDate,
+                        departureTime,
+                        passengerCount,
+                        totalTime: tripResult.totalTime,
+                        arrivalTime: tripResult.arrivalTime,
+                        originAirport: tripResult.route.originAirport,
+                        destAirport: tripResult.route.destAirport,
+                        segments: tripResult.segments,
+                      })
+                    }
+                    variant="default"
+                    className="w-full"
+                    size="lg"
                   >
-                    <div className="mt-0.5 p-1.5 rounded-full bg-background">
-                      {segment.type === 'ground' ? (
-                        <Car className="w-4 h-4 text-primary" />
-                      ) : (
-                        <Plane className="w-4 h-4 text-success" />
-                      )}
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <div className="font-semibold text-sm">
-                        {segment.type === 'ground' ? 'Ground Transport' : 'PC-24 Flight'}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {segment.from} → {segment.to}
-                      </div>
-                      <div className="flex gap-3 text-xs mt-1">
-                        <span className="font-semibold text-foreground">
-                          {formatDuration(segment.duration)}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {segment.distance.toFixed(0)} {segment.type === 'ground' ? 'mi' : 'nm'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                <div className="pt-3 border-t border-border space-y-2">
-                  <div className="flex items-center justify-between text-lg font-bold">
-                    <span>Total Time</span>
-                    <span className="text-primary">
-                      {formatDuration(tripResult.totalTime)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Estimated Arrival</span>
-                    <span className="font-medium">{format(tripResult.arrivalTime, 'PPp')}</span>
-                  </div>
+                    <Zap className="w-4 h-4 mr-2" />
+                    View AI Intelligence Platform
+                  </Button>
                 </div>
+              )}
+            </CardContent>
+          </Card>
 
-                {onAIPlatformClick && (
-                  <div className="pt-3 border-t border-border">
-                    <Button
-                      onClick={() =>
-                        onAIPlatformClick({
-                          origin: selectedOrigin,
-                          destination: selectedDestination,
-                          originHospital,
-                          destinationHospital,
-                          originAirport: tripResult.route.originAirport,
-                          destAirport: tripResult.route.destAirport,
-                        })
-                      }
-                      className="w-full gap-2"
-                      variant="outline"
-                      size="lg"
-                    >
-                      <Zap className="w-4 h-4" />
-                      Analyze with AI Intelligence Platform
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* AI Scenario Cards */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between mb-2">
-                <Badge variant="secondary" className="bg-primary/20 text-primary">
-                  AI-Powered Time Estimates
-                </Badge>
-              </div>
-              
-              <div className="grid gap-3">
-                {/* Worst Case */}
-                <Card className="bg-destructive/10 border-destructive/30 border-2">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center gap-2 mb-1">
-                      <AlertTriangle className="w-4 h-4 text-destructive" />
-                      <CardTitle className="text-sm">Worst Case</CardTitle>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <Clock className="w-3 h-3 text-destructive" />
-                      <span className="text-xl font-bold text-foreground">
-                        {Math.floor((tripResult.totalTime * 1.25) / 60)}h {Math.round((tripResult.totalTime * 1.25) % 60)}m - {Math.floor((tripResult.totalTime * 1.35) / 60)}h {Math.round((tripResult.totalTime * 1.35) % 60)}m
-                      </span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">Confidence</span>
-                        <span className="font-semibold">60%</span>
-                      </div>
-                      <Progress value={60} className="h-1.5" />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase">Key Factors</p>
-                      <ul className="space-y-1">
-                        {['Heavy traffic delays', 'Adverse weather conditions', 'Extended routing requirements'].map((factor, idx) => (
-                          <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
-                            <span className="mt-1 w-1 h-1 rounded-full text-destructive bg-current flex-shrink-0" />
-                            <span>{factor}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Likely Scenario */}
-                <Card className="bg-success/10 border-success/30 border-2">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center gap-2 mb-1">
-                      <CheckCircle className="w-4 h-4 text-success" />
-                      <CardTitle className="text-sm">Likely Scenario</CardTitle>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <Clock className="w-3 h-3 text-success" />
-                      <span className="text-xl font-bold text-foreground">
-                        {Math.floor((tripResult.totalTime * 0.95) / 60)}h {Math.round((tripResult.totalTime * 0.95) % 60)}m - {Math.floor((tripResult.totalTime * 1.10) / 60)}h {Math.round((tripResult.totalTime * 1.10) % 60)}m
-                      </span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">Confidence</span>
-                        <span className="font-semibold">90%</span>
-                      </div>
-                      <Progress value={90} className="h-1.5" />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase">Key Factors</p>
-                      <ul className="space-y-1">
-                        {['Normal traffic patterns', 'Standard weather conditions', 'Optimal routing'].map((factor, idx) => (
-                          <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
-                            <span className="mt-1 w-1 h-1 rounded-full text-success bg-current flex-shrink-0" />
-                            <span>{factor}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Best Case */}
-                <Card className="bg-primary/10 border-primary/30 border-2">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Target className="w-4 h-4 text-primary" />
-                      <CardTitle className="text-sm">Best Case</CardTitle>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <Clock className="w-3 h-3 text-primary" />
-                      <span className="text-xl font-bold text-foreground">
-                        {Math.floor((tripResult.totalTime * 0.85) / 60)}h {Math.round((tripResult.totalTime * 0.85) % 60)}m - {Math.floor((tripResult.totalTime * 0.95) / 60)}h {Math.round((tripResult.totalTime * 0.95) % 60)}m
-                      </span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">Confidence</span>
-                        <span className="font-semibold">85%</span>
-                      </div>
-                      <Progress value={85} className="h-1.5" />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase">Key Factors</p>
-                      <ul className="space-y-1">
-                        {['Favorable winds at altitude', 'Light traffic at all segments', 'Direct routing clearance'].map((factor, idx) => (
-                          <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
-                            <span className="mt-1 w-1 h-1 rounded-full text-primary bg-current flex-shrink-0" />
-                            <span>{factor}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="mt-3 p-3 bg-card border border-border rounded-lg">
-                <div className="flex items-start gap-2">
-                  <Target className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="font-semibold text-sm text-foreground mb-1">AI Recommendation</p>
-                    <p className="text-xs text-muted-foreground">
-                      Based on historical analysis, the{' '}
-                      <span className="font-semibold text-success">Likely Scenario</span> has the highest 
-                      probability. Consider departure timing and weather patterns for optimal results.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Map - Full Width */}
-          <Card className="overflow-hidden">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <MapPin className="w-6 h-6 text-primary" />
+                Interactive Route Map
+              </CardTitle>
+            </CardHeader>
             <CardContent className="p-0">
-              <div
-                ref={mapContainer}
-                className="w-full h-[800px]"
-              />
+              <div ref={mapContainer} className="h-[500px] w-full rounded-b-lg" />
             </CardContent>
           </Card>
         </div>
