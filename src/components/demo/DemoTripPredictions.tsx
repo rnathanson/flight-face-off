@@ -189,11 +189,19 @@ export const DemoTripPredictions = ({
         }
       });
       if (data?.results) {
-        setLeadDoctorSuggestions(data.results);
+        const sorted = [...data.results].sort((a, b) => {
+          if (!organType) return 0;
+          const aExp = a.organ_experience?.[organType as keyof typeof a.organ_experience];
+          const bExp = b.organ_experience?.[organType as keyof typeof b.organ_experience];
+          const aRate = (aExp && typeof aExp === 'object' && 'success_rate' in aExp) ? aExp.success_rate : 0;
+          const bRate = (bExp && typeof bExp === 'object' && 'success_rate' in bExp) ? bExp.success_rate : 0;
+          return bRate - aRate;
+        });
+        setLeadDoctorSuggestions(sorted);
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [leadDoctorSearch, leadDoctorOpen]);
+  }, [leadDoctorSearch, leadDoctorOpen, organType]);
   useEffect(() => {
     const currentInput = surgeonInputs[activeSurgeonInput];
     if (!currentInput || currentInput.length < 2) {
@@ -210,11 +218,19 @@ export const DemoTripPredictions = ({
         }
       });
       if (data?.results) {
-        setSurgeonSuggestions(data.results);
+        const sorted = [...data.results].sort((a, b) => {
+          if (!organType) return 0;
+          const aExp = a.organ_experience?.[organType as keyof typeof a.organ_experience];
+          const bExp = b.organ_experience?.[organType as keyof typeof b.organ_experience];
+          const aRate = (aExp && typeof aExp === 'object' && 'success_rate' in aExp) ? aExp.success_rate : 0;
+          const bRate = (bExp && typeof bExp === 'object' && 'success_rate' in bExp) ? bExp.success_rate : 0;
+          return bRate - aRate;
+        });
+        setSurgeonSuggestions(sorted);
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [surgeonInputs, activeSurgeonInput]);
+  }, [surgeonInputs, activeSurgeonInput, organType]);
   useEffect(() => {
     if (coordinatorSearch.length < 2 && !coordinatorOpen) {
       setCoordinatorSuggestions([]);
@@ -230,11 +246,19 @@ export const DemoTripPredictions = ({
         }
       });
       if (data?.results) {
-        setCoordinatorSuggestions(data.results);
+        const sorted = [...data.results].sort((a, b) => {
+          if (!organType) return 0;
+          const aExp = a.organ_experience?.[organType as keyof typeof a.organ_experience];
+          const bExp = b.organ_experience?.[organType as keyof typeof b.organ_experience];
+          const aRate = (aExp && typeof aExp === 'object' && 'success_rate' in aExp) ? aExp.success_rate : 0;
+          const bRate = (bExp && typeof bExp === 'object' && 'success_rate' in bExp) ? bExp.success_rate : 0;
+          return bRate - aRate;
+        });
+        setCoordinatorSuggestions(sorted);
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [coordinatorSearch, coordinatorOpen]);
+  }, [coordinatorSearch, coordinatorOpen, organType]);
 
   // Real-time live prediction calculation
   useEffect(() => {
