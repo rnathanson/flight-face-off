@@ -1,10 +1,14 @@
 import { GeocodeResult } from './geocoding';
+import { supabase } from '@/integrations/supabase/client';
+import { decodePolyline } from './polyline';
 
 export interface DrivingRouteResult {
   distanceMiles: number;
   durationMinutes: number;
-  source: 'osrm' | 'heuristic';
-  polyline?: string; // Encoded polyline for map display
+  source: 'google_maps' | 'heuristic';
+  polyline?: string;
+  coordinates?: [number, number][];
+  hasTrafficData?: boolean;
   alternativeRoutes?: {
     distanceMiles: number;
     durationMinutes: number;
@@ -47,10 +51,6 @@ export function estimateTrafficMultiplier(params: TrafficEstimateParams): number
   
   return multiplier;
 }
-
-// Rate limiting
-let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 1000; // 1 second between requests
 
 // Cache key generator
 function getCacheKey(from: GeocodeResult, to: GeocodeResult): string {
@@ -124,75 +124,71 @@ function calculateHeuristic(from: GeocodeResult, to: GeocodeResult): DrivingRout
 // Main function to get driving route
 export async function getRouteDriving(
   from: GeocodeResult,
-  to: GeocodeResult
+  to: GeocodeResult,
+  departureTime?: string
 ): Promise<DrivingRouteResult> {
-  // Check cache first
   const cacheKey = getCacheKey(from, to);
-  const cached = getCachedRoute(cacheKey);
-  if (cached) {
-    return cached;
-  }
   
-  // Rate limiting
-  const now = Date.now();
-  const timeSinceLastRequest = now - lastRequestTime;
-  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
-    await new Promise(resolve => setTimeout(resolve, MIN_REQUEST_INTERVAL - timeSinceLastRequest));
+  // Check cache first (but skip if we have a specific departure time for traffic)
+  if (!departureTime) {
+    const cachedRoute = getCachedRoute(cacheKey);
+    if (cachedRoute) {
+      console.log('Using cached driving route');
+      return cachedRoute;
+    }
   }
-  lastRequestTime = Date.now();
-  
+
   try {
-    // Enhanced OSRM call with full geometry and alternatives
-    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&alternatives=true&steps=true&geometries=polyline&annotations=duration,distance`;
+    console.log('Fetching driving route from Google Maps...');
     
-    const response = await fetch(url, {
-      method: 'GET',
-      mode: 'cors',
-      headers: {
-        'Accept': 'application/json'
-      }
+    const { data, error } = await supabase.functions.invoke('route-google', {
+      body: {
+        origin: { lat: from.lat, lon: from.lon },
+        destination: { lat: to.lat, lon: to.lon },
+        departureTime,
+      },
     });
-    
-    if (!response.ok) {
-      throw new Error(`OSRM responded with ${response.status}`);
+
+    if (error) {
+      console.error('Google Maps routing error:', error);
+      throw new Error('Failed to get route from Google Maps');
     }
-    
-    const json = await response.json();
-    
-    if (json.code !== 'Ok' || !json.routes || json.routes.length === 0) {
-      throw new Error('OSRM returned no valid routes');
+
+    if (!data) {
+      console.log('No route data from Google Maps, using heuristic');
+      return calculateHeuristic(from, to);
     }
-    
-    const route = json.routes[0];
-    const distanceMiles = route.distance / 1609.344; // meters to miles
-    const baseDurationMinutes = route.duration / 60; // seconds to minutes
-    const durationMinutes = baseDurationMinutes * 1.05; // Add 5% for traffic
-    
-    // Extract alternative routes if available
-    const alternativeRoutes = json.routes.slice(1, 3).map((altRoute: any) => ({
-      distanceMiles: altRoute.distance / 1609.344,
-      durationMinutes: (altRoute.duration / 60) * 1.05,
-      polyline: altRoute.geometry
-    }));
-    
+
+    // Decode the polyline for map display
+    const coordinates = data.polyline ? decodePolyline(data.polyline) : undefined;
+
+    // Convert km to miles (1 km = 0.621371 miles)
+    const distanceMiles = data.distance * 0.621371;
+
     const result: DrivingRouteResult = {
       distanceMiles,
-      durationMinutes,
-      source: 'osrm',
-      polyline: route.geometry, // Encoded polyline
-      alternativeRoutes: alternativeRoutes.length > 0 ? alternativeRoutes : undefined
+      durationMinutes: data.duration,
+      source: 'google_maps',
+      polyline: data.polyline,
+      coordinates,
+      hasTrafficData: data.hasTrafficData,
     };
+
+    // Cache the successful result (if no specific departure time)
+    if (!departureTime) {
+      setCachedRoute(cacheKey, result);
+    }
     
-    // Cache the result
-    setCachedRoute(cacheKey, result);
-    
+    console.log('Google Maps route:', {
+      distance: result.distanceMiles.toFixed(1),
+      duration: result.durationMinutes.toFixed(1),
+      hasTrafficData: result.hasTrafficData,
+    });
+
     return result;
   } catch (error) {
-    console.warn('OSRM routing failed, using heuristic:', error);
-    // Return heuristic fallback
-    const result = calculateHeuristic(from, to);
-    // Cache the fallback too (but with shorter duration implicitly handled by cache timestamp)
-    setCachedRoute(cacheKey, result);
-    return result;
+    console.error('Error fetching route from Google Maps:', error);
+    console.log('Falling back to heuristic calculation');
+    return calculateHeuristic(from, to);
   }
 }

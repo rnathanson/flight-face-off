@@ -22,7 +22,7 @@ export interface LocationSuggestion {
 import { supabase } from '@/integrations/supabase/client';
 
 async function geocodeFetch(query: string, limit: number): Promise<NominatimResult[]> {
-  const { data, error } = await supabase.functions.invoke('geocode', {
+  const { data, error } = await supabase.functions.invoke('geocode-google', {
     body: { query, limit }
   });
 

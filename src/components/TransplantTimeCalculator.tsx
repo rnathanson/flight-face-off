@@ -90,16 +90,21 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     return `${hours}h ${mins}m`;
   };
 
-  const calculateMidpoint = (coords: [number, number][]): [number, number] => {
+  const calculateMidpoint = (coords: [number, number][]): [number, number] | null => {
+    if (!coords || coords.length === 0) return null;
     if (coords.length === 2) {
       return [(coords[0][0] + coords[1][0]) / 2, (coords[0][1] + coords[1][1]) / 2];
     }
     const middleIndex = Math.floor(coords.length / 2);
-    return coords[middleIndex];
+    return coords[middleIndex] || null;
   };
 
-  const createSegmentLabel = (segment: TripSegment, index: number, midpoint: [number, number]) => {
-    if (!map.current) return null;
+  const createSegmentLabel = (segment: TripSegment, index: number, midpoint: [number, number] | null) => {
+    if (!map.current || !midpoint || midpoint.length !== 2 || 
+        typeof midpoint[0] !== 'number' || typeof midpoint[1] !== 'number') {
+      console.warn('Invalid midpoint for segment label:', midpoint);
+      return null;
+    }
     
     const el = document.createElement('div');
     el.className = 'segment-label';
@@ -341,14 +346,17 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         [KFRG.lng, KFRG.lat],
         [originAirport.lng, originAirport.lat]
       ]);
-      const firstFlightSegment: TripSegment = {
-        type: 'flight',
-        from: 'KFRG',
-        to: originAirport.code,
-        duration: segments[0].duration,
-        distance: segments[0].distance
-      };
-      createSegmentLabel(firstFlightSegment, 0, firstFlightMidpoint)?.addTo(map.current);
+      if (firstFlightMidpoint) {
+        const firstFlightSegment: TripSegment = {
+          type: 'flight',
+          from: 'KFRG',
+          to: originAirport.code,
+          duration: segments[0].duration,
+          distance: segments[0].distance
+        };
+        const label = createSegmentLabel(firstFlightSegment, 0, firstFlightMidpoint);
+        if (label) label.addTo(map.current);
+      }
 
       map.current.addSource('route-animated', {
         type: 'geojson',
@@ -385,14 +393,17 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         [originAirport.lng, originAirport.lat],
         [destAirport.lng, destAirport.lat]
       ]);
-      const mainFlightSegment: TripSegment = {
-        type: 'flight',
-        from: originAirport.code,
-        to: destAirport.code,
-        duration: segments[3]?.duration || 0,
-        distance: segments[3]?.distance || 0
-      };
-      createSegmentLabel(mainFlightSegment, 3, mainFlightMidpoint)?.addTo(map.current);
+      if (mainFlightMidpoint) {
+        const mainFlightSegment: TripSegment = {
+          type: 'flight',
+          from: originAirport.code,
+          to: destAirport.code,
+          duration: segments[3]?.duration || 0,
+          distance: segments[3]?.distance || 0
+        };
+        const mainLabel = createSegmentLabel(mainFlightSegment, 3, mainFlightMidpoint);
+        if (mainLabel) mainLabel.addTo(map.current);
+      }
     }
 
     if (segments) {
@@ -428,7 +439,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
 
           // Add label for ground segment
           const midpoint = calculateMidpoint(segment.polyline as [number, number][]);
-          createSegmentLabel(segment, index, midpoint)?.addTo(map.current);
+          if (midpoint) {
+            const label = createSegmentLabel(segment, index, midpoint);
+            if (label) label.addTo(map.current);
+          }
         }
       });
     }
