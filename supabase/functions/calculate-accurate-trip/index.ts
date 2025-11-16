@@ -151,14 +151,18 @@ serve(async (req) => {
     const leg2Data = await calculateGroundSegmentEnhanced(
       { lat: pickupAirport.lat, lng: pickupAirport.lng },
       pickupLocation,
-      trafficMultiplier
+      trafficMultiplier,
+      supabase,
+      departureTime
     );
 
     // === LEG 3: Pickup Hospital back to Pickup Airport (GROUND) ===
     const leg3Data = await calculateGroundSegmentEnhanced(
       pickupLocation,
       { lat: pickupAirport.lat, lng: pickupAirport.lng },
-      trafficMultiplier
+      trafficMultiplier,
+      supabase,
+      departureTime
     );
 
     // === LEG 4: Pickup Airport to Destination Airport (FLIGHT) ===
@@ -197,7 +201,9 @@ serve(async (req) => {
     const leg5Data = await calculateGroundSegmentEnhanced(
       { lat: destinationAirport.lat, lng: destinationAirport.lng },
       deliveryLocation,
-      trafficMultiplier
+      trafficMultiplier,
+      supabase,
+      departureTime
     );
 
     // Build segments
@@ -406,42 +412,97 @@ function calculateFlightTime(
   return Math.round(climbTimeMin + cruiseTimeMin + descentTimeMin + taxiTime + bufferTime + weatherDelay);
 }
 
+// Polyline decoder function for Google Maps encoded polylines
+function decodePolyline(encoded: string): [number, number][] {
+  const coordinates: [number, number][] = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+
+  while (index < encoded.length) {
+    let shift = 0;
+    let result = 0;
+    let byte;
+
+    // Decode latitude
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+
+    const deltaLat = result & 1 ? ~(result >> 1) : result >> 1;
+    lat += deltaLat;
+
+    shift = 0;
+    result = 0;
+
+    // Decode longitude
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+
+    const deltaLng = result & 1 ? ~(result >> 1) : result >> 1;
+    lng += deltaLng;
+
+    // Return as [lng, lat] for Mapbox
+    coordinates.push([lng / 1e5, lat / 1e5]);
+  }
+
+  return coordinates;
+}
+
 async function calculateGroundSegmentEnhanced(
   from: { lat: number; lng: number },
   to: { lat: number; lng: number },
-  trafficMultiplier: number
-): Promise<{ duration: number; distance: number; source: string; polyline?: string }> {
+  trafficMultiplier: number,
+  supabase: any,
+  departureTime?: Date
+): Promise<{ duration: number; distance: number; source: string; polyline?: number[][]; hasTrafficData?: boolean }> {
   try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson&steps=true&annotations=duration,distance&alternatives=true`;
-    const response = await fetch(url);
+    console.log('Calculating ground segment using Google Maps...');
     
-    if (!response.ok) {
-      throw new Error('OSRM request failed');
-    }
+    // Call route-google edge function
+    const { data, error } = await supabase.functions.invoke('route-google', {
+      body: {
+        origin: { lat: from.lat, lon: from.lng },
+        destination: { lat: to.lat, lon: to.lng },
+        departureTime: departureTime?.toISOString()
+      }
+    });
     
-    const data = await response.json();
+    if (error) throw error;
     
-    if (data.routes && data.routes.length > 0) {
-      const route = data.routes[0];
-      const distanceMiles = route.distance * 0.000621371;
-      const baseTimeMinutes = route.duration / 60;
-      const adjustedTimeMinutes = baseTimeMinutes * trafficMultiplier;
+    if (data && data.distance && data.duration) {
+      console.log('Google Maps route found:', {
+        distance: data.distance,
+        duration: data.duration,
+        hasTraffic: data.hasTrafficData
+      });
+      
+      // Decode polyline to coordinates array
+      const coordinates = data.polyline ? decodePolyline(data.polyline) : undefined;
       
       return {
-        duration: Math.round(adjustedTimeMinutes),
-        distance: Math.round(distanceMiles * 10) / 10,
-        source: 'osrm',
-        polyline: JSON.stringify(route.geometry)
+        duration: Math.round(data.duration),
+        distance: Math.round(data.distance * 10) / 10,
+        source: 'google_maps',
+        polyline: coordinates,
+        hasTrafficData: data.hasTrafficData || false
       };
     }
   } catch (error) {
-    console.warn('OSRM failed, using heuristic:', error);
+    console.warn('Google Maps routing failed, using heuristic:', error);
   }
   
   // Fallback heuristic
   const distance = calculateDistance(from.lat, from.lng, to.lat, to.lng) * 1.15092;
   const baseTime = (distance / 45) * 60;
   const adjustedTime = baseTime * trafficMultiplier;
+  
+  console.log('Using heuristic routing for ground segment');
   
   return {
     duration: Math.round(adjustedTime),

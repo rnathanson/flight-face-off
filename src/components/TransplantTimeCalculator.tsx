@@ -25,6 +25,7 @@ interface TripSegment {
   distance: number;
   traffic?: string;
   polyline?: number[][];
+  hasTrafficData?: boolean;
 }
 
 interface Airport {
@@ -409,6 +410,15 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     if (segments) {
       segments.forEach((segment, index) => {
         if (segment.type === 'ground' && segment.polyline) {
+          console.log(`Rendering ground segment ${index}:`, {
+            from: segment.from,
+            to: segment.to,
+            coordinateCount: segment.polyline.length,
+            firstCoord: segment.polyline[0],
+            lastCoord: segment.polyline[segment.polyline.length - 1],
+            hasTrafficData: segment.hasTrafficData
+          });
+          
           const sourceId = `route-ground-${index + 1}`;
           
           map.current?.addSource(sourceId, {
@@ -780,7 +790,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               <div ref={mapContainer} className="h-[600px] w-full rounded-b-lg" />
               
               {/* Map Legend */}
-              <div className="absolute top-4 right-4 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm p-3 rounded-lg shadow-lg text-xs z-10 border border-border">
+              <div className="absolute bottom-4 right-4 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm p-3 rounded-lg shadow-lg text-xs z-10 border border-border">
                 <div className="font-semibold mb-2 text-foreground">Route Legend</div>
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
