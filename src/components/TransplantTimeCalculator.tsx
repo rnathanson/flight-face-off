@@ -714,154 +714,137 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             </CardContent>
           </Card>
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between mb-2">
-              <Badge variant="secondary" className="bg-primary/20 text-primary">
-                AI-Powered Time Estimates
-              </Badge>
+          <div className="border-t pt-4 mt-4">
+            <div className="mb-3">
+              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Time Analysis</h3>
             </div>
             
-            <div className="grid md:grid-cols-3 gap-4">
-              <Card className="bg-destructive/10 border-destructive/30 border-2">
-                <CardHeader className="pb-1 pt-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <AlertTriangle className="w-4 h-4 text-destructive" />
-                    <CardTitle className="text-sm">Worst Case</CardTitle>
+            <div className="grid md:grid-cols-3 gap-3">
+              {/* Conservative Estimate */}
+              <div className="border rounded-sm bg-card">
+                <div className="px-4 py-3 border-b bg-muted/30">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Conservative</span>
+                    <div className="h-1 w-1 rounded-full bg-amber-600" />
                   </div>
-                  <div className="flex items-baseline gap-2">
-                    <Clock className="w-3 h-3 text-destructive" />
-                    <span className="text-base font-bold text-foreground">
-                      {Math.floor((tripResult.totalTime * 1.35) / 60)}h {Math.round((tripResult.totalTime * 1.35) % 60)}m
-                    </span>
+                </div>
+                <div className="px-4 py-4">
+                  <div className="text-2xl font-semibold text-foreground mb-3">
+                    {Math.floor((tripResult.totalTime * 1.35) / 60)}h {Math.round((tripResult.totalTime * 1.35) % 60)}m
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-1 pb-3">
-                  <div className="space-y-0.5">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase">Key Factors</p>
-                    <ul className="space-y-0.5">
-                      {(() => {
-                        const factors = [];
-                        if (tripResult.conditions?.trafficLevel === 'heavy') {
-                          factors.push('Heavy traffic delays detected');
-                        } else if (tripResult.conditions?.trafficLevel === 'normal') {
-                          factors.push('Peak hour traffic expected');
-                        } else if (!tripResult.conditions?.hasRealTimeTraffic) {
-                          factors.push('Traffic data unavailable');
-                        }
-                        
-                        if (tripResult.conditions?.weatherDelay > 10 || tripResult.conditions?.maxHeadwind > 20) {
-                          factors.push(`Strong headwinds (${Math.round(tripResult.conditions.maxHeadwind)}kts)`);
-                        } else if (tripResult.conditions?.maxHeadwind > 10) {
-                          factors.push('Moderate headwinds');
-                        }
-                        
-                        if (tripResult.conditions?.routingQuality === 'great-circle') {
-                          factors.push('Non-standard routing required');
-                        }
-                        
-                        return factors.slice(0, 3).map((factor, idx) => (
-                          <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
-                            <span className="mt-1 w-1 h-1 rounded-full text-destructive bg-current flex-shrink-0" />
-                            <span>{factor}</span>
-                          </li>
-                        ));
-                      })()}
-                    </ul>
+                  <div className="space-y-1.5">
+                    {(() => {
+                      const factors = [];
+                      if (tripResult.conditions?.trafficLevel === 'heavy') {
+                        factors.push('Heavy traffic delays');
+                      } else if (tripResult.conditions?.trafficLevel === 'normal') {
+                        factors.push('Peak hour conditions');
+                      } else if (!tripResult.conditions?.hasRealTimeTraffic) {
+                        factors.push('Limited traffic data');
+                      }
+                      
+                      if (tripResult.conditions?.weatherDelay > 10 || tripResult.conditions?.maxHeadwind > 20) {
+                        factors.push(`Headwinds ${Math.round(tripResult.conditions.maxHeadwind)}kts`);
+                      } else if (tripResult.conditions?.maxHeadwind > 10) {
+                        factors.push('Moderate headwinds');
+                      }
+                      
+                      if (tripResult.conditions?.routingQuality === 'great-circle') {
+                        factors.push('Non-standard routing');
+                      }
+                      
+                      return factors.slice(0, 3).map((factor, idx) => (
+                        <div key={idx} className="text-xs text-muted-foreground flex items-center gap-2">
+                          <div className="h-px w-2 bg-border" />
+                          {factor}
+                        </div>
+                      ));
+                    })()}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
-              <Card className="bg-green-50 dark:bg-green-950/20 border-green-600/30 border-2">
-                <CardHeader className="pb-1 pt-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                    <CardTitle className="text-sm">Likely Scenario</CardTitle>
+              {/* Expected Estimate */}
+              <div className="border rounded-sm bg-card border-primary/30">
+                <div className="px-4 py-3 border-b bg-primary/5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-primary uppercase tracking-wide">Expected</span>
+                    <div className="h-1 w-1 rounded-full bg-primary" />
                   </div>
-                  <div className="flex items-baseline gap-2">
-                    <Clock className="w-3 h-3 text-green-600" />
-                    <span className="text-base font-bold text-foreground">
-                      {Math.floor(tripResult.totalTime / 60)}h {Math.round(tripResult.totalTime % 60)}m
-                    </span>
+                </div>
+                <div className="px-4 py-4">
+                  <div className="text-2xl font-semibold text-foreground mb-3">
+                    {Math.floor(tripResult.totalTime / 60)}h {Math.round(tripResult.totalTime % 60)}m
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-1 pb-3">
-                  <div className="space-y-0.5">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase">Key Factors</p>
-                    <ul className="space-y-0.5">
-                      {(() => {
-                        const factors = [];
-                        if (tripResult.conditions?.hasRealTimeTraffic) {
-                          factors.push('Real-time traffic data included');
-                        }
-                        
-                        if (tripResult.conditions?.weatherDelay <= 5 && tripResult.conditions?.maxHeadwind <= 15) {
-                          factors.push('Favorable weather conditions');
-                        } else {
-                          factors.push('Weather factored into estimate');
-                        }
-                        
-                        if (tripResult.conditions?.routingQuality === 'faa-preferred') {
-                          factors.push('FAA preferred routing');
-                        } else {
-                          factors.push('Direct routing available');
-                        }
-                        
-                        return factors.slice(0, 3).map((factor, idx) => (
-                          <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
-                            <span className="mt-1 w-1 h-1 rounded-full text-green-600 bg-current flex-shrink-0" />
-                            <span>{factor}</span>
-                          </li>
-                        ));
-                      })()}
-                    </ul>
+                  <div className="space-y-1.5">
+                    {(() => {
+                      const factors = [];
+                      if (tripResult.conditions?.hasRealTimeTraffic) {
+                        factors.push('Real-time traffic');
+                      }
+                      
+                      if (tripResult.conditions?.weatherDelay <= 5 && tripResult.conditions?.maxHeadwind <= 15) {
+                        factors.push('Favorable conditions');
+                      } else {
+                        factors.push('Weather adjusted');
+                      }
+                      
+                      if (tripResult.conditions?.routingQuality === 'faa-preferred') {
+                        factors.push('FAA routing');
+                      } else {
+                        factors.push('Direct routing');
+                      }
+                      
+                      return factors.slice(0, 3).map((factor, idx) => (
+                        <div key={idx} className="text-xs text-muted-foreground flex items-center gap-2">
+                          <div className="h-px w-2 bg-border" />
+                          {factor}
+                        </div>
+                      ));
+                    })()}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
-              <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-600/30 border-2">
-                <CardHeader className="pb-1 pt-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Zap className="w-4 h-4 text-blue-600" />
-                    <CardTitle className="text-sm">Best Case</CardTitle>
+              {/* Optimistic Estimate */}
+              <div className="border rounded-sm bg-card">
+                <div className="px-4 py-3 border-b bg-muted/30">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Optimistic</span>
+                    <div className="h-1 w-1 rounded-full bg-blue-600" />
                   </div>
-                  <div className="flex items-baseline gap-2">
-                    <Clock className="w-3 h-3 text-blue-600" />
-                    <span className="text-base font-bold text-foreground">
-                      {Math.floor((tripResult.totalTime * 0.85) / 60)}h {Math.round((tripResult.totalTime * 0.85) % 60)}m
-                    </span>
+                </div>
+                <div className="px-4 py-4">
+                  <div className="text-2xl font-semibold text-foreground mb-3">
+                    {Math.floor((tripResult.totalTime * 0.85) / 60)}h {Math.round((tripResult.totalTime * 0.85) % 60)}m
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-1 pb-3">
-                  <div className="space-y-0.5">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase">Key Factors</p>
-                    <ul className="space-y-0.5">
-                      {(() => {
-                        const factors = [];
-                        if (tripResult.conditions?.trafficLevel === 'light') {
-                          factors.push('Light traffic conditions');
-                        } else {
-                          factors.push('Optimistic traffic flow');
-                        }
-                        
-                        if (tripResult.conditions?.maxHeadwind <= 5) {
-                          factors.push('Minimal wind impact');
-                        } else {
-                          factors.push('Tailwind opportunities');
-                        }
-                        
-                        factors.push('Direct routing possible');
-                        
-                        return factors.slice(0, 3).map((factor, idx) => (
-                          <li key={idx} className="text-xs text-foreground flex items-start gap-1.5">
-                            <span className="mt-1 w-1 h-1 rounded-full text-blue-600 bg-current flex-shrink-0" />
-                            <span>{factor}</span>
-                          </li>
-                        ));
-                      })()}
-                    </ul>
+                  <div className="space-y-1.5">
+                    {(() => {
+                      const factors = [];
+                      if (tripResult.conditions?.trafficLevel === 'light') {
+                        factors.push('Light traffic');
+                      } else {
+                        factors.push('Optimal flow');
+                      }
+                      
+                      if (tripResult.conditions?.maxHeadwind <= 5) {
+                        factors.push('Minimal wind');
+                      } else {
+                        factors.push('Tailwind potential');
+                      }
+                      
+                      factors.push('Direct routing');
+                      
+                      return factors.slice(0, 3).map((factor, idx) => (
+                        <div key={idx} className="text-xs text-muted-foreground flex items-center gap-2">
+                          <div className="h-px w-2 bg-border" />
+                          {factor}
+                        </div>
+                      ));
+                    })()}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
           </div>
 
