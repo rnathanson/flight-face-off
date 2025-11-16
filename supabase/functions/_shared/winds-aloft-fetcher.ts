@@ -44,16 +44,21 @@ function getStationCode(icao: string): string | null {
   return STATION_CODES[icao] || icao.replace('K', '').toUpperCase();
 }
 
-// Determine forecast cycle based on current UTC time
-function getForecastCycle(): string {
+// Determine valid forecast cycle based on current UTC time and NOAA "FOR USE" windows
+function getValidForecastCycle(): string {
   const now = new Date();
   const hour = now.getUTCHours();
   
-  // Use most recent cycle (00, 06, 12, 18)
-  if (hour >= 18) return '18';
-  if (hour >= 12) return '12';
-  if (hour >= 6) return '06';
-  return '00';
+  // NOAA publishes at 00, 06, 12, 18 with specific "FOR USE" windows:
+  // 00Z: FOR USE 2000–0200Z (previous day 8pm - 2am)
+  // 06Z: FOR USE 0200–0900Z (2am - 9am)
+  // 12Z: FOR USE 0900–1500Z (9am - 3pm)
+  // 18Z: FOR USE 1500–2100Z (3pm - 9pm)
+  
+  if (hour >= 2 && hour < 9) return '06';
+  if (hour >= 9 && hour < 15) return '12';
+  if (hour >= 15 && hour < 21) return '18';
+  return '00'; // 21Z - 02Z uses 00Z
 }
 
 /**
@@ -75,17 +80,28 @@ export async function fetchWindsAloft(
   try {
     const region = determineRegion(lat, lng);
     const level = altitudeFt >= 18000 ? 'high' : 'low';
-    const fcst = getForecastCycle();
+    const fcst = getValidForecastCycle();
     
-    const url = `https://aviationweather.gov/api/data/windtemp?region=${region}&level=${level}&fcst=${fcst}`;
+    let url = `https://aviationweather.gov/api/data/windtemp?region=${region}&level=${level}&fcst=${fcst}`;
     
-    console.log(`Fetching NOAA winds aloft: region=${region}, level=${level}, fcst=${fcst}Z, alt=${altitudeFt}ft`);
+    console.log(`Fetching NOAA winds aloft: region=${region}, level=${level}, fcst=${fcst}Z, alt=${altitudeFt}ft, airport=${nearestAirport || 'none'}`);
     
-    const response = await fetch(url);
+    let response = await fetch(url, {
+      headers: { 'Accept': 'text/plain' }
+    });
     
+    // If regional fetch fails, retry with national (region=us)
     if (!response.ok) {
-      console.error(`NOAA API error: ${response.status}`);
-      return null;
+      console.warn(`NOAA regional API failed (${response.status}), retrying with region=us`);
+      url = `https://aviationweather.gov/api/data/windtemp?region=us&level=${level}&fcst=${fcst}`;
+      response = await fetch(url, {
+        headers: { 'Accept': 'text/plain' }
+      });
+      
+      if (!response.ok) {
+        console.error(`NOAA API error: ${response.status}`);
+        return null;
+      }
     }
 
     const text = await response.text();
@@ -135,6 +151,7 @@ export async function fetchWindsAloft(
     
     if (nearestAirport) {
       targetStation = getStationCode(nearestAirport);
+      console.log(`Looking for target station: ${targetStation} (from ${nearestAirport})`);
     }
 
     // Parse station data (starts after FT line)
@@ -154,11 +171,12 @@ export async function fetchWindsAloft(
       if (targetStation && station === targetStation) {
         foundStation = station;
         windData = parts[altIndex + 1]; // +1 because parts[0] is station name
+        console.log(`Found target station ${targetStation} with data: ${windData}`);
         break;
       }
       
       // Otherwise, use first valid station as fallback
-      if (!targetStation && !foundStation && parts.length > altIndex + 1) {
+      if (!foundStation && parts.length > altIndex + 1) {
         foundStation = station;
         windData = parts[altIndex + 1];
         // Continue looking in case we find a better match
@@ -166,8 +184,12 @@ export async function fetchWindsAloft(
     }
 
     if (!windData || !foundStation) {
-      console.warn(`No wind data found for altitude ${closestAlt}ft`);
+      console.warn(`No wind data found for altitude ${closestAlt}ft, target=${targetStation}`);
       return null;
+    }
+    
+    if (targetStation && foundStation !== targetStation) {
+      console.log(`Target station ${targetStation} not found, using ${foundStation} as fallback`);
     }
 
     // Parse 6-digit wind code: DDSSTT

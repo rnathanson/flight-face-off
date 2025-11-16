@@ -197,7 +197,7 @@ serve(async (req) => {
 
     // Leg 1 is outbound - use current METAR for both airports
     const leg1FlightResult = pickupAirport.code === KFRG.code 
-      ? { minutes: 0, weatherDelay: 0, headwind: 0, cruiseAltitude: 0 }
+      ? { minutes: 0, weatherDelay: 0, headwind: 0, cruiseAltitude: 0, cruiseWinds: null }
       : await calculateFlightTime(
           leg1FlightDistance,
           config,
@@ -205,7 +205,8 @@ serve(async (req) => {
           pickupAirportData || kfrgData,
           KFRG,
           pickupAirport,
-          false // Use METAR for arrival
+          false, // Use METAR for arrival
+          pickupAirport.code
         );
 
     // === LEG 2: Pickup Airport to Pickup Hospital (GROUND) ===
@@ -251,7 +252,7 @@ serve(async (req) => {
 
     // Leg 4 is return flight - use TAF for arrival forecast if available
     const leg4FlightResult = pickupAirport.code === destinationAirport.code 
-      ? { minutes: 0, weatherDelay: 0, headwind: 0, cruiseAltitude: 0 }
+      ? { minutes: 0, weatherDelay: 0, headwind: 0, cruiseAltitude: 0, cruiseWinds: null }
       : await calculateFlightTime(
           leg4FlightDistance,
           config,
@@ -259,7 +260,8 @@ serve(async (req) => {
           destinationAirportData || kfrgData,
           pickupAirport,
           destinationAirport,
-          true // Use TAF for arrival (forecasted conditions)
+          true, // Use TAF for arrival (forecasted conditions)
+          destinationAirport.code
         );
 
     // === LEG 5: Destination Airport to Delivery Hospital (GROUND) ===
@@ -384,7 +386,11 @@ serve(async (req) => {
         maxHeadwind,
         hasRealTimeTraffic,
         routingQuality,
-        trafficLevel
+        trafficLevel,
+        cruiseWinds: {
+          leg1: leg1FlightResult.cruiseWinds ?? null,
+          leg4: leg4FlightResult.cruiseWinds ?? null
+        }
       },
       route: {
         homeBase: KFRG,
@@ -465,9 +471,10 @@ async function calculateFlightTime(
   departureAirport: any,
   arrivalAirport: any,
   useArrivalTAF: boolean = false,
-  forecastHours: number = 0
-): Promise<{ minutes: number; weatherDelay: number; headwind: number; cruiseAltitude: number }> {
-  if (distanceNM === 0) return { minutes: 0, weatherDelay: 0, headwind: 0, cruiseAltitude: 0 };
+  nearestAirport?: string
+): Promise<{ minutes: number; weatherDelay: number; headwind: number; cruiseAltitude: number; cruiseWinds: any | null }> {
+  const forecastHours = 0;
+  if (distanceNM === 0) return { minutes: 0, weatherDelay: 0, headwind: 0, cruiseAltitude: 0, cruiseWinds: null };
 
   // Determine altitude based on distance
   let cruiseAltitudeFt: number;
@@ -530,7 +537,7 @@ async function calculateFlightTime(
   // Fetch winds aloft at cruise altitude
   let cruiseWinds = null;
   try {
-    cruiseWinds = await fetchWindsAloft(midLat, midLng, cruiseAltitudeFt, forecastHours);
+    cruiseWinds = await fetchWindsAloft(midLat, midLng, cruiseAltitudeFt, forecastHours, nearestAirport);
     if (cruiseWinds) {
       console.log(`Fetched winds aloft at ${cruiseAltitudeFt}ft: ${cruiseWinds.direction}° @ ${cruiseWinds.speed}kt from station ${cruiseWinds.station}`);
     }
@@ -596,7 +603,7 @@ async function calculateFlightTime(
   
   const cruiseDistanceNM = Math.max(0, distanceNM * 1.05 - climbNM - descentNM);
   // Negative headwind = tailwind, which increases groundspeed
-  const cruiseGroundSpeed = config.cruise_speed_ktas - headwind;
+  const cruiseGroundSpeed = Math.max(50, config.cruise_speed_ktas - headwind); // Clamp to minimum 50 kt
   const cruiseTimeMin = cruiseDistanceNM / cruiseGroundSpeed * 60;
   
   const taxiTime = config.taxi_time_regional_airport_min;
@@ -608,7 +615,8 @@ async function calculateFlightTime(
     minutes: totalMinutes,
     weatherDelay,
     headwind, // Can be negative (tailwind) or positive (headwind)
-    cruiseAltitude: cruiseAltitudeFt
+    cruiseAltitude: cruiseAltitudeFt,
+    cruiseWinds: cruiseWinds || undefined
   };
 }
 
@@ -732,8 +740,14 @@ function calculateCourse(lat1: number, lng1: number, lat2: number, lng2: number)
 }
 
 function calculateHeadwindComponent(windDir: number, windSpeed: number, course: number): number {
-  const relativeAngle = ((windDir - course + 180) % 360) * Math.PI / 180;
-  return windSpeed * Math.cos(relativeAngle);
+  // Calculate bearing difference: phi in range [-180, 180]
+  let phi = ((windDir - course + 540) % 360) - 180;
+  
+  // Convert to radians and calculate headwind component
+  // Positive = headwind, Negative = tailwind
+  const headwind = windSpeed * Math.cos(phi * Math.PI / 180);
+  
+  return headwind;
 }
 
 function generateAdvisories(weatherDelay: number, headwind: number, trafficMultiplier: number): string[] {
