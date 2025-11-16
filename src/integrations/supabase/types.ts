@@ -82,30 +82,36 @@ export type Database = {
       }
       crew_members: {
         Row: {
+          airport_experience: Json | null
           created_at: string
           full_name: string
           id: string
           is_chief_pilot: boolean
+          organ_experience: Json | null
           role: string
           success_rate: number
           total_missions: number
           updated_at: string
         }
         Insert: {
+          airport_experience?: Json | null
           created_at?: string
           full_name: string
           id?: string
           is_chief_pilot?: boolean
+          organ_experience?: Json | null
           role?: string
           success_rate?: number
           total_missions?: number
           updated_at?: string
         }
         Update: {
+          airport_experience?: Json | null
           created_at?: string
           full_name?: string
           id?: string
           is_chief_pilot?: boolean
+          organ_experience?: Json | null
           role?: string
           success_rate?: number
           total_missions?: number
@@ -429,7 +435,9 @@ export type Database = {
         Row: {
           created_at: string
           full_name: string
+          hospital_partnerships: Json | null
           id: string
+          organ_experience: Json | null
           role: Database["public"]["Enums"]["medical_role"]
           specialty: string | null
           success_rate: number
@@ -439,7 +447,9 @@ export type Database = {
         Insert: {
           created_at?: string
           full_name: string
+          hospital_partnerships?: Json | null
           id?: string
+          organ_experience?: Json | null
           role: Database["public"]["Enums"]["medical_role"]
           specialty?: string | null
           success_rate?: number
@@ -449,7 +459,9 @@ export type Database = {
         Update: {
           created_at?: string
           full_name?: string
+          hospital_partnerships?: Json | null
           id?: string
+          organ_experience?: Json | null
           role?: Database["public"]["Enums"]["medical_role"]
           specialty?: string | null
           success_rate?: number

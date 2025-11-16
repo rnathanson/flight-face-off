@@ -37,6 +37,8 @@ interface MedicalPersonnel {
   specialty?: string;
   total_missions: number;
   success_rate: number;
+  organ_experience?: Record<string, { missions: number; success_rate: number }>;
+  hospital_partnerships?: Record<string, number>;
 }
 
 interface CrewMember {
@@ -46,6 +48,8 @@ interface CrewMember {
   is_chief_pilot: boolean;
   total_missions: number;
   success_rate: number;
+  organ_experience?: Record<string, { missions: number; success_rate: number }>;
+  airport_experience?: Record<string, number>;
 }
 
 interface MissionType {
@@ -53,6 +57,36 @@ interface MissionType {
   organ_type: string;
   min_viability_hours: number;
   max_viability_hours: number;
+}
+
+interface LivePrediction {
+  overallPrediction: number;
+  confidence: 'low' | 'medium' | 'high';
+  breakdown: {
+    crewScore: number;
+    medicalTeamScore: number;
+    airportFamiliarityScore: number;
+    hospitalPartnershipScore: number;
+    distanceComplexityScore: number;
+  };
+  organSpecificInsights: {
+    crew?: string;
+    crewSummary?: string;
+    leadDoctor?: string;
+    surgeons?: string[];
+    coordinator?: string;
+  };
+  logisticsInsights: {
+    airportFamiliarity?: string;
+    originHospital?: string;
+    destHospital?: string;
+    routeComplexity?: string;
+  };
+  optimalTeamSuggestion: {
+    crew: CrewMember[];
+    leadDoctor: MedicalPersonnel | null;
+    reasoning: string;
+  };
 }
 
 interface SuccessAnalysis {
@@ -110,6 +144,8 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
   const [caseNumber, setCaseNumber] = useState('');
   const [caseData, setCaseData] = useState<any>(null);
   const [loadingCase, setLoadingCase] = useState(false);
+  const [livePrediction, setLivePrediction] = useState<LivePrediction | null>(null);
+  const [calculatingLive, setCalculatingLive] = useState(false);
   
   const { toast } = useToast();
 
@@ -129,9 +165,9 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
         .select('*')
         .order('full_name');
       if (crewData) {
-        setAvailableCrew(crewData);
+        setAvailableCrew(crewData as unknown as CrewMember[]);
         // Pre-select top 2 by success rate
-        const topCrew = [...crewData].sort((a, b) => b.success_rate - a.success_rate).slice(0, 2);
+        const topCrew = [...(crewData as unknown as CrewMember[])].sort((a, b) => b.success_rate - a.success_rate).slice(0, 2);
         setSelectedCrew(topCrew);
       }
     };
@@ -193,6 +229,43 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
 
     return () => clearTimeout(timer);
   }, [coordinatorSearch]);
+
+  // Real-time live prediction calculation
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (organType || selectedCrew.length > 0 || selectedLeadDoctor) {
+        setCalculatingLive(true);
+        try {
+          const { data, error } = await supabase.functions.invoke('calculate-live-prediction', {
+            body: {
+              organType: organType || undefined,
+              crewMemberIds: selectedCrew.map(c => c.id),
+              leadDoctorId: selectedLeadDoctor?.id,
+              surgicalTeamIds: surgicalTeam.map(s => s.id),
+              coordinatorId: selectedCoordinator?.id,
+              originAirportCode: tripCalc?.originAirport?.code,
+              destAirportCode: tripCalc?.destAirport?.code,
+              distance: tripCalc?.originAirport?.distance_nm,
+              originHospital: originHospital || undefined,
+              destHospital: destinationHospital || undefined,
+            }
+          });
+          
+          if (data && !error) {
+            setLivePrediction(data);
+          }
+        } catch (e) {
+          console.error('Live prediction error:', e);
+        } finally {
+          setCalculatingLive(false);
+        }
+      } else {
+        setLivePrediction(null);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [organType, selectedCrew, selectedLeadDoctor, surgicalTeam, selectedCoordinator, tripCalc, originHospital, destinationHospital]);
 
   const findNearestAirport = async (lat: number, lng: number): Promise<Airport> => {
     const { data, error } = await supabase.functions.invoke('find-nearest-airport', {
@@ -442,6 +515,164 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
 
   return (
     <div className="space-y-6">
+      {/* Live Prediction Display */}
+      {livePrediction && (
+        <Card className="shadow-card animate-fade-in border-primary/20">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Target className="w-5 h-5 text-primary" />
+                AI Predictive Success Rate
+              </div>
+              {calculatingLive && (
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Main Prediction Score */}
+            <div className="text-center space-y-3">
+              <div className="text-6xl font-bold" style={{
+                color: livePrediction.overallPrediction >= 85 ? 'hsl(var(--success))' :
+                       livePrediction.overallPrediction >= 70 ? 'hsl(var(--warning))' :
+                       'hsl(var(--destructive))'
+              }}>
+                {livePrediction.overallPrediction}%
+              </div>
+              <div className="space-y-2">
+                <Progress 
+                  value={livePrediction.overallPrediction} 
+                  className="h-3"
+                />
+                <div className="flex items-center justify-center gap-2 text-sm">
+                  <Badge variant={
+                    livePrediction.confidence === 'high' ? 'default' :
+                    livePrediction.confidence === 'medium' ? 'secondary' :
+                    'outline'
+                  }>
+                    {livePrediction.confidence === 'high' ? 'High Confidence' :
+                     livePrediction.confidence === 'medium' ? 'Medium Confidence' :
+                     'Low Confidence'}
+                  </Badge>
+                  <span className="text-muted-foreground">
+                    {livePrediction.confidence === 'high' ? 'Full team & logistics data' :
+                     livePrediction.confidence === 'medium' ? 'Team selected' :
+                     'Add more details for better prediction'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Breakdown Scores */}
+            {(livePrediction.breakdown.crewScore > 0 || livePrediction.breakdown.medicalTeamScore > 0) && (
+              <div className="grid grid-cols-2 gap-4">
+                {livePrediction.breakdown.crewScore > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Flight Crew</Label>
+                    <div className="flex items-center justify-between">
+                      <Progress value={livePrediction.breakdown.crewScore} className="flex-1 h-2" />
+                      <span className="ml-2 text-sm font-semibold">{livePrediction.breakdown.crewScore}%</span>
+                    </div>
+                  </div>
+                )}
+                {livePrediction.breakdown.medicalTeamScore > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Medical Team</Label>
+                    <div className="flex items-center justify-between">
+                      <Progress value={livePrediction.breakdown.medicalTeamScore} className="flex-1 h-2" />
+                      <span className="ml-2 text-sm font-semibold">{livePrediction.breakdown.medicalTeamScore}%</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Organ-Specific Insights */}
+            {livePrediction.organSpecificInsights.crewSummary && (
+              <div className="space-y-3 p-4 bg-primary/5 rounded-lg border border-primary/10">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                  <Heart className="w-4 h-4 text-primary" />
+                  {organType && `${organType.charAt(0).toUpperCase() + organType.slice(1)} Mission Experience`}
+                </h4>
+                {livePrediction.organSpecificInsights.crewSummary && (
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Flight Crew:</strong> {livePrediction.organSpecificInsights.crewSummary}
+                  </p>
+                )}
+                {livePrediction.organSpecificInsights.leadDoctor && (
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Lead Doctor:</strong> {livePrediction.organSpecificInsights.leadDoctor}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Logistics Insights */}
+            {(livePrediction.logisticsInsights.airportFamiliarity || 
+              livePrediction.logisticsInsights.routeComplexity) && (
+              <div className="space-y-3 p-4 bg-accent/5 rounded-lg border border-accent/10">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                  <Plane className="w-4 h-4 text-accent" />
+                  Route Intelligence
+                </h4>
+                {livePrediction.logisticsInsights.airportFamiliarity && (
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Airport Familiarity:</strong> {livePrediction.logisticsInsights.airportFamiliarity}
+                  </p>
+                )}
+                {livePrediction.logisticsInsights.routeComplexity && (
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Route Analysis:</strong> {livePrediction.logisticsInsights.routeComplexity}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Optimal Team Suggestion */}
+            {livePrediction.optimalTeamSuggestion.crew.length > 0 && 
+             livePrediction.optimalTeamSuggestion.leadDoctor && (
+              <div className="space-y-3 p-4 bg-success/5 rounded-lg border border-success/10">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-success" />
+                  Recommended Optimal Team
+                </h4>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <strong className="text-muted-foreground">Flight Crew:</strong>
+                    <div className="mt-1 space-y-1">
+                      {livePrediction.optimalTeamSuggestion.crew.map(c => (
+                        <div key={c.id} className="flex items-center justify-between text-xs">
+                          <span>• {c.full_name}</span>
+                          {c.organ_experience && organType && (
+                            <Badge variant="outline" className="text-xs">
+                              {c.organ_experience[organType]?.success_rate || 0}% success
+                            </Badge>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <strong className="text-muted-foreground">Lead Doctor:</strong>
+                    <div className="mt-1 flex items-center justify-between text-xs">
+                      <span>• {livePrediction.optimalTeamSuggestion.leadDoctor.full_name}</span>
+                      {livePrediction.optimalTeamSuggestion.leadDoctor.organ_experience && organType && (
+                        <Badge variant="outline" className="text-xs">
+                          {livePrediction.optimalTeamSuggestion.leadDoctor.organ_experience[organType]?.success_rate || 0}% success
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground italic mt-2">
+                    {livePrediction.optimalTeamSuggestion.reasoning}
+                  </p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="shadow-card animate-fade-in">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -604,7 +835,15 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
                           {crew.is_chief_pilot && " 🛡️"}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {crew.total_missions} missions • {crew.success_rate}% success
+                          {organType && crew.organ_experience?.[organType] ? (
+                            <>
+                              {organType.charAt(0).toUpperCase() + organType.slice(1)}: {crew.organ_experience[organType].missions} missions • {crew.organ_experience[organType].success_rate}% success
+                            </>
+                          ) : (
+                            <>
+                              {crew.total_missions} missions • {crew.success_rate}% success
+                            </>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -647,7 +886,15 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
                       >
                         <p className="font-medium text-sm">{doc.full_name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {doc.specialty} • {doc.total_missions} missions • {doc.success_rate}% success
+                          {organType && doc.organ_experience?.[organType] ? (
+                            <>
+                              {doc.specialty} • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {doc.organ_experience[organType].missions} cases • {doc.organ_experience[organType].success_rate}% success
+                            </>
+                          ) : (
+                            <>
+                              {doc.specialty} • {doc.total_missions} missions • {doc.success_rate}% success
+                            </>
+                          )}
                         </p>
                       </button>
                     ))}
@@ -661,7 +908,15 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
                     <div className="flex-1">
                       <p className="font-medium text-sm">{selectedLeadDoctor.full_name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {selectedLeadDoctor.specialty} • {selectedLeadDoctor.total_missions} missions • {selectedLeadDoctor.success_rate}% success
+                        {organType && selectedLeadDoctor.organ_experience?.[organType] ? (
+                          <>
+                            {selectedLeadDoctor.specialty} • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {selectedLeadDoctor.organ_experience[organType].missions} cases • {selectedLeadDoctor.organ_experience[organType].success_rate}% success
+                          </>
+                        ) : (
+                          <>
+                            {selectedLeadDoctor.specialty} • {selectedLeadDoctor.total_missions} missions • {selectedLeadDoctor.success_rate}% success
+                          </>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -699,7 +954,15 @@ export const DemoTripPredictions = ({ initialTripData }: DemoTripPredictionsProp
                             >
                               <p className="font-medium text-sm">{surgeon.full_name}</p>
                               <p className="text-xs text-muted-foreground">
-                                {surgeon.specialty} • {surgeon.total_missions} missions
+                                {organType && surgeon.organ_experience?.[organType] ? (
+                                  <>
+                                    {surgeon.specialty} • {organType.charAt(0).toUpperCase() + organType.slice(1)}: {surgeon.organ_experience[organType].missions} cases • {surgeon.organ_experience[organType].success_rate}% success
+                                  </>
+                                ) : (
+                                  <>
+                                    {surgeon.specialty} • {surgeon.total_missions} missions
+                                  </>
+                                )}
                               </p>
                             </button>
                           ))}
