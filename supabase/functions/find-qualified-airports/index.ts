@@ -4,7 +4,20 @@ import { fetchAndParseAirNav } from '../_shared/airnav-parser.ts';
 import { parseMETAR } from '../_shared/metar-parser.ts';
 import { fetchTAFWithFallback } from '../_shared/checkwx-fetcher.ts';
 import { parseTAFPeriods, findRelevantTafPeriod } from '../_shared/taf-period-parser.ts';
-import { findNearbyAirports, calculateDistance } from '../_shared/airportdb-api.ts';
+import { searchNearbyAirports } from '../_shared/airnav-search.ts';
+
+// Calculate distance using Haversine formula
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 3440.065; // Earth's radius in nautical miles
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -209,19 +222,11 @@ serve(async (req) => {
 
     const config = configData;
 
-    console.log(`🔍 Querying AirportDB API for airports within ${maxDistance}nm`);
+    console.log(`🔍 Searching AirNav for airports within ${maxDistance}nm`);
     
-    const airportResults = await findNearbyAirports(location.lat, location.lng, maxDistance);
-    
-    const nearbyAirports = airportResults.map(airport => ({
-      code: airport.icao_code,
-      name: airport.name,
-      lat: airport.latitude_deg,
-      lng: airport.longitude_deg,
-      distance_nm: calculateDistance(location.lat, location.lng, airport.latitude_deg, airport.longitude_deg)
-    })).sort((a, b) => a.distance_nm - b.distance_nm);
+    const nearbyAirports = await searchNearbyAirports(location.lat, location.lng, maxDistance);
 
-    console.log(`✓ Found ${nearbyAirports.length} airports within ${maxDistance}nm`);
+    console.log(`✓ Found ${nearbyAirports.length} airports via AirNav search`);
 
     // PHASE 1: Check Runway Dimensions Only
     console.log('\n🛫 PHASE 1: Checking runway dimensions...');
@@ -268,9 +273,9 @@ serve(async (req) => {
         console.log(`✅ Passes runway checks (${qualifyingRunways.length} qualifying runways)`);
         runwayQualifiedAirports.push({
           code: airport.code,
-          name: airnavData.name || airport.name,
-          lat: airnavData.lat || airport.lat,
-          lng: airnavData.lng || airport.lng,
+          name: airnavData.name || airport.name || airport.code,
+          lat: airnavData.lat || 0,
+          lng: airnavData.lng || 0,
           distance_nm: airport.distance_nm,
           elevation_ft: airnavData.elevation_ft || 0,
           airnavData,
