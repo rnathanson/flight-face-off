@@ -103,6 +103,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
   const [showPickupAirportPrefs, setShowPickupAirportPrefs] = useState(false);
   const [showDestinationAirportPrefs, setShowDestinationAirportPrefs] = useState(false);
   const [showAirportInputs, setShowAirportInputs] = useState(false);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
   const { toast } = useToast();
   
   const mapContainer = useRef<HTMLDivElement>(null);
