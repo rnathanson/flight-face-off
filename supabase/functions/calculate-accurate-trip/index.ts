@@ -474,7 +474,7 @@ serve(async (req) => {
       departureTime
     );
 
-    // Build segments
+    // Build segments with polylines for all flight legs
     const segments = [
       ...(pickupAirport.code !== KFRG.code ? [{
         type: 'flight' as const,
@@ -482,7 +482,8 @@ serve(async (req) => {
         to: `${pickupAirport.code} (Pickup Airport)`,
         duration: leg1FlightResult.minutes,
         distance: leg1FlightDistance,
-        route: leg1RouteSource
+        route: leg1RouteSource,
+        polyline: [[KFRG.lng, KFRG.lat], [pickupAirport.lng, pickupAirport.lat]]
       }] : []),
       {
         type: 'ground' as const,
@@ -508,7 +509,8 @@ serve(async (req) => {
         to: `${destinationAirport.code}${destinationAirport.code === KFRG.code ? ' (Home Base)' : ' (Destination Airport)'}`,
         duration: leg4FlightResult.minutes,
         distance: leg4FlightDistance,
-        route: leg4RouteSource
+        route: leg4RouteSource,
+        polyline: [[pickupAirport.lng, pickupAirport.lat], [destinationAirport.lng, destinationAirport.lat]]
       }] : []),
       {
         type: 'ground' as const,

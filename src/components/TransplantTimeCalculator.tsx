@@ -367,7 +367,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       hasPolylines: result.segments?.some(s => s.polyline && s.polyline.length > 0)
     });
 
-    ['route-base', 'route-animated', 'route-ground-1', 'route-ground-2', 'route-ground-3', 'route-ground-4', 'route-ground-5'].forEach((id) => {
+    // Clean up existing layers and sources
+    ['route-base', 'route-animated', 
+     'route-flight-1', 'route-flight-2', 'route-flight-3', 'route-flight-4', 'route-flight-5',
+     'route-ground-1', 'route-ground-2', 'route-ground-3', 'route-ground-4', 'route-ground-5'].forEach((id) => {
       if (map.current?.getLayer(id)) map.current.removeLayer(id);
       if (map.current?.getSource(id)) map.current.removeSource(id);
     });
@@ -413,40 +416,9 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         .addTo(map.current);
     }
 
-    if (pickupAirport) {
-      map.current.addSource('route-base', {
-        type: 'geojson',
-        data: {
-          type: 'Feature',
-          properties: {},
-          geometry: {
-            type: 'LineString',
-            coordinates: [
-              [KFRG.lng, KFRG.lat],
-              [pickupAirport.lng, pickupAirport.lat]
-            ]
-          }
-        }
-      });
-
-      map.current.addLayer({
-        id: 'route-base',
-        type: 'line',
-        source: 'route-base',
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round'
-        },
-        paint: {
-          'line-color': '#3b82f6',
-          'line-width': 3,
-          'line-dasharray': [2, 2]
-        }
-      });
-    }
 
     if (segments && segments.length >= 4 && pickupAirport && destAirport) {
-      // Add first flight leg label (KFRG to pickup airport)
+      // Add segment labels for flight legs
       const firstFlightMidpoint = calculateMidpoint([
         [KFRG.lng, KFRG.lat],
         [pickupAirport.lng, pickupAirport.lat]
@@ -462,36 +434,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         const label = createSegmentLabel(firstFlightSegment, 0, firstFlightMidpoint);
         if (label) label.addTo(map.current);
       }
-
-      map.current.addSource('route-animated', {
-        type: 'geojson',
-        data: {
-          type: 'Feature',
-          properties: {},
-          geometry: {
-            type: 'LineString',
-            coordinates: [
-              [pickupAirport.lng, pickupAirport.lat],
-              [destAirport.lng, destAirport.lat]
-            ]
-          }
-        }
-      });
-
-      map.current.addLayer({
-        id: 'route-animated',
-        type: 'line',
-        source: 'route-animated',
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round'
-        },
-        paint: {
-          'line-color': '#3b82f6',
-          'line-width': 3,
-          'line-dasharray': [2, 2]
-        }
-      });
 
       // Add main flight leg label (pickup airport to dest airport)
       const mainFlightMidpoint = calculateMidpoint([
@@ -513,17 +455,16 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
 
     if (segments) {
       segments.forEach((segment, index) => {
-        if (segment.type === 'ground' && segment.polyline) {
-          console.log(`Rendering ground segment ${index}:`, {
+        if (segment.polyline && segment.polyline.length > 0) {
+          console.log(`Rendering ${segment.type} segment ${index}:`, {
             from: segment.from,
             to: segment.to,
             coordinateCount: segment.polyline.length,
             firstCoord: segment.polyline[0],
-            lastCoord: segment.polyline[segment.polyline.length - 1],
-            hasTrafficData: segment.hasTrafficData
+            lastCoord: segment.polyline[segment.polyline.length - 1]
           });
           
-          const sourceId = `route-ground-${index + 1}`;
+          const sourceId = `route-${segment.type}-${index + 1}`;
           
           map.current?.addSource(sourceId, {
             type: 'geojson',
@@ -546,8 +487,9 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               'line-cap': 'round'
             },
             paint: {
-              'line-color': index === 1 || index === 2 ? '#10b981' : '#ef4444',
-              'line-width': 3
+              'line-color': segment.type === 'flight' ? '#3b82f6' : (index === 1 || index === 2 ? '#10b981' : '#ef4444'),
+              'line-width': 3,
+              'line-dasharray': segment.type === 'flight' ? [2, 2] : undefined
             }
           });
 
