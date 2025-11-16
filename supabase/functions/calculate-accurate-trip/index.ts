@@ -241,7 +241,7 @@ serve(async (req) => {
 
     // === DEPARTURE WIND CHECK (BLOCKING) ===
     console.log(`\n🛫 Checking departure wind limits at ${KFRG.code}...`);
-    const departureWeather = await fetchAndParseAirNav(KFRG.code, true); // weatherOnly=true
+    const departureWeather = await fetchAndParseAirNav(KFRG.code, true, supabase); // weatherOnly=true
     
     if (departureWeather?.metar) {
       const metarRaw = departureWeather.metar.raw;
@@ -385,11 +385,11 @@ serve(async (req) => {
       pickupAirport.lng
     ));
 
-    // Get airport weather data
+    // Get airport weather data (with caching for airport info, live weather)
     const [kfrgData, pickupAirportData, destinationAirportData] = await Promise.all([
-      fetchAndParseAirNav(KFRG.code, false),
-      pickupAirport.code !== KFRG.code ? fetchAndParseAirNav(pickupAirport.code, false) : Promise.resolve(null),
-      destinationAirport.code !== KFRG.code && destinationAirport.code !== pickupAirport.code ? fetchAndParseAirNav(destinationAirport.code, false) : Promise.resolve(null)
+      fetchAndParseAirNav(KFRG.code, false, supabase),
+      pickupAirport.code !== KFRG.code ? fetchAndParseAirNav(pickupAirport.code, false, supabase) : Promise.resolve(null),
+      destinationAirport.code !== KFRG.code && destinationAirport.code !== pickupAirport.code ? fetchAndParseAirNav(destinationAirport.code, false, supabase) : Promise.resolve(null)
     ]);
 
     // Leg 1 is outbound - use current METAR for both airports
@@ -407,23 +407,35 @@ serve(async (req) => {
           leg1RouteWaypoints || undefined
         );
 
-    // === LEG 2: Pickup Airport to Pickup Hospital (GROUND) ===
-    const leg2Data = await calculateGroundSegmentEnhanced(
-      { lat: pickupAirport.lat, lng: pickupAirport.lng },
-      pickupLocation,
-      trafficMultiplier,
-      supabase,
-      departureTime
-    );
-
-    // === LEG 3: Pickup Hospital back to Pickup Airport (GROUND) ===
-    const leg3Data = await calculateGroundSegmentEnhanced(
-      pickupLocation,
-      { lat: pickupAirport.lat, lng: pickupAirport.lng },
-      trafficMultiplier,
-      supabase,
-      departureTime
-    );
+    // === PARALLEL: Calculate all ground routes simultaneously ===
+    console.log('⚡ Calculating ground routes in parallel...');
+    const [leg2Data, leg3Data, leg5Data] = await Promise.all([
+      // LEG 2: Pickup Airport to Pickup Hospital
+      calculateGroundSegmentEnhanced(
+        { lat: pickupAirport.lat, lng: pickupAirport.lng },
+        pickupLocation,
+        trafficMultiplier,
+        supabase,
+        departureTime
+      ),
+      // LEG 3: Pickup Hospital back to Pickup Airport
+      calculateGroundSegmentEnhanced(
+        pickupLocation,
+        { lat: pickupAirport.lat, lng: pickupAirport.lng },
+        trafficMultiplier,
+        supabase,
+        departureTime
+      ),
+      // LEG 5: Destination Airport to Delivery Hospital (calculated early)
+      calculateGroundSegmentEnhanced(
+        { lat: destinationAirport.lat, lng: destinationAirport.lng },
+        deliveryLocation,
+        trafficMultiplier,
+        supabase,
+        departureTime
+      )
+    ]);
+    console.log('✅ Ground routes calculated in parallel');
 
     // === LEG 4: Pickup Airport to Destination Airport (FLIGHT) ===
     let leg4RouteString = await getFAARoute(pickupAirport.code, destinationAirport.code, supabase);
@@ -466,14 +478,7 @@ serve(async (req) => {
           leg4RouteWaypoints || undefined
         );
 
-    // === LEG 5: Destination Airport to Delivery Hospital (GROUND) ===
-    const leg5Data = await calculateGroundSegmentEnhanced(
-      { lat: destinationAirport.lat, lng: destinationAirport.lng },
-      deliveryLocation,
-      trafficMultiplier,
-      supabase,
-      departureTime
-    );
+    // LEG 5 already calculated in parallel above
 
     // Build segments with polylines for all flight legs
     const segments = [

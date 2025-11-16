@@ -379,13 +379,38 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       hasPolylines: result.segments?.some(s => s.polyline && s.polyline.length > 0)
     });
 
-    // Clean up existing layers and sources
-    ['route-base', 'route-animated', 
-     'route-flight-1', 'route-flight-2', 'route-flight-3', 'route-flight-4', 'route-flight-5',
-     'route-ground-1', 'route-ground-2', 'route-ground-3', 'route-ground-4', 'route-ground-5'].forEach((id) => {
-      if (map.current?.getLayer(id)) map.current.removeLayer(id);
-      if (map.current?.getSource(id)) map.current.removeSource(id);
-    });
+    // Clean up existing layers and sources MORE SAFELY
+    try {
+      const style = map.current?.getStyle();
+      if (style && style.layers) {
+        const layerIds = style.layers
+          .map(l => l.id)
+          .filter(id => id.startsWith('route-'));
+        
+        layerIds.forEach((id) => {
+          try {
+            if (map.current?.getLayer(id)) {
+              map.current.removeLayer(id);
+            }
+          } catch (e) {
+            console.warn(`Could not remove layer ${id}`);
+          }
+        });
+
+        // Remove sources after layers
+        layerIds.forEach((id) => {
+          try {
+            if (map.current?.getSource(id)) {
+              map.current.removeSource(id);
+            }
+          } catch (e) {
+            console.warn(`Could not remove source ${id}`);
+          }
+        });
+      }
+    } catch (e) {
+      console.error('Error during layer cleanup:', e);
+    }
 
     document.querySelectorAll('.mapboxgl-marker').forEach((el) => el.remove());
     document.querySelectorAll('.segment-label').forEach((el) => el.remove());

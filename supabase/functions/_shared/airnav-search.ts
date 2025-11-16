@@ -30,7 +30,7 @@ export async function searchNearbyAirports(
     console.log(`Searching AirNav for airports within ${radiusNm}nm of ${lat}, ${lng}`);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     const response = await fetch(searchUrl, {
       signal: controller.signal,
