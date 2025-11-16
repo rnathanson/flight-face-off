@@ -8,7 +8,7 @@ import { LocationAutocomplete } from '@/components/LocationAutocomplete';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
-import { CalendarIcon, MapPin, Plane, Zap, Clock, Car, Timer, AlertTriangle, CheckCircle, Target } from 'lucide-react';
+import { CalendarIcon, MapPin, Plane, Zap, Clock, Car, Timer, AlertTriangle, CheckCircle, Target, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { GeocodeResult } from '@/lib/geocoding';
@@ -16,6 +16,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface TripSegment {
   type: 'ground' | 'flight';
@@ -34,17 +35,20 @@ interface Airport {
   lat: number;
   lng: number;
   distance_nm?: number;
+  address?: string;
+  distance_from_pickup?: number;
+  distance_from_delivery?: number;
 }
 
 interface TripResult {
   segments: TripSegment[];
   totalTime: number;
   arrivalTime: Date;
-  route: {
-    origin: GeocodeResult;
-    destination: GeocodeResult;
-    originAirport: Airport;
-    destAirport: Airport;
+  route?: {
+    pickupLocation?: GeocodeResult;
+    deliveryLocation?: GeocodeResult;
+    pickupAirport?: Airport;
+    destinationAirport?: Airport;
   };
 }
 
@@ -220,10 +224,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         totalTime: data.totalTime,
         arrivalTime: new Date(data.arrivalTime),
         route: {
-          origin: selectedOrigin,
-          destination: selectedDestination,
-          originAirport: data.route.departureAirport,
-          destAirport: data.route.arrivalAirport,
+          pickupLocation: selectedOrigin,
+          deliveryLocation: selectedDestination,
+          pickupAirport: data.route.pickupAirport,
+          destinationAirport: data.route.destinationAirport,
         }
       };
 
@@ -259,7 +263,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
 
     mapboxgl.accessToken = mapboxToken;
 
-    const { origin, destination, originAirport, destAirport } = result.route;
+    const origin = result.route?.pickupLocation;
+    const destination = result.route?.deliveryLocation;
+    
+    if (!origin || !destination) return;
     
     const centerLng = (origin.lon + destination.lon) / 2;
     const centerLat = (origin.lat + destination.lat) / 2;
@@ -290,7 +297,12 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     document.querySelectorAll('.mapboxgl-marker').forEach((el) => el.remove());
     document.querySelectorAll('.segment-label').forEach((el) => el.remove());
 
-    const { origin, destination, originAirport, destAirport } = result.route;
+    const origin = result.route?.pickupLocation;
+    const destination = result.route?.deliveryLocation;
+    const pickupAirport = result.route?.pickupAirport;
+    const destAirport = result.route?.destinationAirport;
+    
+    if (!origin || !destination) return;
 
     const KFRG = { lat: 40.728889, lng: -73.413333 };
 
@@ -299,10 +311,12 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       .setPopup(new mapboxgl.Popup().setHTML('<h3>KFRG - Home Base</h3>'))
       .addTo(map.current);
 
-    new mapboxgl.Marker({ color: '#10b981' })
-      .setLngLat([originAirport.lng, originAirport.lat])
-      .setPopup(new mapboxgl.Popup().setHTML(`<h3>${originAirport.code}</h3><p>${originAirport.name}</p>`))
-      .addTo(map.current);
+    if (pickupAirport) {
+      new mapboxgl.Marker({ color: '#10b981' })
+        .setLngLat([pickupAirport.lng, pickupAirport.lat])
+        .setPopup(new mapboxgl.Popup().setHTML(`<h3>${pickupAirport.code}</h3><p>${pickupAirport.name}</p>`))
+        .addTo(map.current);
+    }
 
     new mapboxgl.Marker({ color: '#10b981' })
       .setLngLat([origin.lon, origin.lat])
@@ -314,54 +328,56 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       .setPopup(new mapboxgl.Popup().setHTML(`<h3>Delivery Hospital</h3><p>${destination.displayName.split(',')[0]}</p>`))
       .addTo(map.current);
 
-    if (destAirport.code !== 'KFRG') {
+    if (destAirport && destAirport.code !== 'KFRG') {
       new mapboxgl.Marker({ color: '#ef4444' })
         .setLngLat([destAirport.lng, destAirport.lat])
         .setPopup(new mapboxgl.Popup().setHTML(`<h3>${destAirport.code}</h3><p>${destAirport.name}</p>`))
         .addTo(map.current);
     }
 
-    map.current.addSource('route-base', {
-      type: 'geojson',
-      data: {
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'LineString',
-          coordinates: [
-            [KFRG.lng, KFRG.lat],
-            [originAirport.lng, originAirport.lat]
-          ]
+    if (pickupAirport) {
+      map.current.addSource('route-base', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [KFRG.lng, KFRG.lat],
+              [pickupAirport.lng, pickupAirport.lat]
+            ]
+          }
         }
-      }
-    });
+      });
 
-    map.current.addLayer({
-      id: 'route-base',
-      type: 'line',
-      source: 'route-base',
-      layout: {
-        'line-join': 'round',
-        'line-cap': 'round'
-      },
-      paint: {
-        'line-color': '#3b82f6',
-        'line-width': 3,
-        'line-dasharray': [2, 2]
-      }
-    });
+      map.current.addLayer({
+        id: 'route-base',
+        type: 'line',
+        source: 'route-base',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': '#3b82f6',
+          'line-width': 3,
+          'line-dasharray': [2, 2]
+        }
+      });
+    }
 
-    if (segments && segments.length >= 4) {
-      // Add first flight leg label (KFRG to origin airport)
+    if (segments && segments.length >= 4 && pickupAirport && destAirport) {
+      // Add first flight leg label (KFRG to pickup airport)
       const firstFlightMidpoint = calculateMidpoint([
         [KFRG.lng, KFRG.lat],
-        [originAirport.lng, originAirport.lat]
+        [pickupAirport.lng, pickupAirport.lat]
       ]);
       if (firstFlightMidpoint) {
         const firstFlightSegment: TripSegment = {
           type: 'flight',
           from: 'KFRG',
-          to: originAirport.code,
+          to: pickupAirport.code,
           duration: segments[0].duration,
           distance: segments[0].distance
         };
@@ -377,7 +393,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
           geometry: {
             type: 'LineString',
             coordinates: [
-              [originAirport.lng, originAirport.lat],
+              [pickupAirport.lng, pickupAirport.lat],
               [destAirport.lng, destAirport.lat]
             ]
           }
@@ -399,15 +415,15 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         }
       });
 
-      // Add main flight leg label (origin airport to dest airport)
+      // Add main flight leg label (pickup airport to dest airport)
       const mainFlightMidpoint = calculateMidpoint([
-        [originAirport.lng, originAirport.lat],
+        [pickupAirport.lng, pickupAirport.lat],
         [destAirport.lng, destAirport.lat]
       ]);
       if (mainFlightMidpoint) {
         const mainFlightSegment: TripSegment = {
           type: 'flight',
-          from: originAirport.code,
+          from: pickupAirport.code,
           to: destAirport.code,
           duration: segments[3]?.duration || 0,
           distance: segments[3]?.distance || 0
@@ -469,10 +485,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
 
     const bounds = new mapboxgl.LngLatBounds();
     bounds.extend([KFRG.lng, KFRG.lat]);
-    bounds.extend([originAirport.lng, originAirport.lat]);
+    if (pickupAirport) bounds.extend([pickupAirport.lng, pickupAirport.lat]);
     bounds.extend([origin.lon, origin.lat]);
     bounds.extend([destination.lon, destination.lat]);
-    bounds.extend([destAirport.lng, destAirport.lat]);
+    if (destAirport) bounds.extend([destAirport.lng, destAirport.lat]);
 
     map.current.fitBounds(bounds, {
       padding: 100,
@@ -661,9 +677,24 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                     </div>
                   </div>
                   <div className="text-center space-y-2">
-                    <Zap className="w-8 h-8 mx-auto text-amber-600" />
-                    <div className="text-sm text-muted-foreground">Confidence</div>
-                    <div className="text-3xl font-bold">85%</div>
+                    <Plane className="w-8 h-8 mx-auto text-blue-600" />
+                    <div className="text-sm text-muted-foreground">Pickup Airport</div>
+                    <div className="text-2xl font-bold">
+                      {tripResult.route?.pickupAirport?.code || 'N/A'}
+                    </div>
+                    <div className="text-xs font-medium">
+                      {tripResult.route?.pickupAirport?.name || 'Airport'}
+                    </div>
+                    {tripResult.route?.pickupAirport?.address && (
+                      <div className="text-xs text-muted-foreground line-clamp-2 max-w-[200px] mx-auto">
+                        {tripResult.route.pickupAirport.address}
+                      </div>
+                    )}
+                    {tripResult.route?.pickupAirport?.distance_from_pickup !== undefined && (
+                      <div className="text-xs text-muted-foreground">
+                        {tripResult.route.pickupAirport.distance_from_pickup.toFixed(1)} nm from pickup
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -791,6 +822,98 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             </div>
           </div>
 
+          {/* Leg-by-Leg Summary - Collapsible */}
+          <Collapsible defaultOpen={false}>
+            <Card>
+              <CollapsibleTrigger className="w-full">
+                <CardHeader className="pb-3 hover:bg-muted/50 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2 text-xl">
+                      <Plane className="w-6 h-6 text-primary" />
+                      Trip Breakdown
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        {tripResult.segments.length} segments • {formatDuration(tripResult.totalTime)}
+                      </span>
+                      <ChevronDown className="w-5 h-5 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                    </div>
+                  </div>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent>
+                  <div className="space-y-4">
+                    {tripResult.segments.map((segment, index) => (
+                      <div 
+                        key={index}
+                        className="p-4 rounded-lg border border-border bg-background hover:bg-muted/50 transition-all"
+                        style={{
+                          borderLeft: `4px solid ${segment.type === 'flight' ? '#3b82f6' : '#10b981'}`
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              {segment.type === 'flight' ? (
+                                <Plane className="w-4 h-4 text-muted-foreground" />
+                              ) : (
+                                <Car className="w-4 h-4 text-muted-foreground" />
+                              )}
+                              <span className="font-semibold text-sm uppercase tracking-wide">
+                                {segment.type === 'flight' ? 'Flight' : 'Ground Transport'}
+                              </span>
+                              <Badge variant="outline" className="text-xs">
+                                Leg {index + 1}
+                              </Badge>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 text-base font-medium mb-1">
+                              <span className="text-foreground">{segment.from}</span>
+                              <span className="text-muted-foreground">→</span>
+                              <span className="text-foreground">{segment.to}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="text-right space-y-1">
+                            <div className="flex items-center gap-2 justify-end">
+                              <Clock className="w-4 h-4 text-muted-foreground" />
+                              <span className="text-lg font-bold text-foreground">
+                                {formatDuration(segment.duration)}
+                              </span>
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {segment.distance.toFixed(1)} {segment.type === 'flight' ? 'nm' : 'mi'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {/* Total Summary */}
+                    <div className="pt-4 border-t-2 border-border">
+                      <div className="flex items-center justify-between p-4 bg-primary/5 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-5 h-5 text-primary" />
+                          <span className="text-lg font-semibold">Total Trip Time</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-primary">
+                            {formatDuration(tripResult.totalTime)}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            Door to door
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+
+          {/* Interactive Map */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-xl">
@@ -824,95 +947,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-0.5 bg-green-500 flex-shrink-0"></div>
                     <span className="text-foreground">Ground Transport</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Leg-by-Leg Summary */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Plane className="w-6 h-6 text-primary" />
-                Trip Breakdown
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {tripResult.segments.map((segment, index) => (
-                  <div 
-                    key={index}
-                    className="p-4 rounded-lg border border-border bg-background hover:bg-muted/50 transition-all"
-                    style={{
-                      borderLeft: `4px solid ${segment.type === 'flight' ? '#3b82f6' : '#10b981'}`
-                    }}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          {segment.type === 'flight' ? (
-                            <Plane className="w-4 h-4 text-muted-foreground" />
-                          ) : (
-                            <Car className="w-4 h-4 text-muted-foreground" />
-                          )}
-                          <span className="font-semibold text-sm uppercase tracking-wide">
-                            {segment.type === 'flight' ? 'Flight' : 'Ground Transport'}
-                          </span>
-                          <Badge variant="outline" className="text-xs">
-                            Leg {index + 1}
-                          </Badge>
-                        </div>
-                        
-                        <div className="flex items-center gap-2 text-base font-medium mb-1">
-                          <span className="text-foreground">{segment.from}</span>
-                          <span className="text-muted-foreground">→</span>
-                          <span className="text-foreground">{segment.to}</span>
-                        </div>
-                        
-                        {segment.traffic && (
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
-                            <Target className="w-3 h-3" />
-                            <span>Route source: {segment.traffic}</span>
-                            {segment.hasTrafficData && (
-                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                                Live traffic
-                              </Badge>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="text-right space-y-1">
-                        <div className="flex items-center gap-2 justify-end">
-                          <Clock className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-lg font-bold text-foreground">
-                            {formatDuration(segment.duration)}
-                          </span>
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {segment.distance.toFixed(1)} {segment.type === 'flight' ? 'nm' : 'mi'}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                
-                {/* Total Summary */}
-                <div className="pt-4 border-t-2 border-border">
-                  <div className="flex items-center justify-between p-4 bg-primary/5 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="w-5 h-5 text-primary" />
-                      <span className="text-lg font-semibold">Total Trip Time</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-primary">
-                        {formatDuration(tripResult.totalTime)}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Door to door
-                      </div>
-                    </div>
                   </div>
                 </div>
               </div>

@@ -265,6 +265,32 @@ serve(async (req) => {
     if (kfrgData?.metar) confidence += 5;
     if (leg2Data.source === 'osrm' && leg3Data.source === 'osrm' && leg5Data.source === 'osrm') confidence += 5;
 
+    // Get airport addresses via reverse geocoding
+    let pickupAirportAddress = '';
+    let destinationAirportAddress = '';
+    
+    try {
+      const pickupGeocode = await supabase.functions.invoke('geocode-google', {
+        body: { query: `${pickupAirport.lat},${pickupAirport.lng}`, limit: 1 }
+      });
+      if (pickupGeocode.data && pickupGeocode.data.length > 0) {
+        pickupAirportAddress = pickupGeocode.data[0].address || pickupGeocode.data[0].display_name || '';
+      }
+    } catch (err) {
+      console.error('Failed to geocode pickup airport:', err);
+    }
+
+    try {
+      const destGeocode = await supabase.functions.invoke('geocode-google', {
+        body: { query: `${destinationAirport.lat},${destinationAirport.lng}`, limit: 1 }
+      });
+      if (destGeocode.data && destGeocode.data.length > 0) {
+        destinationAirportAddress = destGeocode.data[0].address || destGeocode.data[0].display_name || '';
+      }
+    } catch (err) {
+      console.error('Failed to geocode destination airport:', err);
+    }
+
     const result = {
       segments,
       totalTime,
@@ -280,7 +306,9 @@ serve(async (req) => {
           lat: pickupAirport.lat,
           lng: pickupAirport.lng,
           elevation_ft: pickupAirport.elevation_ft,
-          runway: pickupAirport.best_runway
+          runway: pickupAirport.best_runway,
+          address: pickupAirportAddress,
+          distance_from_pickup: calculateDistance(pickupAirport.lat, pickupAirport.lng, pickupLocation.lat, pickupLocation.lng)
         },
         destinationAirport: {
           code: destinationAirport.code,
@@ -288,7 +316,9 @@ serve(async (req) => {
           lat: destinationAirport.lat,
           lng: destinationAirport.lng,
           elevation_ft: destinationAirport.elevation_ft,
-          runway: destinationAirport.best_runway
+          runway: destinationAirport.best_runway,
+          address: destinationAirportAddress,
+          distance_from_delivery: calculateDistance(destinationAirport.lat, destinationAirport.lng, deliveryLocation.lat, deliveryLocation.lng)
         },
         // Legacy compatibility fields
         departureAirport: {
