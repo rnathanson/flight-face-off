@@ -1,1 +1,4 @@
 project_id = "oprguetczdaelzoiceto"
+
+[functions.admin-flight-ops-config]
+verify_jwt = false
