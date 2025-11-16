@@ -16,6 +16,9 @@ serve(async (req) => {
   }
 
   try {
+    const startTime = Date.now();
+    console.log('⏱️  PERFORMANCE: Trip calculation started');
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -238,6 +241,7 @@ serve(async (req) => {
 
     console.log(`Selected Airports - Pickup: ${pickupAirport.code} (${pickupAirport.name}), Destination: ${destinationAirport.code} (${destinationAirport.name})`);
     console.log(`Flight Route: KFRG → ${pickupAirport.code} → ${destinationAirport.code}`);
+    console.log(`⏱️  PERFORMANCE: Airport selection completed in ${Date.now() - startTime}ms`);
 
     // === DEPARTURE WIND CHECK (BLOCKING) ===
     console.log(`\n🛫 Checking departure wind limits at ${KFRG.code}...`);
@@ -391,6 +395,7 @@ serve(async (req) => {
       pickupAirport.code !== KFRG.code ? fetchAndParseAirNav(pickupAirport.code, false, supabase) : Promise.resolve(null),
       destinationAirport.code !== KFRG.code && destinationAirport.code !== pickupAirport.code ? fetchAndParseAirNav(destinationAirport.code, false, supabase) : Promise.resolve(null)
     ]);
+    console.log(`⏱️  PERFORMANCE: Weather data fetched in ${Date.now() - startTime}ms`);
 
     // Leg 1 is outbound - use current METAR for both airports
     const leg1FlightResult = pickupAirport.code === KFRG.code 
@@ -436,6 +441,7 @@ serve(async (req) => {
       )
     ]);
     console.log('✅ Ground routes calculated in parallel');
+    console.log(`⏱️  PERFORMANCE: Ground routes completed in ${Date.now() - startTime}ms`);
 
     // === LEG 4: Pickup Airport to Destination Airport (FLIGHT) ===
     let leg4RouteString = await getFAARoute(pickupAirport.code, destinationAirport.code, supabase);
@@ -657,6 +663,7 @@ serve(async (req) => {
     };
 
     console.log(`Total trip time: ${totalTime} minutes (${Math.floor(totalTime / 60)}h ${totalTime % 60}m)`);
+    console.log(`⏱️  PERFORMANCE: Total calculation time: ${Date.now() - startTime}ms`);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

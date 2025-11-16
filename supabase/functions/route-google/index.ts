@@ -54,13 +54,11 @@ serve(async (req) => {
       key: GOOGLE_MAPS_KEY!,
     });
 
-    // Add departure time if provided (must be a timestamp in seconds)
-    if (departureTime) {
-      const timestamp = Math.floor(new Date(departureTime).getTime() / 1000);
-      params.append('departure_time', timestamp.toString());
-    } else {
-      params.append('departure_time', 'now');
-    }
+    // Always use current time + 5 minutes for traffic data
+    // This ensures we never get "departure_time is in the past" errors
+    // and provides accurate current traffic conditions
+    const futureTimestamp = Math.floor((Date.now() + 5 * 60 * 1000) / 1000);
+    params.append('departure_time', futureTimestamp.toString());
 
     const url = `https://maps.googleapis.com/maps/api/directions/json?${params}`;
     
