@@ -215,7 +215,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       
       setTimeout(() => {
         if (mapboxToken && mapContainer.current && !map.current) {
-          initializeMap(result);
+          initializeMap(result, data.segments);
         } else if (map.current && mapboxToken) {
           updateMap(result, data.segments);
         }
@@ -238,7 +238,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     }
   };
 
-  const initializeMap = (result: TripResult) => {
+  const initializeMap = (result: TripResult, segments?: TripSegment[]) => {
     if (!mapContainer.current || !mapboxToken) return;
 
     mapboxgl.accessToken = mapboxToken;
@@ -259,7 +259,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
     map.current.on('load', () => {
-      updateMap(result);
+      updateMap(result, segments);
     });
   };
 
