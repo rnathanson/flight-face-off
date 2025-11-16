@@ -735,34 +735,38 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         <div className="space-y-6">
           <Card className="border-2 border-primary/20">
             <CardContent className="pt-6">
-              <div className="flex flex-wrap items-start justify-center gap-x-6 gap-y-6 border-b pb-6 mb-6">
-                <div className="flex items-start gap-3">
-                  <div className="text-sm text-muted-foreground pt-0.5">From:</div>
+              <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-4 border-b pb-6 mb-6">
+                <div className="flex items-center gap-2">
+                  <div className="text-base text-muted-foreground font-medium">From:</div>
                   <div className="space-y-0.5">
-                    <div className="font-semibold text-sm">
+                    <div className="font-bold text-base text-foreground">
                       {selectedOrigin?.displayName?.split(',')[0] || originHospital.split(',')[0]}
                     </div>
-                    <div className="text-xs text-muted-foreground max-w-[200px]">
+                    <div className="text-xs text-muted-foreground max-w-[250px]">
                       {selectedOrigin?.address || originHospital}
                     </div>
                   </div>
                 </div>
-                <div className="text-muted-foreground pt-2">→</div>
-                <div className="flex items-start gap-3">
-                  <div className="text-sm text-muted-foreground pt-0.5">To:</div>
+                <div className="text-2xl text-muted-foreground">→</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-base text-muted-foreground font-medium">To:</div>
                   <div className="space-y-0.5">
-                    <div className="font-semibold text-sm">
+                    <div className="font-bold text-base text-foreground">
                       {selectedDestination?.displayName?.split(',')[0] || destinationHospital.split(',')[0]}
                     </div>
-                    <div className="text-xs text-muted-foreground max-w-[200px]">
+                    <div className="text-xs text-muted-foreground max-w-[250px]">
                       {selectedDestination?.address || destinationHospital}
                     </div>
                   </div>
                 </div>
-                <div className="text-muted-foreground pt-2">•</div>
-                <div className="flex items-start gap-2 pt-0.5">
-                  <Clock className="w-4 h-4 text-muted-foreground" />
-                  <div className="text-sm font-medium">{format(departureDate, 'MMM d')} at {departureTime}</div>
+                <div className="text-2xl text-muted-foreground">•</div>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-muted-foreground" />
+                  <div className="text-base font-semibold">{format(departureDate, 'MMM d')} at {format(
+                    new Date(departureDate.getFullYear(), departureDate.getMonth(), departureDate.getDate(), 
+                      parseInt(departureTime.split(':')[0]), parseInt(departureTime.split(':')[1])),
+                    'h:mm a'
+                  )}</div>
                 </div>
               </div>
               
@@ -777,12 +781,23 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                     <div className="space-y-1 pt-2 border-t border-primary/20">
                       <div className="text-xs text-muted-foreground">
                         Time to Pickup: <span className="font-semibold text-foreground">
-                          {formatDuration(tripResult.segments[0]?.duration || 0)}
+                          {formatDuration(
+                            tripResult.segments
+                              .slice(0, tripResult.segments.findIndex(seg => seg.to.toLowerCase().includes('pickup hospital')) + 1)
+                              .reduce((sum, seg) => sum + seg.duration, 0)
+                          )}
                         </span>
                       </div>
                       <div className="text-xs text-muted-foreground">
                         Time to Delivery: <span className="font-semibold text-foreground">
-                          {formatDuration(tripResult.segments[tripResult.segments.length - 1]?.duration || 0)}
+                          {formatDuration(
+                            (() => {
+                              const pickupIndex = tripResult.segments.findIndex(seg => seg.to.toLowerCase().includes('pickup hospital'));
+                              return tripResult.segments
+                                .slice(pickupIndex + 1)
+                                .reduce((sum, seg) => sum + seg.duration, 0);
+                            })()
+                          )}
                         </span>
                       </div>
                     </div>
@@ -799,7 +814,9 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                           {format(
                             new Date(departureDate.getFullYear(), departureDate.getMonth(), departureDate.getDate(), 
                               parseInt(departureTime.split(':')[0]), parseInt(departureTime.split(':')[1])).getTime() + 
-                              (tripResult.segments[0]?.duration || 0) * 60000,
+                              tripResult.segments
+                                .slice(0, tripResult.segments.findIndex(seg => seg.to.toLowerCase().includes('pickup hospital')) + 1)
+                                .reduce((sum, seg) => sum + seg.duration, 0) * 60000,
                             'h:mm a'
                           )}
                         </span>
