@@ -798,7 +798,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             const outboundFlight = flightSegments[0]; // Leg 1: KFRG → Pickup Airport
             const returnFlight = flightSegments[1]; // Leg 4: Pickup Airport → KFRG
 
-            // Calculate bearings from polylines if available
+            // Calculate bearings from polylines if available, otherwise use airport coordinates
             let outboundBearing = 0;
             let returnBearing = 0;
 
@@ -806,12 +806,25 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               const start = outboundFlight.polyline[0];
               const end = outboundFlight.polyline[outboundFlight.polyline.length - 1];
               outboundBearing = calculateBearing(start[1], start[0], end[1], end[0]);
+            } else if (tripResult.route?.pickupAirport) {
+              // Fallback: Calculate bearing from KFRG to pickup airport
+              const pickupAirport = tripResult.route.pickupAirport;
+              const kfrgLat = 40.7289;
+              const kfrgLng = -73.4134;
+              outboundBearing = calculateBearing(kfrgLat, kfrgLng, pickupAirport.lat, pickupAirport.lng);
+              console.log(`Outbound bearing (from airports): ${outboundBearing.toFixed(1)}°`);
             }
 
             if (returnFlight?.polyline && returnFlight.polyline.length >= 2) {
               const start = returnFlight.polyline[0];
               const end = returnFlight.polyline[returnFlight.polyline.length - 1];
               returnBearing = calculateBearing(start[1], start[0], end[1], end[0]);
+            } else if (tripResult.route?.pickupAirport && tripResult.route?.destinationAirport) {
+              // Fallback: Calculate bearing from pickup airport to destination airport
+              const pickupAirport = tripResult.route.pickupAirport;
+              const destAirport = tripResult.route.destinationAirport;
+              returnBearing = calculateBearing(pickupAirport.lat, pickupAirport.lng, destAirport.lat, destAirport.lng);
+              console.log(`Return bearing (from airports): ${returnBearing.toFixed(1)}°`);
             }
 
             // Calculate headwind components
