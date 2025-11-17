@@ -403,7 +403,7 @@ serve(async (req) => {
           distance_nm: airport.distance_nm,
           groundTransportMinutes: -1,
           failureStage: 'runway',
-          rejectionReasons: ['No runway data available — drive time N/A'],
+          rejectionReasons: ['No runway data available'],
           details: {}
         });
         continue;
@@ -424,7 +424,7 @@ serve(async (req) => {
           distance_nm: airport.distance_nm,
           groundTransportMinutes: -1,
           failureStage: 'runway',
-          rejectionReasons: [`No suitable runway surface (have: ${surfaces}) — drive time N/A`],
+          rejectionReasons: [`No suitable runway surface (have: ${surfaces})`],
           details: {}
         });
         continue;
@@ -444,7 +444,7 @@ serve(async (req) => {
           distance_nm: airport.distance_nm,
           groundTransportMinutes: -1,
           failureStage: 'runway',
-          rejectionReasons: [`Runway too short (${longestRunway.length_ft}ft, need ${minRunwayLength}ft+) — drive time N/A`],
+          rejectionReasons: [`Runway too short (${longestRunway.length_ft}ft, need ${minRunwayLength}ft+)`],
           details: { runway: longestRunway.name }
         });
         continue;
@@ -459,7 +459,7 @@ serve(async (req) => {
           distance_nm: airport.distance_nm,
           groundTransportMinutes: -1,
           failureStage: 'runway',
-          rejectionReasons: [`Runway too narrow (${longestRunway.width_ft}ft, need ${minRunwayWidth}ft+) — drive time N/A`],
+          rejectionReasons: [`Runway too narrow (${longestRunway.width_ft}ft, need ${minRunwayWidth}ft+)`],
           details: { runway: longestRunway.name }
         });
         continue;
@@ -501,13 +501,38 @@ serve(async (req) => {
     const transportPromises = airportsWithValidRunways.map(async ({ airport, airnavData }) => {
       console.log(`\n   🏁 Starting processing for ${airport.code} (${airport.distance_nm.toFixed(1)}nm away)`);
       
-      // Get actual airport coordinates from cache
-      let airportCoords = AIRPORT_COORDS[airport.code];
+      let airportCoords: { lat: number; lng: number; name?: string } | undefined;
+      let coordSource = 'unknown';
       
-      // If not in cache, try geocoding by airport name
-      if (!airportCoords && airnavData?.name) {
+      // Priority 1: Use AirNav parsed coordinates if available
+      if (airnavData?.lat !== undefined && airnavData?.lng !== undefined) {
+        airportCoords = {
+          lat: airnavData.lat,
+          lng: airnavData.lng,
+          name: airnavData.name
+        };
+        coordSource = 'airnav';
+        console.log(`   📍 ${airport.code}: Using AirNav coordinates (${airportCoords.lat}, ${airportCoords.lng})`);
+        
+        // Sanity check: warn if cache differs significantly
+        const cachedCoords = AIRPORT_COORDS[airport.code];
+        if (cachedCoords) {
+          const distanceNM = calculateDistance(airportCoords.lat, airportCoords.lng, cachedCoords.lat, cachedCoords.lng);
+          if (distanceNM > 10) {
+            console.warn(`   ⚠️ ${airport.code}: Cache coords differ by ${distanceNM.toFixed(1)}nm from AirNav! Using AirNav.`);
+          }
+        }
+      } 
+      // Priority 2: Fallback to coordinate cache
+      else if (AIRPORT_COORDS[airport.code]) {
+        airportCoords = AIRPORT_COORDS[airport.code];
+        coordSource = 'cache';
+        console.log(`   📍 ${airport.code}: Using cached coordinates (${airportCoords.lat}, ${airportCoords.lng})`);
+      }
+      // Priority 3: Geocode by airport name
+      else if (airnavData?.name) {
         try {
-          console.log(`   🔍 ${airport.code}: Not in cache, geocoding "${airnavData.name}"...`);
+          console.log(`   🔍 ${airport.code}: Geocoding "${airnavData.name}"...`);
           const geocodeResult = await supabase.functions.invoke('geocode-google', {
             body: { 
               query: `${airnavData.name} ${airport.code} Airport`,
@@ -522,51 +547,48 @@ serve(async (req) => {
               lng: result.lon,
               name: airnavData.name
             };
+            coordSource = 'geocoded';
             console.log(`   ✅ ${airport.code}: Geocoded to (${result.lat}, ${result.lon})`);
           }
         } catch (error) {
           console.error(`   ❌ ${airport.code}: Geocoding failed`, error);
         }
-      } else if (airportCoords) {
-        console.log(`   📍 ${airport.code}: Using cached coordinates (${airportCoords.lat}, ${airportCoords.lng})`);
       }
       
-      // If still no coords after geocoding attempt, mark as unknown
+      // If still no coords, mark as unknown
       if (!airportCoords) {
         console.log(`   ⚠️ ${airport.code}: No coordinates available (skipping)`);
         return { 
           airport, 
           airnavData,
-          groundTransportMinutes: -1, // Special value for "unknown"
-          hasCoords: false 
+          groundTransportMinutes: -1,
+          hasCoords: false,
+          coordSource: 'none'
         };
       }
 
       const minutes = await calculateGroundTransportTime(
-        location, // Hospital location ✅
+        location,
         { 
-          lat: airportCoords.lat, // ✅ Actual airport coordinates
+          lat: airportCoords.lat,
           lng: airportCoords.lng,
           displayName: airportCoords.name || airport.code 
         },
         supabase,
-        airport.code // Pass airport code for logging
+        airport.code
       );
       
-      console.log(`   ✅ ${airport.code}: FINAL RESULT = ${minutes}min drive from hospital`);
+      console.log(`   ✅ ${airport.code}: ${minutes}min drive (coord source: ${coordSource})`);
       
       const result = { 
         airport, 
         airnavData,
         groundTransportMinutes: minutes,
-        hasCoords: true 
+        hasCoords: true,
+        coordSource
       };
       
-      console.log(`   📦 ${airport.code}: Returning result object:`, JSON.stringify({
-        code: airport.code,
-        distance_nm: airport.distance_nm,
-        groundTransportMinutes: minutes
-      }));
+      console.log(`   📦 ${airport.code}: Result = ${minutes}min, source=${coordSource}, coords=(${airportCoords.lat}, ${airportCoords.lng})`);
       
       return result;
     });
