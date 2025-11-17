@@ -417,7 +417,32 @@ serve(async (req) => {
         continue;
       }
 
-      // Check runway dimensions
+      // CRITICAL: Explicit runway validation (don't trust AirNav's search filters)
+      console.log(`\n🛬 Checking runway suitability for ${nearbyAirport.code}...`);
+      
+      if (!airnavData.runways || airnavData.runways.length === 0) {
+        console.log(`❌ No runway data available`);
+        const rejected: RejectedAirport = {
+          code: nearbyAirport.code,
+          name: airnavData.name || nearbyAirport.code,
+          distance_nm: nearbyAirport.distance_nm,
+          groundTransportMinutes,
+          failureStage: 'runway',
+          rejectionReasons: ['No runway information available'],
+          details: {}
+        };
+        rejectedAirports.push(rejected);
+        if (!firstRejectedAirport) firstRejectedAirport = rejected;
+        continue;
+      }
+
+      // Log all runways for debugging
+      console.log(`   Found ${airnavData.runways.length} runways:`);
+      airnavData.runways.forEach((rwy: any) => {
+        console.log(`   - Runway ${rwy.name}: ${rwy.length_ft}ft x ${rwy.width_ft}ft, ${rwy.surface}`);
+      });
+
+      // Check runway dimensions and surface
       const qualifyingRunways = airnavData.runways.filter((runway: any) => 
         runway.length_ft >= config.min_runway_length_ft &&
         runway.width_ft >= config.min_runway_width_ft &&
@@ -426,15 +451,30 @@ serve(async (req) => {
       );
 
       if (qualifyingRunways.length === 0) {
-        console.log(`❌ No qualifying runways (need ${config.min_runway_length_ft}ft x ${config.min_runway_width_ft}ft)`);
+        // Find the specific failure reason
+        const longestRunway = airnavData.runways.reduce((best: any, rwy: any) => 
+          rwy.length_ft > best.length_ft ? rwy : best, airnavData.runways[0]);
+        
+        let reason = '';
+        if (longestRunway.length_ft < config.min_runway_length_ft) {
+          reason = `Runway too short (${longestRunway.length_ft}ft, need ${config.min_runway_length_ft}ft+)`;
+        } else if (longestRunway.width_ft < config.min_runway_width_ft) {
+          reason = `Runway too narrow (${longestRunway.width_ft}ft, need ${config.min_runway_width_ft}ft+)`;
+        } else if (!acceptableSurfaces.includes(longestRunway.surface)) {
+          reason = `Unsuitable runway surface (${longestRunway.surface}, need paved)`;
+        } else {
+          reason = `No qualifying runways (need ${config.min_runway_length_ft}ft x ${config.min_runway_width_ft}ft paved)`;
+        }
+        
+        console.log(`❌ ${reason}`);
         const rejected: RejectedAirport = {
           code: nearbyAirport.code,
           name: airnavData.name || nearbyAirport.code,
           distance_nm: nearbyAirport.distance_nm,
           groundTransportMinutes,
           failureStage: 'runway',
-          rejectionReasons: [formatUserFriendlyReason('runway', {})],
-          details: { runway: `Need ${config.min_runway_length_ft}ft x ${config.min_runway_width_ft}ft` }
+          rejectionReasons: [reason],
+          details: { runway: `Longest: ${longestRunway.length_ft}ft x ${longestRunway.width_ft}ft ${longestRunway.surface}` }
         };
         rejectedAirports.push(rejected);
         if (!firstRejectedAirport) firstRejectedAirport = rejected;
@@ -659,14 +699,29 @@ serve(async (req) => {
     }
 
     // If we get here, no airports within boundary passed all requirements
-    console.log(`⚠️ NO QUALIFIED AIRPORTS FOUND within ${maxGroundTimeMinutes}min ground transport`);
+    console.log(`\n⚠️ NO QUALIFIED AIRPORTS FOUND within ${maxGroundTimeMinutes}min ground transport`);
     console.log(`   Tried ${rejectedAirports.length} airports within boundary`);
     
-    // Select least-worst option from those we tried
+    // Separate HARD failures (runway, distance, fuel) from SOFT failures (weather, wind, approaches)
+    const hardFailures = rejectedAirports.filter(a => 
+      ['runway', 'ground_transport', 'fuel'].includes(a.failureStage)
+    );
+    
+    const softFailures = rejectedAirports.filter(a => 
+      ['weather', 'wind', 'approaches'].includes(a.failureStage)
+    );
+    
+    console.log(`\n📊 FAILURE ANALYSIS:`);
+    console.log(`   ❌ HARD failures (runway/distance/fuel): ${hardFailures.length} airports`);
+    console.log(`   ⚠️  SOFT failures (weather/wind/approaches): ${softFailures.length} airports`);
+    
+    // CRITICAL: NEVER select an airport with hard failures
+    // ONLY select from soft failures (can be overridden by Chief Pilot)
     let selectedAirport: QualifiedAirport | null = null;
-    if (rejectedAirports.length > 0) {
-      // Pick the closest one with fewest violations
-      const leastBad = rejectedAirports.reduce((best, current) => {
+    
+    if (softFailures.length > 0) {
+      // Pick the closest one with fewest soft violations
+      const leastBad = softFailures.reduce((best, current) => {
         // Prefer closer airports
         if (current.distance_nm < best.distance_nm - 5) return current;
         if (best.distance_nm < current.distance_nm - 5) return best;
@@ -674,7 +729,10 @@ serve(async (req) => {
         return current.rejectionReasons.length < best.rejectionReasons.length ? current : best;
       });
 
-      console.log(`⚠️ Selecting least-worst option: ${leastBad.code}`);
+      console.log(`\n⚠️ Selecting airport with SOFT violations (requires Chief Pilot approval):`);
+      console.log(`   Airport: ${leastBad.code} - ${leastBad.name}`);
+      console.log(`   Distance: ${leastBad.distance_nm.toFixed(1)}nm`);
+      console.log(`   Ground transport: ${leastBad.groundTransportMinutes}min`);
       console.log(`   Violations: ${leastBad.rejectionReasons.join(', ')}`);
 
       // Create a qualified airport object but mark it as requiring approval
@@ -687,7 +745,7 @@ serve(async (req) => {
         elevation_ft: 0,
         qualifications: {
           passed: false,
-          runway_ok: leastBad.failureStage !== 'runway',
+          runway_ok: true, // Runway is OK (soft failure)
           surface_ok: true,
           lighting_ok: true,
           weather_ok: leastBad.failureStage !== 'weather',
@@ -700,6 +758,15 @@ serve(async (req) => {
       };
       
       qualifiedAirports.push(selectedAirport);
+    } else {
+      // NO acceptable airports - all failed HARD requirements
+      console.log(`\n❌ NO SUITABLE AIRPORTS FOUND`);
+      console.log(`   All ${hardFailures.length} airports within range failed critical requirements:`);
+      hardFailures.forEach(airport => {
+        console.log(`   - ${airport.code}: ${airport.rejectionReasons.join(', ')}`);
+      });
+      console.log(`   ⛔ Cannot complete this trip - HARD requirements cannot be waived`);
+      selectedAirport = null;
     }
 
     const result: AirportSelectionResult = {
