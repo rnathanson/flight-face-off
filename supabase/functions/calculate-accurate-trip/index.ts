@@ -581,27 +581,35 @@ serve(async (req) => {
     if (kfrgData?.metar) confidence += 5;
     if (hasRealTimeTraffic) confidence += 5;
 
-    // Get airport addresses via reverse geocoding
+    // Get airport addresses by name/code (more reliable than coordinates)
     let pickupAirportAddress = '';
     let destinationAirportAddress = '';
     
     try {
+      const searchQuery = `${pickupAirport.name} ${pickupAirport.code} Airport`;
+      console.log(`Geocoding pickup airport: ${searchQuery}`);
+      
       const pickupGeocode = await supabase.functions.invoke('geocode-google', {
-        body: { query: `${pickupAirport.lat},${pickupAirport.lng}`, limit: 1 }
+        body: { query: searchQuery, limit: 1 }
       });
       if (pickupGeocode.data && pickupGeocode.data.length > 0) {
         pickupAirportAddress = pickupGeocode.data[0].address || pickupGeocode.data[0].display_name || '';
+        console.log(`✅ Pickup airport address: ${pickupAirportAddress}`);
       }
     } catch (err) {
       console.error('Failed to geocode pickup airport:', err);
     }
 
     try {
+      const searchQuery = `${destinationAirport.name} ${destinationAirport.code} Airport`;
+      console.log(`Geocoding destination airport: ${searchQuery}`);
+      
       const destGeocode = await supabase.functions.invoke('geocode-google', {
-        body: { query: `${destinationAirport.lat},${destinationAirport.lng}`, limit: 1 }
+        body: { query: searchQuery, limit: 1 }
       });
       if (destGeocode.data && destGeocode.data.length > 0) {
         destinationAirportAddress = destGeocode.data[0].address || destGeocode.data[0].display_name || '';
+        console.log(`✅ Destination airport address: ${destinationAirportAddress}`);
       }
     } catch (err) {
       console.error('Failed to geocode destination airport:', err);
