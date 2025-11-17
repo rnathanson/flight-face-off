@@ -1239,7 +1239,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                             <div className="font-medium">{rejected.code} - {rejected.distance_nm.toFixed(1)}nm away</div>
                             <div className="text-xs">
                               {rejected.groundTransportMinutes === -1 
-                                ? 'Drive time unknown' 
+                                ? (rejected.failureStage === 'runway' ? 'Drive time N/A (runway disqualified)' : 'Drive time unknown')
                                 : `${rejected.groundTransportMinutes}min drive`
                               } • 
                               Rejected: {rejected.reasons.join(', ')}
@@ -1284,7 +1284,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                             <div className="font-medium">{rejected.code} - {rejected.distance_nm.toFixed(1)}nm away</div>
                             <div className="text-xs">
                               {rejected.groundTransportMinutes === -1 
-                                ? 'Drive time unknown' 
+                                ? (rejected.failureStage === 'runway' ? 'Drive time N/A (runway disqualified)' : 'Drive time unknown')
                                 : `${rejected.groundTransportMinutes}min drive`
                               } • 
                               Rejected: {rejected.reasons.join(', ')}
