@@ -490,14 +490,40 @@ serve(async (req) => {
 
     const transportPromises = airportsWithValidRunways.map(async ({ airport, airnavData }) => {
       // Get actual airport coordinates from cache
-      const airportCoords = AIRPORT_COORDS[airport.code];
+      let airportCoords = AIRPORT_COORDS[airport.code];
       
+      // If not in cache, try geocoding by airport name
+      if (!airportCoords && airnavData?.name) {
+        try {
+          console.log(`   🔍 ${airport.code}: Not in cache, geocoding "${airnavData.name}"...`);
+          const geocodeResult = await supabase.functions.invoke('geocode-google', {
+            body: { 
+              query: `${airnavData.name} ${airport.code} Airport`,
+              limit: 1 
+            }
+          });
+          
+          if (geocodeResult.data && geocodeResult.data.length > 0) {
+            const result = geocodeResult.data[0];
+            airportCoords = {
+              lat: result.lat,
+              lng: result.lon,
+              name: airnavData.name
+            };
+            console.log(`   ✅ ${airport.code}: Geocoded to (${result.lat}, ${result.lon})`);
+          }
+        } catch (error) {
+          console.error(`   ❌ ${airport.code}: Geocoding failed`, error);
+        }
+      }
+      
+      // If still no coords after geocoding attempt, mark as unknown
       if (!airportCoords) {
-        console.log(`   ⚠️ No coordinates for ${airport.code}`);
+        console.log(`   ⚠️ ${airport.code}: No coordinates available (skipping)`);
         return { 
           airport, 
           airnavData,
-          groundTransportMinutes: 999,
+          groundTransportMinutes: -1, // Special value for "unknown"
           hasCoords: false 
         };
       }
@@ -534,7 +560,17 @@ serve(async (req) => {
 
     // Add rejected airports for those beyond ground transport boundary
     transportResults.forEach(r => {
-      if (!r.hasCoords || r.groundTransportMinutes > maxGroundTimeMinutes) {
+      if (!r.hasCoords) {
+        rejectedAirports.push({
+          code: r.airport.code,
+          name: r.airport.name || r.airport.code,
+          distance_nm: r.airport.distance_nm,
+          groundTransportMinutes: -1, // Special value for "Unable to calculate"
+          failureStage: 'ground_transport',
+          rejectionReasons: ['Unable to calculate ground transport time (no coordinates)'],
+          details: {}
+        });
+      } else if (r.groundTransportMinutes > maxGroundTimeMinutes) {
         rejectedAirports.push({
           code: r.airport.code,
           name: r.airport.name || r.airport.code,
