@@ -715,9 +715,9 @@ serve(async (req) => {
         // But also add as qualified with approval requirement
         const qualifiedAirport: QualifiedAirport = {
           code: airport.code,
-          name: airport.name || airport.code,
-          lat: airnavData.lat || 0,
-          lng: airnavData.lng || 0,
+          name: airnavData.name || airport.code,
+          lat: airnavData.lat || AIRPORT_COORDS[airport.code]?.lat || 0,
+          lng: airnavData.lng || AIRPORT_COORDS[airport.code]?.lng || 0,
           distance_nm: airport.distance_nm,
           elevation_ft: airnavData.elevation_ft || 0,
           qualifications: {
@@ -743,9 +743,9 @@ serve(async (req) => {
       
       const qualifiedAirport: QualifiedAirport = {
         code: airport.code,
-        name: airport.name || airport.code,
-        lat: airnavData.lat || 0,
-        lng: airnavData.lng || 0,
+        name: airnavData.name || airport.code,
+        lat: airnavData.lat || AIRPORT_COORDS[airport.code]?.lat || 0,
+        lng: airnavData.lng || AIRPORT_COORDS[airport.code]?.lng || 0,
         distance_nm: airport.distance_nm,
         elevation_ft: airnavData.elevation_ft || 0,
         qualifications: {
@@ -824,8 +824,8 @@ serve(async (req) => {
       selectedAirport = {
         code: leastBad.code,
         name: leastBad.name,
-        lat: 0, // Would need to fetch from airnavData
-        lng: 0,
+        lat: AIRPORT_COORDS[leastBad.code]?.lat || 0,
+        lng: AIRPORT_COORDS[leastBad.code]?.lng || 0,
         distance_nm: leastBad.distance_nm,
         elevation_ft: 0,
         qualifications: {
