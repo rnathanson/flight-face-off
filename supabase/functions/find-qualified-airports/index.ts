@@ -207,8 +207,12 @@ function analyzeBestRunway(wind: WindData, runways: any[]): RunwayWindAnalysis |
 async function calculateGroundTransportTime(
   from: { lat: number; lng: number; displayName: string },
   to: { lat: number; lng: number; displayName: string },
-  supabase: any
+  supabase: any,
+  airportCode?: string
 ): Promise<number> {
+  const logPrefix = airportCode ? `   [${airportCode}]` : '  ';
+  console.log(`${logPrefix} 🚗 Calculating route: "${from.displayName}" (${from.lat}, ${from.lng}) → "${to.displayName}" (${to.lat}, ${to.lng})`);
+  
   try {
     const { data, error } = await supabase.functions.invoke('route-google', {
       body: { 
@@ -227,12 +231,12 @@ async function calculateGroundTransportTime(
     if (!error && data) {
       const minutes = Math.ceil(data.duration ?? data.duration_minutes);
       if (Number.isFinite(minutes) && minutes > 0) {
-        console.log(`   🚗 Google routing: ${minutes}min`);
+        console.log(`${logPrefix} ✅ Google routing returned: ${minutes}min`);
         return minutes;
       }
     }
     
-    console.log(`   ⚠️ Google routing failed, using heuristic fallback`);
+    console.log(`${logPrefix} ⚠️ Google routing failed, using heuristic fallback`);
     
     // Fallback to straight-line heuristic (1.5x distance / 45mph)
     const R = 3440.065; // Nautical miles
@@ -245,14 +249,18 @@ async function calculateGroundTransportTime(
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     const distanceNM = R * c;
     const distanceMiles = distanceNM * 1.15078; // Convert NM to statute miles
-    return Math.ceil((distanceMiles * 1.5) / 45 * 60); // 45mph avg with 1.5x road factor
+    const fallbackMinutes = Math.ceil((distanceMiles * 1.5) / 45 * 60);
+    console.log(`${logPrefix} 📏 Heuristic fallback: ${fallbackMinutes}min`);
+    return fallbackMinutes;
   } catch (error) {
-    console.error('   ❌ Error calculating ground transport time:', error);
-    console.log(`   ⚠️ Using heuristic fallback`);
+    console.error(`${logPrefix} ❌ Error calculating ground transport time:`, error);
+    console.log(`${logPrefix} ⚠️ Using heuristic fallback`);
     // Return a conservative estimate
     const distanceNM = calculateDistance(from.lat, from.lng, to.lat, to.lng);
     const distanceMiles = distanceNM * 1.15078;
-    return Math.ceil((distanceMiles * 1.5) / 45 * 60);
+    const fallbackMinutes = Math.ceil((distanceMiles * 1.5) / 45 * 60);
+    console.log(`${logPrefix} 📏 Heuristic fallback: ${fallbackMinutes}min`);
+    return fallbackMinutes;
   }
 }
 
@@ -491,6 +499,8 @@ serve(async (req) => {
     console.log('\n🚗 BATCH 2: Calculating ground transport times in parallel...');
 
     const transportPromises = airportsWithValidRunways.map(async ({ airport, airnavData }) => {
+      console.log(`\n   🏁 Starting processing for ${airport.code} (${airport.distance_nm.toFixed(1)}nm away)`);
+      
       // Get actual airport coordinates from cache
       let airportCoords = AIRPORT_COORDS[airport.code];
       
@@ -539,20 +549,34 @@ serve(async (req) => {
           lng: airportCoords.lng,
           displayName: airportCoords.name || airport.code 
         },
-        supabase
+        supabase,
+        airport.code // Pass airport code for logging
       );
       
-      console.log(`   ${airport.code}: ${minutes} min drive`);
+      console.log(`   ✅ ${airport.code}: FINAL RESULT = ${minutes}min drive from hospital`);
       
-      return { 
+      const result = { 
         airport, 
         airnavData,
         groundTransportMinutes: minutes,
         hasCoords: true 
       };
+      
+      console.log(`   📦 ${airport.code}: Returning result object:`, JSON.stringify({
+        code: airport.code,
+        distance_nm: airport.distance_nm,
+        groundTransportMinutes: minutes
+      }));
+      
+      return result;
     });
 
     const transportResults = await Promise.all(transportPromises);
+    
+    console.log('\n📋 TRANSPORT RESULTS AFTER Promise.all:');
+    transportResults.forEach(r => {
+      console.log(`   ${r.airport.code}: ${r.groundTransportMinutes}min, hasCoords: ${r.hasCoords}`);
+    });
 
     // Filter for airports within ground transport boundary
     const airportsWithinBoundary = transportResults
@@ -565,25 +589,29 @@ serve(async (req) => {
     // Add rejected airports for those beyond ground transport boundary
     transportResults.forEach(r => {
       if (!r.hasCoords) {
-        rejectedAirports.push({
+        const rejected = {
           code: r.airport.code,
           name: r.airport.name || r.airport.code,
           distance_nm: r.airport.distance_nm,
           groundTransportMinutes: -1, // Special value for "Unable to calculate"
-          failureStage: 'ground_transport',
+          failureStage: 'ground_transport' as const,
           rejectionReasons: ['Unable to calculate ground transport time (no coordinates)'],
           details: {}
-        });
+        };
+        console.log(`   ➕ Adding ${r.airport.code} to rejected (no coords): ${r.airport.distance_nm.toFixed(1)}nm`);
+        rejectedAirports.push(rejected);
       } else if (r.groundTransportMinutes > maxGroundTimeMinutes) {
-        rejectedAirports.push({
+        const rejected = {
           code: r.airport.code,
           name: r.airport.name || r.airport.code,
           distance_nm: r.airport.distance_nm,
           groundTransportMinutes: r.groundTransportMinutes,
-          failureStage: 'ground_transport',
+          failureStage: 'ground_transport' as const,
           rejectionReasons: [formatUserFriendlyReason('ground transport', {})],
           details: {}
-        });
+        };
+        console.log(`   ➕ Adding ${r.airport.code} to rejected (>${maxGroundTimeMinutes}min): ${r.groundTransportMinutes}min drive, ${r.airport.distance_nm.toFixed(1)}nm`);
+        rejectedAirports.push(rejected);
       }
     });
 
@@ -893,6 +921,14 @@ serve(async (req) => {
       console.log(`   ⛔ Cannot complete this trip - HARD requirements cannot be waived`);
       selectedAirport = null;
     }
+
+    // Sort rejected airports by distance (closest first)
+    rejectedAirports.sort((a, b) => a.distance_nm - b.distance_nm);
+    
+    console.log('\n📋 FINAL REJECTED AIRPORTS LIST (sorted by distance):');
+    rejectedAirports.forEach(a => {
+      console.log(`   ${a.code}: ${a.distance_nm.toFixed(1)}nm away, ${a.groundTransportMinutes}min drive - ${a.rejectionReasons.join(', ')}`);
+    });
 
     const result: AirportSelectionResult = {
       selectedAirport,
