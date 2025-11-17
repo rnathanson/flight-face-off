@@ -130,7 +130,7 @@ serve(async (req) => {
       const pickupAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
         body: { 
           location: pickupLocation, 
-          maxDistance: 50,
+          maxGroundTimeMinutes: 60, // Changed from maxDistance to time-based
           departureTimeUTC: departureTimeUTC.toISOString(),
           estimatedArrivalTimeUTC: pickupArrivalTimeUTC.toISOString()
         }
@@ -144,9 +144,9 @@ serve(async (req) => {
         pickupAirportApprovalData = airportSelection.selectedAirport;
         
         // Store alternate airport info for display
-        if (airportSelection.isAlternate && airportSelection.closestRejected) {
-          console.log(`ℹ️ Using alternate pickup airport ${pickupAirport.code} - closest rejected: ${airportSelection.closestRejected.code}`);
-          console.log(`Rejection reasons: ${airportSelection.closestRejected.rejectionReasons.join(', ')}`);
+        if (airportSelection.isAlternate && airportSelection.preferredAirport) {
+          console.log(`ℹ️ Using alternate pickup airport ${pickupAirport.code} - preferred was ${airportSelection.preferredAirport.code}`);
+          console.log(`Rejection reasons: ${airportSelection.preferredAirport.whyRejected.join(', ')}`);
         }
         
         // Check if approval is required
@@ -218,7 +218,7 @@ serve(async (req) => {
         const deliveryAirportsResponse = await supabase.functions.invoke('find-qualified-airports', {
           body: { 
             location: deliveryLocation, 
-            maxDistance: 50,
+            maxGroundTimeMinutes: 60, // Changed from maxDistance to time-based
             departureTimeUTC: pickupToDeliveryDepartureTime.toISOString(),
             estimatedArrivalTimeUTC: deliveryArrivalTimeUTC.toISOString()
           }
@@ -231,9 +231,9 @@ serve(async (req) => {
           destinationAirport = deliverySelection.selectedAirport;
           deliveryAirportApprovalData = deliverySelection.selectedAirport;
           
-          if (deliverySelection.isAlternate && deliverySelection.closestRejected) {
-            console.log(`ℹ️ Using alternate delivery airport ${destinationAirport.code} - closest rejected: ${deliverySelection.closestRejected.code}`);
-            console.log(`Rejection reasons: ${deliverySelection.closestRejected.rejectionReasons.join(', ')}`);
+          if (deliverySelection.isAlternate && deliverySelection.preferredAirport) {
+            console.log(`ℹ️ Using alternate delivery airport ${destinationAirport.code} - preferred was ${deliverySelection.preferredAirport.code}`);
+            console.log(`Rejection reasons: ${deliverySelection.preferredAirport.whyRejected.join(', ')}`);
           }
           
           if (deliveryAirportApprovalData.requiresChiefPilotApproval) {
