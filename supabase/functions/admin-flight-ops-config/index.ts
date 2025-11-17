@@ -147,6 +147,17 @@ Deno.serve(async (req) => {
       const updates = await req.json();
       console.log('Updating config with:', updates);
 
+      // Filter out fields that shouldn't be updated or don't exist in schema
+      const {
+        id,
+        created_at,
+        updated_at,
+        fuel_burn_cruise_gal_per_hr, // This field doesn't exist in DB
+        ...validUpdates
+      } = updates;
+
+      console.log('Filtered updates (removed invalid fields):', validUpdates);
+
       // Get existing config to find the ID
       const { data: existing } = await supabase
         .from('flight_ops_config')
@@ -161,10 +172,10 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Update the config
+      // Update the config with filtered data
       const { data: updated, error: updateError } = await supabase
         .from('flight_ops_config')
-        .update(updates)
+        .update(validUpdates)
         .eq('id', existing.id)
         .select()
         .single();
