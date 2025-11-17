@@ -86,6 +86,14 @@ interface TripResult {
         name: string;
         reasons: string[];
       } | null;
+      rejectedAirports?: Array<{
+        code: string;
+        name: string;
+        distance_nm: number;
+        groundTransportMinutes: number;
+        reasons: string[];
+        failureStage: string;
+      }>;
     } | null;
     deliveryAirport: { 
       code: string; 
@@ -97,6 +105,14 @@ interface TripResult {
         name: string;
         reasons: string[];
       } | null;
+      rejectedAirports?: Array<{
+        code: string;
+        name: string;
+        distance_nm: number;
+        groundTransportMinutes: number;
+        reasons: string[];
+        failureStage: string;
+      }>;
     } | null;
   };
 }
@@ -108,6 +124,13 @@ interface TransplantTimeCalculatorProps {
 export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCalculatorProps) {
   const [originHospital, setOriginHospital] = useState('');
   const [destinationHospital, setDestinationHospital] = useState('');
+
+  // Helper function to decode HTML entities in airport names
+  const decodeHtmlEntities = (text: string): string => {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = text;
+    return textarea.value;
+  };
   const [selectedOrigin, setSelectedOrigin] = useState<GeocodeResult | null>(null);
   const [selectedDestination, setSelectedDestination] = useState<GeocodeResult | null>(null);
   const [departureDate, setDepartureDate] = useState<Date>(new Date());
@@ -456,9 +479,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       .addTo(map.current);
 
     if (pickupAirport) {
+      const decodedPickupName = decodeHtmlEntities(pickupAirport.name || '');
       new mapboxgl.Marker({ color: '#10b981' })
         .setLngLat([pickupAirport.lng, pickupAirport.lat])
-        .setPopup(new mapboxgl.Popup().setHTML(`<h3>${pickupAirport.code}</h3><p>${pickupAirport.name}</p>`))
+        .setPopup(new mapboxgl.Popup().setHTML(`<h3>${pickupAirport.code}</h3><p>${decodedPickupName}</p>`))
         .addTo(map.current);
     }
 
@@ -473,9 +497,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       .addTo(map.current);
 
     if (destAirport && destAirport.code !== 'KFRG') {
+      const decodedDestName = decodeHtmlEntities(destAirport.name || '');
       new mapboxgl.Marker({ color: '#ef4444' })
         .setLngLat([destAirport.lng, destAirport.lat])
-        .setPopup(new mapboxgl.Popup().setHTML(`<h3>${destAirport.code}</h3><p>${destAirport.name}</p>`))
+        .setPopup(new mapboxgl.Popup().setHTML(`<h3>${destAirport.code}</h3><p>${decodedDestName}</p>`))
         .addTo(map.current);
     }
 
@@ -854,7 +879,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       {tripResult.route?.pickupAirport?.code || 'N/A'}
                     </div>
                     <div className="text-sm font-medium">
-                      {tripResult.route?.pickupAirport?.name || ''}
+                      {tripResult.route?.pickupAirport?.name ? decodeHtmlEntities(tripResult.route.pickupAirport.name) : ''}
                     </div>
                     <div className="text-xs text-muted-foreground max-w-[250px] mx-auto">
                       {tripResult.route?.pickupAirport?.address || ''}
@@ -1203,6 +1228,27 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       Would have selected {tripResult.chiefPilotApproval.pickupAirport.wouldHaveSelected.code} if conditions were different: {tripResult.chiefPilotApproval.pickupAirport.wouldHaveSelected.reasons.join(', ')}
                     </div>
                   )}
+                  
+                  {tripResult.chiefPilotApproval.pickupAirport.rejectedAirports && 
+                   tripResult.chiefPilotApproval.pickupAirport.rejectedAirports.length > 0 && (
+                    <div className="mt-3 pt-3 border-t">
+                      <span className="font-medium text-xs">Other Airports Evaluated:</span>
+                      <div className="mt-2 space-y-1">
+                        {tripResult.chiefPilotApproval.pickupAirport.rejectedAirports.slice(0, 5).map((rejected, i) => (
+                          <div key={i} className="text-xs text-muted-foreground bg-muted/30 p-2 rounded">
+                            <div className="font-medium">{rejected.code} - {rejected.distance_nm.toFixed(1)}nm away</div>
+                            <div className="text-xs">
+                              {rejected.groundTransportMinutes}min drive • 
+                              Rejected: {rejected.reasons.join(', ')}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-2 text-xs italic text-amber-600">
+                        ⚠️ {tripResult.chiefPilotApproval.pickupAirport.code} is the best available option despite guideline violations
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1222,6 +1268,27 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                   {tripResult.chiefPilotApproval.deliveryAirport.wouldHaveSelected && (
                     <div className="text-muted-foreground italic mt-2">
                       Would have selected {tripResult.chiefPilotApproval.deliveryAirport.wouldHaveSelected.code} if conditions were different: {tripResult.chiefPilotApproval.deliveryAirport.wouldHaveSelected.reasons.join(', ')}
+                    </div>
+                  )}
+                  
+                  {tripResult.chiefPilotApproval.deliveryAirport.rejectedAirports && 
+                   tripResult.chiefPilotApproval.deliveryAirport.rejectedAirports.length > 0 && (
+                    <div className="mt-3 pt-3 border-t">
+                      <span className="font-medium text-xs">Other Airports Evaluated:</span>
+                      <div className="mt-2 space-y-1">
+                        {tripResult.chiefPilotApproval.deliveryAirport.rejectedAirports.slice(0, 5).map((rejected, i) => (
+                          <div key={i} className="text-xs text-muted-foreground bg-muted/30 p-2 rounded">
+                            <div className="font-medium">{rejected.code} - {rejected.distance_nm.toFixed(1)}nm away</div>
+                            <div className="text-xs">
+                              {rejected.groundTransportMinutes}min drive • 
+                              Rejected: {rejected.reasons.join(', ')}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-2 text-xs italic text-amber-600">
+                        ⚠️ {tripResult.chiefPilotApproval.deliveryAirport.code} is the best available option despite guideline violations
+                      </div>
                     </div>
                   )}
                 </div>
