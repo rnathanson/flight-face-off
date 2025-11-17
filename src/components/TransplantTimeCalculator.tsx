@@ -1238,14 +1238,14 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                           <div key={i} className="text-xs text-muted-foreground bg-muted/30 p-2 rounded">
                             <div className="font-medium">{rejected.code} - {rejected.distance_nm.toFixed(1)}nm away</div>
                             <div className="text-xs">
-                              {rejected.failureStage === 'runway' 
+                        {rejected.failureStage === 'runway' 
                                 ? `Rejected: ${rejected.reasons.join(', ')}`
                                 : (
                                   <>
                                     {rejected.groundTransportMinutes === -1 
-                                      ? 'Drive time unknown'
-                                      : `${rejected.groundTransportMinutes}min drive`
-                                    } • Rejected: {rejected.reasons.join(', ')}
+                                      ? 'Drive time unknown • '
+                                      : `${rejected.groundTransportMinutes}min drive • `
+                                    }Rejected: {rejected.reasons.join(', ')}
                                   </>
                                 )
                               }
@@ -1289,14 +1289,14 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                           <div key={i} className="text-xs text-muted-foreground bg-muted/30 p-2 rounded">
                             <div className="font-medium">{rejected.code} - {rejected.distance_nm.toFixed(1)}nm away</div>
                             <div className="text-xs">
-                              {rejected.failureStage === 'runway' 
+                        {rejected.failureStage === 'runway' 
                                 ? `Rejected: ${rejected.reasons.join(', ')}`
                                 : (
                                   <>
                                     {rejected.groundTransportMinutes === -1 
-                                      ? 'Drive time unknown'
-                                      : `${rejected.groundTransportMinutes}min drive`
-                                    } • Rejected: {rejected.reasons.join(', ')}
+                                      ? 'Drive time unknown • '
+                                      : `${rejected.groundTransportMinutes}min drive • `
+                                    }Rejected: {rejected.reasons.join(', ')}
                                   </>
                                 )
                               }
