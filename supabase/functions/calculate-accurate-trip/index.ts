@@ -682,7 +682,15 @@ serve(async (req) => {
             code: pickupAirportSelection.closestRejected.code,
             name: pickupAirportSelection.closestRejected.name,
             reasons: pickupAirportSelection.closestRejected.rejectionReasons
-          } : null
+          } : null,
+          rejectedAirports: pickupAirportSelection?.rejectedAirports?.slice(0, 5).map((a: any) => ({
+            code: a.code,
+            name: a.name,
+            distance_nm: a.distance_nm,
+            groundTransportMinutes: a.groundTransportMinutes,
+            reasons: a.rejectionReasons,
+            failureStage: a.failureStage
+          })) || []
         } : null,
         deliveryAirport: deliveryAirportApprovalData ? {
           code: deliveryAirportApprovalData.code,
@@ -693,7 +701,15 @@ serve(async (req) => {
             code: deliveryAirportSelection.closestRejected.code,
             name: deliveryAirportSelection.closestRejected.name,
             reasons: deliveryAirportSelection.closestRejected.rejectionReasons
-          } : null
+          } : null,
+          rejectedAirports: deliveryAirportSelection?.rejectedAirports?.slice(0, 5).map((a: any) => ({
+            code: a.code,
+            name: a.name,
+            distance_nm: a.distance_nm,
+            groundTransportMinutes: a.groundTransportMinutes,
+            reasons: a.rejectionReasons,
+            failureStage: a.failureStage
+          })) || []
         } : null
       }
     };
