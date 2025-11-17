@@ -212,26 +212,27 @@ async function calculateGroundTransportTime(
   try {
     const { data, error } = await supabase.functions.invoke('route-google', {
       body: { 
-        from: {
+        origin: {
           lat: from.lat,
-          lon: from.lng,
-          displayName: from.displayName,
-          address: from.displayName,
-          placeId: 'temp'
+          lon: from.lng
         },
-        to: {
+        destination: {
           lat: to.lat,
-          lon: to.lng,
-          displayName: to.displayName,
-          address: to.displayName,
-          placeId: 'temp'
+          lon: to.lng
         }
       }
     });
 
-    if (!error && data?.duration_minutes) {
-      return Math.ceil(data.duration_minutes);
+    // Parse the correct field from route-google response
+    if (!error && data) {
+      const minutes = Math.ceil(data.duration ?? data.duration_minutes);
+      if (Number.isFinite(minutes) && minutes > 0) {
+        console.log(`   🚗 Google routing: ${minutes}min`);
+        return minutes;
+      }
     }
+    
+    console.log(`   ⚠️ Google routing failed, using heuristic fallback`);
     
     // Fallback to straight-line heuristic (1.5x distance / 45mph)
     const R = 3440.065; // Nautical miles
@@ -246,7 +247,8 @@ async function calculateGroundTransportTime(
     const distanceMiles = distanceNM * 1.15078; // Convert NM to statute miles
     return Math.ceil((distanceMiles * 1.5) / 45 * 60); // 45mph avg with 1.5x road factor
   } catch (error) {
-    console.error('Error calculating ground transport time:', error);
+    console.error('   ❌ Error calculating ground transport time:', error);
+    console.log(`   ⚠️ Using heuristic fallback`);
     // Return a conservative estimate
     const distanceNM = calculateDistance(from.lat, from.lng, to.lat, to.lng);
     const distanceMiles = distanceNM * 1.15078;
@@ -374,9 +376,9 @@ serve(async (req) => {
           code: result.airport.code,
           name: result.airport.name || result.airport.code,
           distance_nm: result.airport.distance_nm,
-          groundTransportMinutes: 999,
+          groundTransportMinutes: -1,
           failureStage: 'runway',
-          rejectionReasons: ['Unable to fetch airport data'],
+          rejectionReasons: ['Unable to fetch airport data — drive time N/A'],
           details: {}
         });
         continue;
@@ -391,9 +393,9 @@ serve(async (req) => {
           code: airport.code,
           name: airport.name || airport.code,
           distance_nm: airport.distance_nm,
-          groundTransportMinutes: 999,
+          groundTransportMinutes: -1,
           failureStage: 'runway',
-          rejectionReasons: ['No runway data available'],
+          rejectionReasons: ['No runway data available — drive time N/A'],
           details: {}
         });
         continue;
@@ -412,9 +414,9 @@ serve(async (req) => {
           code: airport.code,
           name: airport.name || airport.code,
           distance_nm: airport.distance_nm,
-          groundTransportMinutes: 999,
+          groundTransportMinutes: -1,
           failureStage: 'runway',
-          rejectionReasons: [`No suitable runway surface (have: ${surfaces})`],
+          rejectionReasons: [`No suitable runway surface (have: ${surfaces}) — drive time N/A`],
           details: {}
         });
         continue;
@@ -432,9 +434,9 @@ serve(async (req) => {
           code: airport.code,
           name: airport.name || airport.code,
           distance_nm: airport.distance_nm,
-          groundTransportMinutes: 999,
+          groundTransportMinutes: -1,
           failureStage: 'runway',
-          rejectionReasons: [`Runway too short (${longestRunway.length_ft}ft, need ${minRunwayLength}ft+)`],
+          rejectionReasons: [`Runway too short (${longestRunway.length_ft}ft, need ${minRunwayLength}ft+) — drive time N/A`],
           details: { runway: longestRunway.name }
         });
         continue;
@@ -447,9 +449,9 @@ serve(async (req) => {
           code: airport.code,
           name: airport.name || airport.code,
           distance_nm: airport.distance_nm,
-          groundTransportMinutes: 999,
+          groundTransportMinutes: -1,
           failureStage: 'runway',
-          rejectionReasons: [`Runway too narrow (${longestRunway.width_ft}ft, need ${minRunwayWidth}ft+)`],
+          rejectionReasons: [`Runway too narrow (${longestRunway.width_ft}ft, need ${minRunwayWidth}ft+) — drive time N/A`],
           details: { runway: longestRunway.name }
         });
         continue;
@@ -515,6 +517,8 @@ serve(async (req) => {
         } catch (error) {
           console.error(`   ❌ ${airport.code}: Geocoding failed`, error);
         }
+      } else if (airportCoords) {
+        console.log(`   📍 ${airport.code}: Using cached coordinates (${airportCoords.lat}, ${airportCoords.lng})`);
       }
       
       // If still no coords after geocoding attempt, mark as unknown
