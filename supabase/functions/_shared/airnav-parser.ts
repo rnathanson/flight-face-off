@@ -40,35 +40,7 @@ export async function fetchAndParseAirNav(
   weatherOnly: boolean = false,
   supabase?: any
 ): Promise<AirNavAirportData | null> {
-  // Check cache first (only for non-weather-only requests with supabase client)
-  if (!weatherOnly && supabase) {
-    const cached = await getCachedAirport(airportCode, supabase);
-    if (cached) {
-      const cachedData = cachedToAirnavFormat(cached);
-      
-      // Still fetch live weather even for cached airports
-      try {
-        const weatherResponse = await fetch(
-          `https://www.airnav.com/airport/${airportCode.toUpperCase()}`,
-          { signal: AbortSignal.timeout(10000) }
-        );
-        
-        if (weatherResponse.ok) {
-          const html = await weatherResponse.text();
-          const metarData = parseMETAR(html, airportCode);
-          const tafData = parseTAF(html, airportCode);
-          
-          if (metarData) cachedData.metar = metarData;
-          if (tafData) cachedData.taf = tafData;
-        }
-      } catch (error) {
-        console.warn(`Failed to fetch live weather for cached ${airportCode}:`, error);
-      }
-      
-      return cachedData;
-    }
-  }
-
+  // ALWAYS try to fetch fresh data from AirNav first
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -220,7 +192,19 @@ export async function fetchAndParseAirNav(
     return result as AirNavAirportData;
   } catch (error) {
     clearTimeout(timeoutId);
-    console.error(`Error fetching AirNav data for ${airportCode}:`, error);
+    console.error(`AirNav fetch failed for ${airportCode}:`, error);
+    
+    // FALLBACK: Try cache only if AirNav fetch failed
+    if (!weatherOnly && supabase) {
+      console.log(`⚠️ Attempting cache fallback for ${airportCode}...`);
+      const cached = await getCachedAirport(airportCode, supabase);
+      if (cached) {
+        console.log(`✅ Using cached data for ${airportCode} (AirNav unavailable)`);
+        return cachedToAirnavFormat(cached);
+      }
+    }
+    
+    console.error(`❌ Both AirNav and cache failed for ${airportCode}`);
     return null;
   }
 }
