@@ -20,7 +20,7 @@ export async function searchNearbyAirports(
   try {
     // Build AirNav search URL with filters for suitable airports
     const ns = lat >= 0 ? 'N' : 'S';
-    const ew = lng >= 0 ? 'W' : 'E'; // Note: W for negative longitude (Western hemisphere)
+    const ew = lng < 0 ? 'W' : 'E'; // Negative longitude = Western hemisphere = W
     const searchUrl = 
       `https://airnav.com/cgi-bin/airport-search?` +
       `place=&airportid=&` +
