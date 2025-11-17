@@ -5,6 +5,7 @@ import { parseMETAR } from '../_shared/metar-parser.ts';
 import { fetchTAFWithFallback } from '../_shared/checkwx-fetcher.ts';
 import { parseTAFPeriods, findRelevantTafPeriod } from '../_shared/taf-period-parser.ts';
 import { searchNearbyAirports } from '../_shared/airnav-search.ts';
+import { AIRPORT_COORDS } from '../_shared/airport-data.ts';
 
 // Calculate distance using Haversine formula
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -320,374 +321,458 @@ serve(async (req) => {
 
     const config = configData;
 
-    // Start with wider search radius (100nm) to ensure we find airports
-    console.log(`🔍 Searching AirNav for airports within 100nm (will filter by ground transport time)`);
+    // Search 40nm radius - covers ~1 hour ground transport in most areas
+    console.log(`🔍 Searching AirNav for airports within 40nm (will filter by ground transport time)`);
     
-    const nearbyAirports = await searchNearbyAirports(location.lat, location.lng, 100);
+    const nearbyAirports = await searchNearbyAirports(location.lat, location.lng, 40);
 
     console.log(`✓ Found ${nearbyAirports.length} airports via AirNav search`);
     
     // Sort by flight distance initially
     nearbyAirports.sort((a, b) => a.distance_nm - b.distance_nm);
 
-    // CASCADE LOGIC: Try airports one by one until we find a qualified one
-    console.log('\n🔄 CASCADE LOGIC: Checking airports sequentially...');
-    
+    // Get flight ops config requirements
+    const minRunwayLength = config.min_runway_length_ft || 4000;
+    const minRunwayWidth = config.min_runway_width_ft || 100;
     const acceptableSurfaces = config.acceptable_surfaces || ['ASPH', 'CONC'];
+
+    // Take top 10 closest airports for detailed checking
+    const airportsToCheck = nearbyAirports.slice(0, 10);
+    console.log(`\n📋 Checking top ${airportsToCheck.length} closest airports in detail`);
+
     const rejectedAirports: RejectedAirport[] = [];
     const qualifiedAirports: QualifiedAirport[] = [];
-    let airportsWithinBoundary = 0;
-    let firstRejectedAirport: RejectedAirport | null = null;
-    
-    // Try each airport in order of flight distance
-    for (const nearbyAirport of nearbyAirports) {
-      console.log(`\n🔍 Checking ${nearbyAirport.code} (${nearbyAirport.distance_nm.toFixed(1)}nm away)...`);
+
+    // ============================================================
+    // PARALLEL BATCH 1: Fetch AirNav data for all 10 airports
+    // ============================================================
+    console.log('\n📡 BATCH 1: Fetching airport data in parallel...');
+
+    const airnavDataPromises = airportsToCheck.map(async (airport) => {
+      try {
+        const airnavData = await fetchAndParseAirNav(airport.code, false, supabase);
+        return { airport, airnavData, fetchSuccess: true };
+      } catch (error) {
+        console.error(`   ❌ Error fetching data for ${airport.code}:`, error);
+        return { airport, fetchSuccess: false };
+      }
+    });
+
+    const airnavResults = await Promise.all(airnavDataPromises);
+    console.log(`   ✅ Fetched data for ${airnavResults.filter(r => r.fetchSuccess).length}/${airportsToCheck.length} airports`);
+
+    // ============================================================
+    // VALIDATION: Check runway requirements immediately (HARD)
+    // ============================================================
+    console.log('\n🛬 Validating runway requirements...');
+
+    const airportsWithValidRunways = [];
+
+    for (const result of airnavResults) {
+      if (!result.fetchSuccess) {
+        rejectedAirports.push({
+          code: result.airport.code,
+          name: result.airport.name || result.airport.code,
+          distance_nm: result.airport.distance_nm,
+          groundTransportMinutes: 999,
+          failureStage: 'runway',
+          rejectionReasons: ['Unable to fetch airport data'],
+          details: {}
+        });
+        continue;
+      }
+
+      const { airport, airnavData } = result;
+
+      // Check if runway data exists
+      if (!airnavData || !airnavData.runways || airnavData.runways.length === 0) {
+        console.log(`   ❌ ${airport.code}: No runway data`);
+        rejectedAirports.push({
+          code: airport.code,
+          name: airport.name || airport.code,
+          distance_nm: airport.distance_nm,
+          groundTransportMinutes: 999,
+          failureStage: 'runway',
+          rejectionReasons: ['No runway data available'],
+          details: {}
+        });
+        continue;
+      }
+
+      // Filter for acceptable surface types
+      const validRunways = airnavData.runways.filter((rwy: any) => {
+        const surface = rwy.surface?.toUpperCase() || '';
+        return acceptableSurfaces.includes(surface);
+      });
+
+      if (validRunways.length === 0) {
+        const surfaces = airnavData.runways.map((r: any) => r.surface).join(', ');
+        console.log(`   ❌ ${airport.code}: No paved runways (surfaces: ${surfaces})`);
+        rejectedAirports.push({
+          code: airport.code,
+          name: airport.name || airport.code,
+          distance_nm: airport.distance_nm,
+          groundTransportMinutes: 999,
+          failureStage: 'runway',
+          rejectionReasons: [`No suitable runway surface (have: ${surfaces})`],
+          details: {}
+        });
+        continue;
+      }
+
+      // Find longest paved runway
+      const longestRunway = validRunways.reduce((longest: any, rwy: any) => 
+        (rwy.length_ft > longest.length_ft) ? rwy : longest
+      );
+
+      // Check runway length
+      if (longestRunway.length_ft < minRunwayLength) {
+        console.log(`   ❌ ${airport.code}: Runway too short (${longestRunway.length_ft}ft < ${minRunwayLength}ft)`);
+        rejectedAirports.push({
+          code: airport.code,
+          name: airport.name || airport.code,
+          distance_nm: airport.distance_nm,
+          groundTransportMinutes: 999,
+          failureStage: 'runway',
+          rejectionReasons: [`Runway too short (${longestRunway.length_ft}ft, need ${minRunwayLength}ft+)`],
+          details: { runway: longestRunway.name }
+        });
+        continue;
+      }
+
+      // Check runway width
+      if (longestRunway.width_ft < minRunwayWidth) {
+        console.log(`   ❌ ${airport.code}: Runway too narrow (${longestRunway.width_ft}ft < ${minRunwayWidth}ft)`);
+        rejectedAirports.push({
+          code: airport.code,
+          name: airport.name || airport.code,
+          distance_nm: airport.distance_nm,
+          groundTransportMinutes: 999,
+          failureStage: 'runway',
+          rejectionReasons: [`Runway too narrow (${longestRunway.width_ft}ft, need ${minRunwayWidth}ft+)`],
+          details: { runway: longestRunway.name }
+        });
+        continue;
+      }
+
+      // ✅ Runway is suitable
+      console.log(`   ✅ ${airport.code}: ${longestRunway.name} - ${longestRunway.length_ft}ft x ${longestRunway.width_ft}ft ${longestRunway.surface}`);
+      airportsWithValidRunways.push({ airport, airnavData });
+    }
+
+    console.log(`\n   📊 ${airportsWithValidRunways.length}/${airportsToCheck.length} airports have suitable runways`);
+
+    if (airportsWithValidRunways.length === 0) {
+      console.log('\n❌ NO AIRPORTS with suitable runways found');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          selectedAirport: null,
+          isAlternate: false,
+          rejectedAirports,
+          searchBoundary: {
+            maxGroundTimeMinutes,
+            airportsTried: airportsToCheck.length,
+            airportsWithinBoundary: 0,
+          },
+          airports: [],
+          configUsed: config,
+          error: 'No airports with suitable runways within search area',
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ============================================================
+    // PARALLEL BATCH 2: Calculate ground transport (FIXED)
+    // ============================================================
+    console.log('\n🚗 BATCH 2: Calculating ground transport times in parallel...');
+
+    const transportPromises = airportsWithValidRunways.map(async ({ airport, airnavData }) => {
+      // Get actual airport coordinates from cache
+      const airportCoords = AIRPORT_COORDS[airport.code];
       
-      // STEP 1: Calculate ground transport time
-      // Note: NearbyAirport doesn't have lat/lng, so we use location as approximation
-      // The actual airport coordinates will be used once we fetch airnavData
-      const groundTransportMinutes = await calculateGroundTransportTime(
-        location,
+      if (!airportCoords) {
+        console.log(`   ⚠️ No coordinates for ${airport.code}`);
+        return { 
+          airport, 
+          airnavData,
+          groundTransportMinutes: 999,
+          hasCoords: false 
+        };
+      }
+
+      const minutes = await calculateGroundTransportTime(
+        location, // Hospital location ✅
         { 
-          lat: location.lat, // Will use actual airport coords after fetch
-          lng: location.lng, 
-          displayName: nearbyAirport.code 
+          lat: airportCoords.lat, // ✅ Actual airport coordinates
+          lng: airportCoords.lng,
+          displayName: airportCoords.name || airport.code 
         },
         supabase
       );
       
-      console.log(`🚗 Ground transport time: ${groundTransportMinutes} minutes`);
+      console.log(`   ${airport.code}: ${minutes} min drive`);
       
-      if (groundTransportMinutes > maxGroundTimeMinutes) {
-        console.log(`❌ Outside ground transport boundary (${groundTransportMinutes}min > ${maxGroundTimeMinutes}min limit)`);
-        const rejected: RejectedAirport = {
-          code: nearbyAirport.code,
-          name: nearbyAirport.name || nearbyAirport.code,
-          distance_nm: nearbyAirport.distance_nm,
-          groundTransportMinutes,
+      return { 
+        airport, 
+        airnavData,
+        groundTransportMinutes: minutes,
+        hasCoords: true 
+      };
+    });
+
+    const transportResults = await Promise.all(transportPromises);
+
+    // Filter for airports within ground transport boundary
+    const airportsWithinBoundary = transportResults
+      .filter(r => r.hasCoords && r.groundTransportMinutes <= maxGroundTimeMinutes)
+      .sort((a, b) => a.airport.distance_nm - b.airport.distance_nm)
+      .slice(0, 5); // Take top 5 for weather checks
+
+    console.log(`\n   📊 ${airportsWithinBoundary.length} airports within ${maxGroundTimeMinutes}min ground transport`);
+
+    // Add rejected airports for those beyond ground transport boundary
+    transportResults.forEach(r => {
+      if (!r.hasCoords || r.groundTransportMinutes > maxGroundTimeMinutes) {
+        rejectedAirports.push({
+          code: r.airport.code,
+          name: r.airport.name || r.airport.code,
+          distance_nm: r.airport.distance_nm,
+          groundTransportMinutes: r.groundTransportMinutes,
           failureStage: 'ground_transport',
           rejectionReasons: [formatUserFriendlyReason('ground transport', {})],
           details: {}
-        };
-        rejectedAirports.push(rejected);
-        if (!firstRejectedAirport) firstRejectedAirport = rejected;
-        continue; // Skip to next airport
+        });
       }
-      
-      airportsWithinBoundary++;
-      
-      // STEP 2: Fetch airport data and check runway requirements
-      let airnavData: any;
-      try {
-        airnavData = await fetchAndParseAirNav(nearbyAirport.code, false, supabase);
-        if (!airnavData) {
-          console.log(`❌ No AirNav data available`);
-          const rejected: RejectedAirport = {
-            code: nearbyAirport.code,
-            name: nearbyAirport.name || nearbyAirport.code,
-            distance_nm: nearbyAirport.distance_nm,
-            groundTransportMinutes,
-            failureStage: 'runway',
-            rejectionReasons: ['Airport data not available'],
-            details: {}
-          };
-          rejectedAirports.push(rejected);
-          if (!firstRejectedAirport) firstRejectedAirport = rejected;
-          continue;
-        }
-      } catch (error) {
-        console.error(`Error fetching ${nearbyAirport.code}:`, error);
-        continue;
-      }
+    });
 
-      // Check fuel requirement
-      if (requiresJetFuel && !airnavData.has_jet_fuel) {
-        console.log(`❌ No Jet A fuel available`);
-        const rejected: RejectedAirport = {
-          code: nearbyAirport.code,
-          name: airnavData.name || nearbyAirport.code,
-          distance_nm: nearbyAirport.distance_nm,
+    if (airportsWithinBoundary.length === 0) {
+      console.log('\n❌ NO AIRPORTS within ground transport boundary');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          selectedAirport: null,
+          isAlternate: false,
+          rejectedAirports,
+          searchBoundary: {
+            maxGroundTimeMinutes,
+            airportsTried: airportsToCheck.length,
+            airportsWithinBoundary: 0,
+          },
+          airports: [],
+          configUsed: config,
+          error: `No airports within ${maxGroundTimeMinutes} minutes ground transport`,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ============================================================
+    // PARALLEL BATCH 3: Fetch TAF weather data
+    // ============================================================
+    console.log('\n🌤️ BATCH 3: Fetching weather data in parallel...');
+
+    const weatherPromises = airportsWithinBoundary.map(async ({ airport, airnavData, groundTransportMinutes }) => {
+      try {
+        const tafData = await fetchTAFWithFallback(airport.code);
+        return {
+          airport, 
+          airnavData, 
+          groundTransportMinutes, 
+          tafData, 
+          weatherFetchSuccess: true 
+        };
+      } catch (error) {
+        console.error(`   ⚠️ No weather data for ${airport.code}`);
+        return { 
+          airport, 
+          airnavData, 
+          groundTransportMinutes, 
+          tafData: null,
+          weatherFetchSuccess: false 
+        };
+      }
+    });
+
+    const weatherResults = await Promise.all(weatherPromises);
+    console.log(`   ✅ Fetched weather for ${weatherResults.filter(r => r.weatherFetchSuccess).length}/${airportsWithinBoundary.length} airports`);
+
+    // ============================================================
+    // SEQUENTIAL: Check fuel, weather, wind, IFR (fast - no API calls)
+    // ============================================================
+    console.log('\n✅ FINAL: Checking fuel, weather, wind, and approaches...');
+
+    for (const { airport, airnavData, groundTransportMinutes, tafData, weatherFetchSuccess } of weatherResults) {
+      console.log(`\n🔍 Evaluating ${airport.code}...`);
+      
+      // Check fuel availability (HARD requirement)
+      if (!airnavData || !airnavData.has_jet_fuel) {
+        console.log(`   ❌ No Jet A fuel`);
+        rejectedAirports.push({
+          code: airport.code,
+          name: airport.name || airport.code,
+          distance_nm: airport.distance_nm,
           groundTransportMinutes,
           failureStage: 'fuel',
-          rejectionReasons: [formatUserFriendlyReason('No Jet A fuel', {})],
+          rejectionReasons: ['No Jet A fuel available'],
           details: {}
-        };
-        rejectedAirports.push(rejected);
-        if (!firstRejectedAirport) firstRejectedAirport = rejected;
+        });
         continue;
       }
-
-      // CRITICAL: Explicit runway validation (don't trust AirNav's search filters)
-      console.log(`\n🛬 Checking runway suitability for ${nearbyAirport.code}...`);
-      
-      if (!airnavData.runways || airnavData.runways.length === 0) {
-        console.log(`❌ No runway data available`);
-        const rejected: RejectedAirport = {
-          code: nearbyAirport.code,
-          name: airnavData.name || nearbyAirport.code,
-          distance_nm: nearbyAirport.distance_nm,
-          groundTransportMinutes,
-          failureStage: 'runway',
-          rejectionReasons: ['No runway information available'],
-          details: {}
-        };
-        rejectedAirports.push(rejected);
-        if (!firstRejectedAirport) firstRejectedAirport = rejected;
-        continue;
-      }
-
-      // Log all runways for debugging
-      console.log(`   Found ${airnavData.runways.length} runways:`);
-      airnavData.runways.forEach((rwy: any) => {
-        console.log(`   - Runway ${rwy.name}: ${rwy.length_ft}ft x ${rwy.width_ft}ft, ${rwy.surface}`);
-      });
-
-      // Check runway dimensions and surface
-      const qualifyingRunways = airnavData.runways.filter((runway: any) => 
-        runway.length_ft >= config.min_runway_length_ft &&
-        runway.width_ft >= config.min_runway_width_ft &&
-        (!config.requires_paved_surface || acceptableSurfaces.includes(runway.surface)) &&
-        (!requireDaylight || !config.requires_lighting || runway.lighted)
-      );
-
-      if (qualifyingRunways.length === 0) {
-        // Find the specific failure reason
-        const longestRunway = airnavData.runways.reduce((best: any, rwy: any) => 
-          rwy.length_ft > best.length_ft ? rwy : best, airnavData.runways[0]);
-        
-        let reason = '';
-        if (longestRunway.length_ft < config.min_runway_length_ft) {
-          reason = `Runway too short (${longestRunway.length_ft}ft, need ${config.min_runway_length_ft}ft+)`;
-        } else if (longestRunway.width_ft < config.min_runway_width_ft) {
-          reason = `Runway too narrow (${longestRunway.width_ft}ft, need ${config.min_runway_width_ft}ft+)`;
-        } else if (!acceptableSurfaces.includes(longestRunway.surface)) {
-          reason = `Unsuitable runway surface (${longestRunway.surface}, need paved)`;
-        } else {
-          reason = `No qualifying runways (need ${config.min_runway_length_ft}ft x ${config.min_runway_width_ft}ft paved)`;
-        }
-        
-        console.log(`❌ ${reason}`);
-        const rejected: RejectedAirport = {
-          code: nearbyAirport.code,
-          name: airnavData.name || nearbyAirport.code,
-          distance_nm: nearbyAirport.distance_nm,
-          groundTransportMinutes,
-          failureStage: 'runway',
-          rejectionReasons: [reason],
-          details: { runway: `Longest: ${longestRunway.length_ft}ft x ${longestRunway.width_ft}ft ${longestRunway.surface}` }
-        };
-        rejectedAirports.push(rejected);
-        if (!firstRejectedAirport) firstRejectedAirport = rejected;
-        continue;
-      }
-
-      console.log(`✅ Runway requirements met (${qualifyingRunways.length} qualifying runways)`);
-      
-      // STEP 3: Check variable rules (weather, wind, approaches)
-      const qualifications = {
-        passed: true,
-        runway_ok: true,
-        surface_ok: true,
-        lighting_ok: true,
-        weather_ok: true,
-        approach_ok: true,
-        wind_ok: true,
-      };
       
       const warnings: string[] = [];
-      const technicalReasons: string[] = [];
-      const rejectionDetails: RejectionDetail = {};
-      let windAnalysis: RunwayWindAnalysis | undefined;
-      let failureStage: RejectedAirport['failureStage'] | null = null;
-
-      // Fetch weather data
-      const tafData = await fetchTAFWithFallback(nearbyAirport.code);
-      
-      if (!tafData) {
-        console.log(`❌ No TAF forecast available`);
-        const rejected: RejectedAirport = {
-          code: nearbyAirport.code,
-          name: airnavData.name || nearbyAirport.code,
-          distance_nm: nearbyAirport.distance_nm,
-          groundTransportMinutes,
-          failureStage: 'weather',
-          rejectionReasons: ['Weather forecast not available'],
-          details: {}
-        };
-        rejectedAirports.push(rejected);
-        if (!firstRejectedAirport) firstRejectedAirport = rejected;
-        continue;
-      }
-
-      const tafPeriods = parseTAFPeriods(tafData.raw);
-      const relevantPeriod = findRelevantTafPeriod(tafPeriods, arrivalTime);
-      
-      if (!relevantPeriod) {
-        console.log(`❌ No TAF for arrival time`);
-        const rejected: RejectedAirport = {
-          code: nearbyAirport.code,
-          name: airnavData.name || nearbyAirport.code,
-          distance_nm: nearbyAirport.distance_nm,
-          groundTransportMinutes,
-          failureStage: 'weather',
-          rejectionReasons: ['Weather forecast not available for arrival time'],
-          details: {}
-        };
-        rejectedAirports.push(rejected);
-        if (!firstRejectedAirport) firstRejectedAirport = rejected;
-        continue;
-      }
-
-      // Check ceiling
-      if (relevantPeriod.ceiling !== null && relevantPeriod.ceiling !== undefined && relevantPeriod.ceiling < config.minimum_ceiling_ft) {
-        qualifications.weather_ok = false;
-        qualifications.passed = false;
-        failureStage = 'weather';
-        const technicalReason = `Ceiling ${relevantPeriod.ceiling}ft < ${config.minimum_ceiling_ft}ft minimum`;
-        warnings.push(technicalReason);
-        technicalReasons.push(technicalReason);
-        rejectionDetails.ceiling_ft = relevantPeriod.ceiling;
-        console.log(`❌ ${technicalReason}`);
-      }
-
-      // Check visibility
-      const visibilitySM = parseFloat(relevantPeriod.visibility || '10');
-      if (visibilitySM < config.minimum_visibility_sm) {
-        qualifications.weather_ok = false;
-        qualifications.passed = false;
-        if (!failureStage) failureStage = 'weather';
-        const technicalReason = `Visibility ${visibilitySM}SM < ${config.minimum_visibility_sm}SM minimum`;
-        warnings.push(technicalReason);
-        technicalReasons.push(technicalReason);
-        rejectionDetails.visibility_sm = visibilitySM;
-        console.log(`❌ ${technicalReason}`);
-      }
-
-      // Check approaches if IFR
-      if (relevantPeriod.flightCategory === 'IFR' || relevantPeriod.flightCategory === 'LIFR') {
-        if (config.ifr_requires_instrument_approach && !airnavData.has_instrument_approach) {
-          qualifications.approach_ok = false;
-          qualifications.passed = false;
-          if (!failureStage) failureStage = 'approaches';
-          const technicalReason = `IFR requires instrument approach (${relevantPeriod.flightCategory})`;
-          warnings.push(technicalReason);
-          technicalReasons.push(technicalReason);
-          console.log(`❌ ${technicalReason}`);
-        }
-      }
-
-      // Check wind
-      if (qualifyingRunways.length > 0 && relevantPeriod.wind) {
-        const windData = {
-          direction: relevantPeriod.wind.direction === 'VRB' ? -1 : relevantPeriod.wind.direction,
-          speed: relevantPeriod.wind.speed,
-          gust: relevantPeriod.wind.gust
-        };
-
-        windAnalysis = analyzeBestRunway(windData, qualifyingRunways) || undefined;
-        
-        if (windAnalysis) {
-          console.log(`📊 Best runway ${windAnalysis.runway}: ${windAnalysis.totalWind}kt total, ${windAnalysis.crosswind}kt crosswind`);
-
-          if (windAnalysis.totalWind > config.max_wind_kt) {
-            qualifications.wind_ok = false;
-            qualifications.passed = false;
-            if (!failureStage) failureStage = 'wind';
-            const technicalReason = `Wind ${windAnalysis.totalWind}kt > ${config.max_wind_kt}kt limit`;
-            warnings.push(technicalReason);
-            technicalReasons.push(technicalReason);
-            rejectionDetails.wind_kt = windAnalysis.totalWind;
-            rejectionDetails.runway = windAnalysis.runway;
-            console.log(`❌ ${technicalReason}`);
-          }
-          
-          if (windAnalysis.crosswind > config.max_crosswind_kt) {
-            qualifications.wind_ok = false;
-            qualifications.passed = false;
-            if (!failureStage) failureStage = 'wind';
-            const technicalReason = `Crosswind ${windAnalysis.crosswind}kt > ${config.max_crosswind_kt}kt limit on ${windAnalysis.runway}`;
-            warnings.push(technicalReason);
-            technicalReasons.push(technicalReason);
-            rejectionDetails.crosswind_kt = windAnalysis.crosswind;
-            rejectionDetails.runway = windAnalysis.runway;
-            console.log(`❌ ${technicalReason}`);
-          }
-
-          if (qualifications.wind_ok) {
-            console.log(`✅ Wind within limits`);
-          }
-        }
-      }
-
-      // If this airport failed variable rules, add to rejected and continue
-      if (!qualifications.passed) {
-        console.log(`❌ ${nearbyAirport.code} failed variable rules: ${technicalReasons.join(', ')}`);
-        const rejected: RejectedAirport = {
-          code: nearbyAirport.code,
-          name: airnavData.name || nearbyAirport.code,
-          distance_nm: nearbyAirport.distance_nm,
-          groundTransportMinutes,
-          failureStage: failureStage || 'weather',
-          rejectionReasons: technicalReasons.map(r => formatUserFriendlyReason(r, rejectionDetails)),
-          details: rejectionDetails
-        };
-        rejectedAirports.push(rejected);
-        if (!firstRejectedAirport) firstRejectedAirport = rejected;
-        continue; // CASCADE: Try next airport
-      }
-
-      // ✅ SUCCESS: This airport passes all requirements!
-      console.log(`✅ ${nearbyAirport.code} FULLY QUALIFIED - stopping search`);
-      
       const violatedGuidelines: string[] = [];
+      let requiresApproval = false;
+
+      // Parse weather if available (SOFT requirement)
+      let weatherOk = true;
+      let windOk = true;
+      let approachOk = true;
+
+      if (weatherFetchSuccess && tafData) {
+        const tafPeriods = parseTAFPeriods(tafData.raw);
+        const relevantPeriod = findRelevantTafPeriod(tafPeriods, arrivalTime);
+
+        if (relevantPeriod) {
+          const minCeiling = config.minimum_ceiling_ft || 1000;
+          const minVisibility = config.minimum_visibility_sm || 3;
+
+          // Check ceiling (SOFT)
+          if (relevantPeriod.ceiling !== undefined && relevantPeriod.ceiling !== null && relevantPeriod.ceiling < minCeiling) {
+            console.log(`   ⚠️ Low ceiling: ${relevantPeriod.ceiling}ft (min ${minCeiling}ft)`);
+            warnings.push(`Low ceiling: ${relevantPeriod.ceiling}ft`);
+            violatedGuidelines.push('ceiling');
+            requiresApproval = true;
+            weatherOk = false;
+          }
+
+          // Check visibility (SOFT) - visibility is a string like "10SM"
+          if (relevantPeriod.visibility) {
+            const visMatch = relevantPeriod.visibility.match(/(\d+(?:\.\d+)?)/);
+            const visSm = visMatch ? parseFloat(visMatch[1]) : 10;
+            if (visSm < minVisibility) {
+              console.log(`   ⚠️ Low visibility: ${visSm}SM (min ${minVisibility}SM)`);
+              warnings.push(`Low visibility: ${visSm}SM`);
+              violatedGuidelines.push('visibility');
+              requiresApproval = true;
+              weatherOk = false;
+            }
+          }
+
+          // Check winds (SOFT)
+          const windData = extractWind(relevantPeriod.raw);
+          if (windData) {
+            const maxWind = config.max_wind_kt || 35;
+            const maxCrosswind = config.max_crosswind_kt || 15;
+
+            const effectiveWind = windData.gust || windData.speed;
+            if (effectiveWind > maxWind) {
+              console.log(`   ⚠️ High winds: ${effectiveWind}kt (max ${maxWind}kt)`);
+              warnings.push(`High winds: ${effectiveWind}kt`);
+              violatedGuidelines.push('wind');
+              requiresApproval = true;
+              windOk = false;
+            }
+
+            // Check crosswind if runways available
+            if (airnavData.runways && airnavData.runways.length > 0) {
+              const runwayAnalysis = analyzeBestRunway(windData, airnavData.runways);
+              if (runwayAnalysis && Math.abs(runwayAnalysis.crosswind) > maxCrosswind) {
+                console.log(`   ⚠️ High crosswind: ${Math.abs(runwayAnalysis.crosswind).toFixed(0)}kt on ${runwayAnalysis.runway} (max ${maxCrosswind}kt)`);
+                warnings.push(`High crosswind: ${Math.abs(runwayAnalysis.crosswind).toFixed(0)}kt`);
+                violatedGuidelines.push('crosswind');
+                requiresApproval = true;
+                windOk = false;
+              }
+            }
+          }
+        }
+      }
+
+      // Check approaches (SOFT) - check if airport has ILS or RNAV approaches
+      if (config.ifr_requires_instrument_approach && airnavData && !airnavData.has_ils && !airnavData.has_rnav) {
+        console.log(`   ⚠️ No instrument approaches for IFR operations`);
+        warnings.push('No instrument approaches');
+        violatedGuidelines.push('approaches');
+        requiresApproval = true;
+        approachOk = false;
+      }
+
+      // If this airport has violations, mark as rejected but continue checking others
+      if (requiresApproval) {
+        console.log(`   ⚠️ ${airport.code} requires Chief Pilot approval: ${warnings.join(', ')}`);
+        rejectedAirports.push({
+          code: airport.code,
+          name: airport.name || airport.code,
+          distance_nm: airport.distance_nm,
+          groundTransportMinutes,
+          failureStage: weatherOk ? (windOk ? 'approaches' : 'wind') : 'weather',
+          rejectionReasons: warnings,
+          details: {}
+        });
+        
+        // But also add as qualified with approval requirement
+        const qualifiedAirport: QualifiedAirport = {
+          code: airport.code,
+          name: airport.name || airport.code,
+          lat: airnavData.lat || 0,
+          lng: airnavData.lng || 0,
+          distance_nm: airport.distance_nm,
+          elevation_ft: airnavData.elevation_ft || 0,
+          qualifications: {
+            passed: false,
+            runway_ok: true,
+            surface_ok: true,
+            lighting_ok: true,
+            weather_ok: weatherOk,
+            approach_ok: approachOk,
+            wind_ok: windOk,
+          },
+          warnings,
+          best_runway: airnavData.runways?.[0],
+          requiresChiefPilotApproval: true,
+          violatedGuidelines
+        };
+        qualifiedAirports.push(qualifiedAirport);
+        continue;
+      }
+
+      // ✅ FULLY QUALIFIED AIRPORT FOUND!
+      console.log(`   ✅ ${airport.code} is FULLY QUALIFIED (no violations)`);
+      
       const qualifiedAirport: QualifiedAirport = {
-        code: nearbyAirport.code,
-        name: airnavData.name || nearbyAirport.code,
+        code: airport.code,
+        name: airport.name || airport.code,
         lat: airnavData.lat || 0,
         lng: airnavData.lng || 0,
-        distance_nm: nearbyAirport.distance_nm,
+        distance_nm: airport.distance_nm,
         elevation_ft: airnavData.elevation_ft || 0,
-        qualifications,
-        warnings,
-        best_runway: qualifyingRunways[0],
-        windAnalysis: windAnalysis ? {
-          runway: windAnalysis.runway,
-          crosswind: windAnalysis.crosswind,
-          headwind: windAnalysis.headwind,
-          totalWind: windAnalysis.totalWind
-        } : undefined,
+        qualifications: {
+          passed: true,
+          runway_ok: true,
+          surface_ok: true,
+          lighting_ok: true,
+          weather_ok: true,
+          approach_ok: true,
+          wind_ok: true,
+        },
+        warnings: [],
+        best_runway: airnavData.runways?.[0],
         requiresChiefPilotApproval: false,
-        violatedGuidelines
+        violatedGuidelines: []
       };
 
       qualifiedAirports.push(qualifiedAirport);
 
-      // Determine if this is an alternate (not the first airport we tried within boundary)
-      const isAlternate = rejectedAirports.length > 0;
-      
-      // Build preferred airport info if this is an alternate
-      let preferredAirport: typeof result.preferredAirport | undefined;
-      if (isAlternate && firstRejectedAirport) {
-        preferredAirport = {
-          code: firstRejectedAirport.code,
-          name: firstRejectedAirport.name,
-          distance_nm: firstRejectedAirport.distance_nm,
-          groundTransportMinutes: firstRejectedAirport.groundTransportMinutes,
-          whyRejected: firstRejectedAirport.rejectionReasons
-        };
-        console.log(`ℹ️ Selected alternate: ${nearbyAirport.code} - preferred was ${firstRejectedAirport.code}`);
-        console.log(`   Preferred rejected because: ${firstRejectedAirport.rejectionReasons.join(', ')}`);
-      }
-
       const result: AirportSelectionResult = {
         selectedAirport: qualifiedAirport,
-        isAlternate,
-        preferredAirport,
+        isAlternate: false,
         rejectedAirports,
         searchBoundary: {
           maxGroundTimeMinutes,
-          airportsTried: rejectedAirports.length + 1,
-          airportsWithinBoundary: airportsWithinBoundary
+          airportsTried: airportsToCheck.length,
+          airportsWithinBoundary: airportsWithinBoundary.length
         },
         airports: qualifiedAirports,
         configUsed: config
@@ -772,18 +857,18 @@ serve(async (req) => {
     const result: AirportSelectionResult = {
       selectedAirport,
       isAlternate: false,
-      preferredAirport: firstRejectedAirport ? {
-        code: firstRejectedAirport.code,
-        name: firstRejectedAirport.name,
-        distance_nm: firstRejectedAirport.distance_nm,
-        groundTransportMinutes: firstRejectedAirport.groundTransportMinutes,
-        whyRejected: firstRejectedAirport.rejectionReasons
+      preferredAirport: rejectedAirports.length > 0 ? {
+        code: rejectedAirports[0].code,
+        name: rejectedAirports[0].name,
+        distance_nm: rejectedAirports[0].distance_nm,
+        groundTransportMinutes: rejectedAirports[0].groundTransportMinutes,
+        whyRejected: rejectedAirports[0].rejectionReasons
       } : undefined,
       rejectedAirports,
       searchBoundary: {
         maxGroundTimeMinutes,
         airportsTried: rejectedAirports.length,
-        airportsWithinBoundary: airportsWithinBoundary
+        airportsWithinBoundary: airportsWithinBoundary.length
       },
       airports: qualifiedAirports,
       configUsed: config

@@ -20,15 +20,23 @@ export async function searchNearbyAirports(
   try {
     // Build AirNav search URL with filters for suitable airports
     const ns = lat >= 0 ? 'N' : 'S';
-    const ew = lng >= 0 ? 'E' : 'W';
+    const ew = lng >= 0 ? 'W' : 'E'; // Note: W for negative longitude (Western hemisphere)
     const searchUrl = 
       `https://airnav.com/cgi-bin/airport-search?` +
-      `lat=${Math.abs(lat).toFixed(6)}&ns=${ns}&` +
-      `lon=${Math.abs(lng).toFixed(6)}&ew=${ew}&` +
-      `maxdistance=${Math.ceil(radiusNm)}&distanceunits=nm&fieldtypes=a&` +
-      `runwaylength=4000&runwayspaved=1`; // Filter: min 4000ft paved runway
+      `place=&airportid=&` +
+      `lat=${Math.abs(lat).toFixed(6)}&NS=${ns}&` +
+      `lon=${Math.abs(lng).toFixed(6)}&EW=${ew}&` +
+      `fieldtypes=a&` +        // Airports only (not heliports)
+      `use=u&` +               // Public use
+      `iap=.&` +               // Any approaches
+      `length=4000&` +         // Min 4000ft runway
+      `paved=Y&` +             // Paved only
+      `fuel=0&` +              // No fuel filtering (we check this separately)
+      `mindistance=0&` +
+      `maxdistance=${Math.ceil(radiusNm)}&` +
+      `distanceunits=nm`;
 
-    console.log(`Searching AirNav for airports within ${radiusNm}nm of ${lat}, ${lng} (4000ft+ paved)`);
+    console.log(`Searching AirNav for airports within ${radiusNm}nm of ${lat}, ${lng} (4000ft+ paved, public use)`);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
