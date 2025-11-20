@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle2, AlertCircle, XCircle, TrendingUp, Shield, Calculator } from 'lucide-react';
+import { CheckCircle2, TrendingUp, Shield, Calculator, AlertCircle } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { TripData } from '@/types/trip';
 
@@ -24,55 +24,81 @@ export const DemoSuccessRate = ({ tripData }: DemoSuccessRateProps) => {
     );
   }
 
-  const overallSuccess = 89;
-  
+  const overallSuccess = tripData.overallSuccess || 85;
+  const viabilityPercent = tripData.viabilityUsedPercent || 65;
   const distance = (tripData.originAirport?.distance_nm || 0) + (tripData.destAirport?.distance_nm || 0);
-  const distanceRisk = distance > 500 ? 75 : distance > 300 ? 85 : 92;
   
-  const riskFactors = [
-    { name: 'Distance', risk: distance > 500 ? 'Moderate' : 'Low', score: distanceRisk, color: distance > 500 ? 'text-warning' : 'text-success', bgColor: distance > 500 ? 'bg-warning/10' : 'bg-success/10' },
-    { name: 'Weather Conditions', risk: 'Moderate', score: 78, color: 'text-warning', bgColor: 'bg-warning/10' },
-    { name: 'Time of Day', risk: 'Low', score: 88, color: 'text-success', bgColor: 'bg-success/10' },
-    { name: 'Organ Viability Window', risk: 'Low', score: 95, color: 'text-success', bgColor: 'bg-success/10' },
-  ];
+  // Extract risk factors from insights or create based on trip data
+  const insights = tripData.insights || [];
+  const riskFactors = insights.map(insight => {
+    const isGood = insight.status === 'success' || insight.score > 85;
+    return {
+      name: insight.title,
+      risk: isGood ? 'Low' : insight.score > 70 ? 'Moderate' : 'High',
+      score: insight.score,
+      color: isGood ? 'text-success' : insight.score > 70 ? 'text-warning' : 'text-destructive',
+      bgColor: isGood ? 'bg-success/10' : insight.score > 70 ? 'bg-warning/10' : 'bg-destructive/10',
+    };
+  });
 
+  // Add viability as a risk factor if not already present
+  if (!riskFactors.find(r => r.name.toLowerCase().includes('viability'))) {
+    riskFactors.push({
+      name: 'Organ Viability Window',
+      risk: viabilityPercent < 70 ? 'Low' : viabilityPercent < 85 ? 'Moderate' : 'High',
+      score: Math.max(10, 100 - viabilityPercent),
+      color: viabilityPercent < 70 ? 'text-success' : viabilityPercent < 85 ? 'text-warning' : 'text-destructive',
+      bgColor: viabilityPercent < 70 ? 'bg-success/10' : viabilityPercent < 85 ? 'bg-warning/10' : 'bg-destructive/10',
+    });
+  }
+
+  // Generate historical data based on organ type (in real app, this would come from database)
+  const organType = tripData.missionType?.organ_type || 'kidney';
+  const baseSuccess = organType.toLowerCase().includes('heart') ? 88 : 
+                      organType.toLowerCase().includes('liver') ? 87 : 
+                      organType.toLowerCase().includes('lung') ? 85 : 90;
+  
   const historicalData = [
-    { month: 'Jan', success: 87, total: 23 },
-    { month: 'Feb', success: 91, total: 19 },
-    { month: 'Mar', success: 85, total: 26 },
-    { month: 'Apr', success: 89, total: 28 },
-    { month: 'May', success: 92, total: 25 },
-    { month: 'Jun', success: 90, total: 22 },
+    { month: 'Jan', success: baseSuccess - 3, total: 18 },
+    { month: 'Feb', success: baseSuccess + 1, total: 15 },
+    { month: 'Mar', success: baseSuccess - 2, total: 22 },
+    { month: 'Apr', success: baseSuccess, total: 24 },
+    { month: 'May', success: baseSuccess + 2, total: 21 },
+    { month: 'Jun', success: baseSuccess + 1, total: 19 },
   ];
 
   const similarFlights = [
-    { status: 'Success', count: 9, color: 'hsl(var(--success))' },
-    { status: 'Delayed', count: 1, color: 'hsl(var(--warning))' },
+    { status: 'Success', count: Math.round(overallSuccess / 10), color: 'hsl(var(--success))' },
+    { status: 'Delayed', count: Math.max(1, Math.round((100 - overallSuccess) / 15)), color: 'hsl(var(--warning))' },
+    { status: 'Failed', count: Math.max(0, Math.round((100 - overallSuccess) / 20)), color: 'hsl(var(--destructive))' },
   ];
+
+  const confidenceLevel = overallSuccess >= 90 ? 'High' : overallSuccess >= 80 ? 'Good' : overallSuccess >= 70 ? 'Moderate' : 'Low';
+  const confidenceColor = overallSuccess >= 90 ? 'success' : overallSuccess >= 80 ? 'primary' : overallSuccess >= 70 ? 'warning' : 'destructive';
 
   return (
     <div className="space-y-6">
-      <Card className="shadow-card border-success/20">
+      <Card className={`shadow-card border-${confidenceColor}/20`}>
         <CardHeader>
           <div className="flex items-start justify-between">
             <div>
               <CardTitle className="text-2xl">Success Rate Prediction</CardTitle>
               <CardDescription className="mt-2">
-                AI-powered success probability for this transplant mission
+                AI-powered success probability for this {organType} transplant mission
               </CardDescription>
             </div>
-            <Badge className="bg-success/20 text-success border-success/30">
-              High Confidence
+            <Badge className={`bg-${confidenceColor}/20 text-${confidenceColor} border-${confidenceColor}/30`}>
+              {confidenceLevel} Confidence
             </Badge>
           </div>
         </CardHeader>
         <CardContent>
           <div className="grid md:grid-cols-2 gap-6 mb-6">
-            <div className="text-center p-8 bg-gradient-to-br from-success/10 to-success/5 rounded-lg border border-success/20">
-              <Shield className="w-12 h-12 text-success mx-auto mb-3" />
-              <div className="text-5xl font-bold text-success mb-2">{overallSuccess}%</div>
+            <div className={`text-center p-8 bg-gradient-to-br from-${confidenceColor}/10 to-${confidenceColor}/5 rounded-lg border border-${confidenceColor}/20`}>
+              <Shield className={`w-12 h-12 text-${confidenceColor} mx-auto mb-3`} />
+              <div className={`text-5xl font-bold text-${confidenceColor} mb-2`}>{overallSuccess}%</div>
               <p className="text-sm text-muted-foreground">Predicted Success Rate</p>
-              <p className="text-xs text-muted-foreground mt-1">For similar transplant missions</p>
+              <p className="text-xs text-muted-foreground mt-1">For this specific mission profile</p>
             </div>
 
             <div className="space-y-3">
@@ -80,7 +106,7 @@ export const DemoSuccessRate = ({ tripData }: DemoSuccessRateProps) => {
                 <TrendingUp className="w-5 h-5 text-primary" />
                 <h3 className="font-semibold">Risk Assessment</h3>
               </div>
-              {riskFactors.map((factor) => (
+              {riskFactors.slice(0, 4).map((factor) => (
                 <div key={factor.name} className={`p-3 rounded-lg border ${factor.bgColor}`}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium">{factor.name}</span>
@@ -156,12 +182,14 @@ export const DemoSuccessRate = ({ tripData }: DemoSuccessRateProps) => {
                 <div className="mt-4 space-y-2">
                   <div className="flex items-center gap-2 text-sm">
                     <CheckCircle2 className="w-4 h-4 text-success" />
-                    <span className="text-muted-foreground">9 successful deliveries</span>
+                    <span className="text-muted-foreground">{similarFlights[0]?.count || 0} successful deliveries</span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <AlertCircle className="w-4 h-4 text-warning" />
-                    <span className="text-muted-foreground">1 delayed but organ remained viable</span>
-                  </div>
+                  {similarFlights[1] && similarFlights[1].count > 0 && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <AlertCircle className="w-4 h-4 text-warning" />
+                      <span className="text-muted-foreground">{similarFlights[1].count} delayed but organ remained viable</span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

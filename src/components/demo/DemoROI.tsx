@@ -2,8 +2,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { TrendingUp, DollarSign, Shield, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { TripData } from '@/types/trip';
+import { calculateROI } from '@/lib/missionFinancials';
 
 interface DemoROIProps {
   tripData?: TripData | null;
@@ -24,21 +25,20 @@ export const DemoROI = ({ tripData }: DemoROIProps) => {
     );
   }
 
-  const distance = (tripData.originAirport?.distance_nm || 0) + (tripData.destAirport?.distance_nm || 0);
-  
-  const costs = [
-    { name: 'Fuel', value: Math.round(distance * 8), color: 'hsl(var(--primary))' },
-    { name: 'Crew', value: 1800, color: 'hsl(var(--accent))' },
-    { name: 'Maintenance', value: Math.round(distance * 2), color: 'hsl(var(--secondary))' },
-    { name: 'Airport Fees', value: 350, color: 'hsl(var(--muted))' },
+  const roi = calculateROI(tripData);
+  const { costs, revenue, grossProfit, profitMargin, riskAdjustedROI, successRate } = roi;
+
+  const costBreakdown = [
+    { name: 'Fuel', value: costs.fuel, color: 'hsl(var(--primary))' },
+    { name: 'Crew', value: costs.crew, color: 'hsl(var(--accent))' },
+    { name: 'Maintenance', value: costs.maintenance, color: 'hsl(var(--secondary))' },
+    { name: 'Airport Fees', value: costs.airportFees, color: 'hsl(var(--muted))' },
+    { name: 'Ground & Other', value: costs.groundTransport + costs.insurance + costs.permits, color: 'hsl(var(--border))' },
   ];
 
-  const totalCost = costs.reduce((sum, item) => sum + item.value, 0);
-  const revenue = 11800;
-  const grossProfit = revenue - totalCost;
-  const profitMargin = ((grossProfit / revenue) * 100).toFixed(1);
-  const successRate = 89;
-  const riskAdjustedROI = (grossProfit * (successRate / 100)).toFixed(0);
+  const isProfitable = grossProfit > 0;
+  const viabilityColor = tripData.viabilityStatus === 'safe' ? 'success' : 
+                         tripData.viabilityStatus === 'warning' ? 'warning' : 'destructive';
 
   return (
     <div className="space-y-6">
@@ -51,8 +51,8 @@ export const DemoROI = ({ tripData }: DemoROIProps) => {
                 Comprehensive financial breakdown with risk-adjusted projections
               </CardDescription>
             </div>
-            <Badge className="bg-success/20 text-success border-success/30">
-              Profitable Mission
+            <Badge className={isProfitable ? "bg-success/20 text-success border-success/30" : "bg-destructive/20 text-destructive border-destructive/30"}>
+              {isProfitable ? 'Profitable Mission' : 'Loss Expected'}
             </Badge>
           </div>
         </CardHeader>
@@ -66,7 +66,7 @@ export const DemoROI = ({ tripData }: DemoROIProps) => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold text-destructive">${totalCost.toLocaleString()}</p>
+                <p className="text-3xl font-bold text-destructive">${costs.total.toLocaleString()}</p>
                 <p className="text-xs text-muted-foreground mt-1">Operational expenses</p>
               </CardContent>
             </Card>
@@ -79,7 +79,7 @@ export const DemoROI = ({ tripData }: DemoROIProps) => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold text-success">${revenue.toLocaleString()}</p>
+                <p className="text-3xl font-bold text-success">${revenue.total.toLocaleString()}</p>
                 <p className="text-xs text-muted-foreground mt-1">Medicare reimbursement</p>
               </CardContent>
             </Card>
@@ -92,8 +92,10 @@ export const DemoROI = ({ tripData }: DemoROIProps) => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold text-primary">${grossProfit.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground mt-1">{profitMargin}% margin</p>
+                <p className={`text-3xl font-bold ${isProfitable ? 'text-primary' : 'text-destructive'}`}>
+                  ${grossProfit.toLocaleString()}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">{profitMargin.toFixed(1)}% margin</p>
               </CardContent>
             </Card>
           </div>
@@ -108,7 +110,7 @@ export const DemoROI = ({ tripData }: DemoROIProps) => {
                 <ResponsiveContainer width="100%" height={250}>
                   <PieChart>
                     <Pie
-                      data={costs}
+                      data={costBreakdown}
                       cx="50%"
                       cy="50%"
                       labelLine={false}
@@ -117,7 +119,7 @@ export const DemoROI = ({ tripData }: DemoROIProps) => {
                       fill="#8884d8"
                       dataKey="value"
                     >
-                      {costs.map((entry, index) => (
+                      {costBreakdown.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
@@ -132,7 +134,7 @@ export const DemoROI = ({ tripData }: DemoROIProps) => {
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="space-y-2 mt-4">
-                  {costs.map((item, idx) => (
+                  {costBreakdown.map((item, idx) => (
                     <div key={idx} className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded" style={{ backgroundColor: item.color }} />
