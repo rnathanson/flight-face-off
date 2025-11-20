@@ -23,16 +23,27 @@ export const DemoLearning = ({ tripData }: DemoLearningProps) => {
     );
   }
 
+  const organType = tripData.missionType?.organ_type || 'organ';
+  const originCode = tripData.originAirport?.code || 'origin';
+  const destCode = tripData.destAirport?.code || 'destination';
+  const successRate = tripData.overallSuccess || 85;
+  
+  // Learning progress adjusted for current success rate
   const learningProgress = [
-    { month: 'Month 1', dispatches: 12, accuracy: 65 },
-    { month: 'Month 2', dispatches: 28, accuracy: 72 },
-    { month: 'Month 3', dispatches: 45, accuracy: 79 },
-    { month: 'Month 4', dispatches: 68, accuracy: 84 },
-    { month: 'Month 5', dispatches: 92, accuracy: 87 },
-    { month: 'Month 6', dispatches: 118, accuracy: 91 },
+    { month: 'Month 1', dispatches: 12, accuracy: Math.max(60, successRate - 20) },
+    { month: 'Month 2', dispatches: 28, accuracy: Math.max(67, successRate - 15) },
+    { month: 'Month 3', dispatches: 45, accuracy: Math.max(74, successRate - 10) },
+    { month: 'Month 4', dispatches: 68, accuracy: Math.max(79, successRate - 5) },
+    { month: 'Month 5', dispatches: 92, accuracy: Math.max(84, successRate - 2) },
+    { month: 'Month 6', dispatches: 118, accuracy: successRate },
   ];
 
-  const patternData = [
+  // Pattern data derived from trip insights
+  const patternData = tripData.insights ? tripData.insights.slice(0, 5).map(insight => ({
+    factor: insight.title,
+    impact: Math.round((100 - insight.score) / 3),
+    count: Math.round(insight.score / 3),
+  })) : [
     { factor: 'Weather', impact: 23, count: 34 },
     { factor: 'Time of Day', impact: 18, count: 42 },
     { factor: 'Crew Experience', impact: 15, count: 28 },
@@ -40,27 +51,31 @@ export const DemoLearning = ({ tripData }: DemoLearningProps) => {
     { factor: 'Airport Ops', impact: 8, count: 19 },
   ];
 
+  // Insights customized for this specific trip
+  const crewName = tripData.crewMembers?.[0]?.full_name || 'crew';
+  const crewSuccessRate = tripData.crewMembers?.[0]?.success_rate || successRate;
+  
   const insights = [
     {
-      category: 'Weather Impact',
-      finding: 'Traffic at KJFK between 4-6pm adds avg 23 min delay',
-      confidence: 94,
-      samples: 34,
-      type: 'delay',
+      category: `${organType} Transport`,
+      finding: `${organType} missions from ${originCode} show ${successRate}% success rate`,
+      confidence: successRate,
+      samples: Math.round(successRate / 3),
+      type: successRate >= 85 ? 'success' : 'delay',
     },
     {
       category: 'Crew Performance',
-      finding: 'Capt. Mitchell + FO Rodriguez pairing shows 15% faster ground ops',
-      confidence: 88,
-      samples: 12,
-      type: 'success',
+      finding: `${crewName.split(' ')[0]} has ${crewSuccessRate}% success rate on ${organType} missions`,
+      confidence: crewSuccessRate,
+      samples: tripData.crewMembers?.[0]?.total_missions || 12,
+      type: crewSuccessRate >= 85 ? 'success' : 'delay',
     },
     {
       category: 'Route Optimization',
-      finding: 'KHPN → KRDU: Afternoon departures 21% more reliable than morning',
-      confidence: 92,
+      finding: `${originCode} → ${destCode}: ${tripData.viabilityStatus === 'safe' ? 'Excellent' : 'Moderate'} viability margins`,
+      confidence: tripData.viabilityStatus === 'safe' ? 92 : tripData.viabilityStatus === 'warning' ? 78 : 65,
       samples: 28,
-      type: 'success',
+      type: tripData.viabilityStatus === 'safe' ? 'success' : 'delay',
     },
   ];
 
@@ -91,7 +106,7 @@ export const DemoLearning = ({ tripData }: DemoLearningProps) => {
                   <Database className="w-5 h-5 text-primary" />
                   <p className="text-sm text-muted-foreground">Total Dispatches</p>
                 </div>
-                <p className="text-3xl font-bold">118</p>
+                <p className="text-3xl font-bold">{learningProgress[learningProgress.length - 1].dispatches}</p>
                 <p className="text-xs text-muted-foreground mt-1">Training samples</p>
               </CardContent>
             </Card>

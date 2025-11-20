@@ -68,6 +68,16 @@ export const DemoChatbot = ({ tripData }: DemoChatbotProps) => {
               role: m.role,
               content: m.content,
             })),
+            tripContext: tripData ? {
+              origin: tripData.originAirport?.code,
+              destination: tripData.destAirport?.code,
+              originHospital: tripData.originHospital,
+              destinationHospital: tripData.destinationHospital,
+              organType: tripData.missionType?.organ_type,
+              successRate: tripData.overallSuccess,
+              crew: tripData.crewMembers?.map(c => c.full_name),
+              viabilityStatus: tripData.viabilityStatus,
+            } : undefined,
           }),
         }
       );

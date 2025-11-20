@@ -26,16 +26,29 @@ export const DemoChiefPilot = ({ tripData }: DemoChiefPilotProps) => {
   }
 
   const missionId = `DIS-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`;
+  const successRate = tripData.overallSuccess || 85;
+  const distance = (tripData.originAirport?.distance_nm || 0) + (tripData.destAirport?.distance_nm || 0);
+  
+  // Calculate approximate ROI (simplified version)
+  const estimatedCost = distance * 50 + 5000;
+  const estimatedRevenue = 200000;
+  const estimatedROI = estimatedRevenue - estimatedCost;
+  
+  const priority = tripData.viabilityStatus === 'critical' ? 'critical' : 
+                   tripData.viabilityStatus === 'warning' ? 'high' : 'normal';
   
   const pendingApprovals = [
     {
       id: missionId,
       route: `${tripData.originAirport?.code} → ${tripData.destAirport?.code}`,
-      reason: 'Weather monitoring required',
-      confidence: 85,
-      roi: 7200,
-      priority: 'high',
+      reason: tripData.viabilityStatus === 'critical' ? 'Critical viability window' : 
+              tripData.viabilityStatus === 'warning' ? 'Weather monitoring required' : 
+              'Standard approval required',
+      confidence: successRate,
+      roi: Math.round(estimatedROI / 1000),
+      priority: priority,
       time: 'Just now',
+      organType: tripData.missionType?.organ_type || 'Organ',
     },
   ];
 
