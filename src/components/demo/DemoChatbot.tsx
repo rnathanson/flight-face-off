@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Bot, User, Sparkles, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { TripData } from '@/types/trip';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -13,14 +14,22 @@ interface Message {
   timestamp: string;
 }
 
-export const DemoChatbot = () => {
+interface DemoChatbotProps {
+  tripData?: TripData | null;
+}
+
+export const DemoChatbot = ({ tripData }: DemoChatbotProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  const quickReplies = [
+  const quickReplies = tripData ? [
+    `What are weather conditions at ${tripData.destAirport?.code}?`,
+    `Calculate fuel requirements for ${((tripData.originAirport?.distance_nm || 0) + (tripData.destAirport?.distance_nm || 0)).toFixed(0)}nm`,
+    `What alternates are available near ${tripData.destAirport?.code}?`,
+  ] : [
     'What are alternate requirements for this flight?',
     'Can we accept this dispatch in current weather?',
     'What are the fuel requirements for a 400nm flight?',

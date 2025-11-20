@@ -1,14 +1,36 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle2, AlertCircle, XCircle, TrendingUp, Shield } from 'lucide-react';
+import { CheckCircle2, AlertCircle, XCircle, TrendingUp, Shield, Calculator } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { TripData } from '@/types/trip';
 
-export const DemoSuccessRate = () => {
+interface DemoSuccessRateProps {
+  tripData?: TripData | null;
+}
+
+export const DemoSuccessRate = ({ tripData }: DemoSuccessRateProps) => {
+  if (!tripData) {
+    return (
+      <Card className="shadow-card">
+        <CardContent className="flex flex-col items-center justify-center py-16">
+          <Calculator className="w-16 h-16 text-muted-foreground mb-4" />
+          <h3 className="text-xl font-semibold mb-2">No Trip Data Available</h3>
+          <p className="text-muted-foreground text-center max-w-md">
+            Enter a trip in the Trip AI tab to see success rate predictions and risk analysis.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const overallSuccess = 89;
   
+  const distance = (tripData.originAirport?.distance_nm || 0) + (tripData.destAirport?.distance_nm || 0);
+  const distanceRisk = distance > 500 ? 75 : distance > 300 ? 85 : 92;
+  
   const riskFactors = [
-    { name: 'Distance', risk: 'Low', score: 92, color: 'text-success', bgColor: 'bg-success/10' },
+    { name: 'Distance', risk: distance > 500 ? 'Moderate' : 'Low', score: distanceRisk, color: distance > 500 ? 'text-warning' : 'text-success', bgColor: distance > 500 ? 'bg-warning/10' : 'bg-success/10' },
     { name: 'Weather Conditions', risk: 'Moderate', score: 78, color: 'text-warning', bgColor: 'bg-warning/10' },
     { name: 'Time of Day', risk: 'Low', score: 88, color: 'text-success', bgColor: 'bg-success/10' },
     { name: 'Organ Viability Window', risk: 'Low', score: 95, color: 'text-success', bgColor: 'bg-success/10' },

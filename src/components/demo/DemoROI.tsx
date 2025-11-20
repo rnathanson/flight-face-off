@@ -3,12 +3,33 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { TrendingUp, DollarSign, Shield, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { TripData } from '@/types/trip';
 
-export const DemoROI = () => {
+interface DemoROIProps {
+  tripData?: TripData | null;
+}
+
+export const DemoROI = ({ tripData }: DemoROIProps) => {
+  if (!tripData) {
+    return (
+      <Card className="shadow-card">
+        <CardContent className="flex flex-col items-center justify-center py-16">
+          <DollarSign className="w-16 h-16 text-muted-foreground mb-4" />
+          <h3 className="text-xl font-semibold mb-2">No Trip Data Available</h3>
+          <p className="text-muted-foreground text-center max-w-md">
+            Enter a trip in the Trip AI tab to see financial analysis and ROI calculations.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const distance = (tripData.originAirport?.distance_nm || 0) + (tripData.destAirport?.distance_nm || 0);
+  
   const costs = [
-    { name: 'Fuel', value: 2450, color: 'hsl(var(--primary))' },
+    { name: 'Fuel', value: Math.round(distance * 8), color: 'hsl(var(--primary))' },
     { name: 'Crew', value: 1800, color: 'hsl(var(--accent))' },
-    { name: 'Maintenance', value: 600, color: 'hsl(var(--secondary))' },
+    { name: 'Maintenance', value: Math.round(distance * 2), color: 'hsl(var(--secondary))' },
     { name: 'Airport Fees', value: 350, color: 'hsl(var(--muted))' },
   ];
 

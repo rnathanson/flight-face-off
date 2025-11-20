@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft } from 'lucide-react';
 import northwellLogo from '@/assets/northwell-health-logo.png';
@@ -18,13 +19,24 @@ const Demo = () => {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState('predictions');
   const [initialTripData, setInitialTripData] = useState<TripData | null>(null);
+  const [tripData, setTripData] = useState<TripData | null>(null);
 
   useEffect(() => {
     const state = location.state as { tripData?: TripData } | null;
     if (state?.tripData) {
       setInitialTripData(state.tripData);
+      setTripData(state.tripData);
     }
   }, [location]);
+
+  const handleTripCalculated = (data: TripData) => {
+    setTripData(data);
+  };
+
+  const handleClearTrip = () => {
+    setTripData(null);
+    setInitialTripData(null);
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -43,14 +55,31 @@ const Demo = () => {
               </div>
             </div>
 
-            <Button 
-              onClick={() => navigate('/')} 
-              variant="ghost"
-              className="gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back to Calculator
-            </Button>
+            <div className="flex items-center gap-2">
+              {tripData && (
+                <>
+                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                    Trip Loaded: {tripData.originAirport?.code} → {tripData.destAirport?.code}
+                  </Badge>
+                  <Button 
+                    onClick={handleClearTrip} 
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                  >
+                    Clear Trip
+                  </Button>
+                </>
+              )}
+              <Button 
+                onClick={() => navigate('/')} 
+                variant="ghost"
+                className="gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Calculator
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -83,31 +112,34 @@ const Demo = () => {
             </TabsList>
 
             <TabsContent value="predictions" className="animate-fade-in">
-              <DemoTripPredictions initialTripData={initialTripData} />
+              <DemoTripPredictions 
+                initialTripData={initialTripData} 
+                onTripCalculated={handleTripCalculated}
+              />
             </TabsContent>
 
             <TabsContent value="success" className="animate-fade-in">
-              <DemoSuccessRate />
+              <DemoSuccessRate tripData={tripData} />
             </TabsContent>
 
             <TabsContent value="roi" className="animate-fade-in">
-              <DemoROI />
+              <DemoROI tripData={tripData} />
             </TabsContent>
 
             <TabsContent value="chatbot" className="animate-fade-in">
-              <DemoChatbot />
+              <DemoChatbot tripData={tripData} />
             </TabsContent>
 
             <TabsContent value="brief" className="animate-fade-in">
-              <DemoCrewBrief />
+              <DemoCrewBrief tripData={tripData} />
             </TabsContent>
 
             <TabsContent value="pilot" className="animate-fade-in">
-              <DemoChiefPilot />
+              <DemoChiefPilot tripData={tripData} />
             </TabsContent>
 
             <TabsContent value="learning" className="animate-fade-in">
-              <DemoLearning />
+              <DemoLearning tripData={tripData} />
             </TabsContent>
           </Tabs>
         </div>
