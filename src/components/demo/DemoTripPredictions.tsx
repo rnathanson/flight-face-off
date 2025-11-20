@@ -489,7 +489,21 @@ export const DemoTripPredictions = ({
               lat: tripData.route.destinationAirport?.lat || 0,
               lng: tripData.route.destinationAirport?.lng || 0,
               distance_nm: tripData.route.destinationAirport?.distance_from_delivery || 0
-            }
+            },
+            // Include success analysis data
+            crewMembers: analysis.crewMembers,
+            leadDoctor: analysis.leadDoctor,
+            surgicalTeam: analysis.surgicalTeam,
+            coordinator: analysis.coordinator,
+            missionType: analysis.missionType,
+            overallSuccess: analysis.overallSuccess,
+            viabilityStatus: analysis.viabilityStatus,
+            viabilityUsedPercent: analysis.viabilityUsedPercent,
+            estimatedTimeMinutes: tripData.totalTime,
+            departureTime: new Date().toISOString(),
+            insights: analysis.insights,
+            suggestions: analysis.suggestions,
+            route: tripData.route
           });
         }
       }
