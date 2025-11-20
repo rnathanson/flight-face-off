@@ -2,8 +2,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Brain, TrendingUp, Database, Zap, CheckCircle2, AlertCircle } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { TripData } from '@/types/trip';
 
-export const DemoLearning = () => {
+interface DemoLearningProps {
+  tripData?: TripData | null;
+}
+
+export const DemoLearning = ({ tripData }: DemoLearningProps) => {
+  if (!tripData) {
+    return (
+      <Card className="shadow-card">
+        <CardContent className="flex flex-col items-center justify-center py-16">
+          <Brain className="w-16 h-16 text-muted-foreground mb-4" />
+          <h3 className="text-xl font-semibold mb-2">No Trip Data Available</h3>
+          <p className="text-muted-foreground text-center max-w-md">
+            Enter a trip in the Trip AI tab to see AI learning insights and pattern recognition.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const learningProgress = [
     { month: 'Month 1', dispatches: 12, accuracy: 65 },
     { month: 'Month 2', dispatches: 28, accuracy: 72 },

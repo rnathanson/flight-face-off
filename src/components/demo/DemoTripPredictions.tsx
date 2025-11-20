@@ -114,9 +114,11 @@ interface SuccessAnalysis {
 }
 interface DemoTripPredictionsProps {
   initialTripData?: TripData | null;
+  onTripCalculated?: (data: TripData) => void;
 }
 export const DemoTripPredictions = ({
-  initialTripData
+  initialTripData,
+  onTripCalculated
 }: DemoTripPredictionsProps) => {
   const [originHospital, setOriginHospital] = useState('');
   const [destinationHospital, setDestinationHospital] = useState('');
@@ -466,6 +468,30 @@ export const DemoTripPredictions = ({
       });
       if (analysis) {
         setSuccessAnalysis(analysis);
+        
+        // Call the callback to notify parent about the calculated trip
+        if (onTripCalculated) {
+          onTripCalculated({
+            origin: selectedOrigin,
+            destination: selectedDestination,
+            originHospital: selectedOrigin.displayName,
+            destinationHospital: selectedDestination.displayName,
+            originAirport: {
+              code: tripData.route.pickupAirport?.code || 'UNKNOWN',
+              name: tripData.route.pickupAirport?.name || 'Unknown',
+              lat: tripData.route.pickupAirport?.lat || 0,
+              lng: tripData.route.pickupAirport?.lng || 0,
+              distance_nm: tripData.route.pickupAirport?.distance_from_pickup || 0
+            },
+            destAirport: {
+              code: tripData.route.destinationAirport?.code || 'UNKNOWN',
+              name: tripData.route.destinationAirport?.name || 'Unknown',
+              lat: tripData.route.destinationAirport?.lat || 0,
+              lng: tripData.route.destinationAirport?.lng || 0,
+              distance_nm: tripData.route.destinationAirport?.distance_from_delivery || 0
+            }
+          });
+        }
       }
       toast({
         title: "Mission Analysis Complete",

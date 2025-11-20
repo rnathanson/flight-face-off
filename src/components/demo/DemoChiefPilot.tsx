@@ -4,26 +4,38 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { CheckCircle2, XCircle, Clock, AlertTriangle, Mail, FileText, TrendingUp } from 'lucide-react';
+import { TripData } from '@/types/trip';
 
-export const DemoChiefPilot = () => {
+interface DemoChiefPilotProps {
+  tripData?: TripData | null;
+}
+
+export const DemoChiefPilot = ({ tripData }: DemoChiefPilotProps) => {
+  if (!tripData) {
+    return (
+      <Card className="shadow-card">
+        <CardContent className="flex flex-col items-center justify-center py-16">
+          <FileText className="w-16 h-16 text-muted-foreground mb-4" />
+          <h3 className="text-xl font-semibold mb-2">No Trip Data Available</h3>
+          <p className="text-muted-foreground text-center max-w-md">
+            Enter a trip in the Trip AI tab to see chief pilot operational oversight and approval workflow.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const missionId = `DIS-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`;
+  
   const pendingApprovals = [
     {
-      id: 'DIS-2024-047',
-      route: 'KHPN → KRDU',
-      reason: 'Weather below standard minimums',
-      confidence: 78,
-      roi: 6600,
-      priority: 'high',
-      time: '2h ago',
-    },
-    {
-      id: 'DIS-2024-048',
-      route: 'KTEB → KMIA',
-      reason: 'Crew duty time extension required',
+      id: missionId,
+      route: `${tripData.originAirport?.code} → ${tripData.destAirport?.code}`,
+      reason: 'Weather monitoring required',
       confidence: 85,
-      roi: 8200,
-      priority: 'medium',
-      time: '45m ago',
+      roi: 7200,
+      priority: 'high',
+      time: 'Just now',
     },
   ];
 

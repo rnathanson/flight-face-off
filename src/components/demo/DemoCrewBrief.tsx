@@ -3,8 +3,30 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Download, Plane, Users, MapPin, Cloud, AlertTriangle, Phone, Clock } from 'lucide-react';
+import { TripData } from '@/types/trip';
 
-export const DemoCrewBrief = () => {
+interface DemoCrewBriefProps {
+  tripData?: TripData | null;
+}
+
+export const DemoCrewBrief = ({ tripData }: DemoCrewBriefProps) => {
+  if (!tripData) {
+    return (
+      <Card className="shadow-card">
+        <CardContent className="flex flex-col items-center justify-center py-16">
+          <Plane className="w-16 h-16 text-muted-foreground mb-4" />
+          <h3 className="text-xl font-semibold mb-2">No Trip Data Available</h3>
+          <p className="text-muted-foreground text-center max-w-md">
+            Enter a trip in the Trip AI tab to generate a comprehensive mission briefing with real-time data.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const missionId = `DIS-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`;
+  const departureTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'EST' });
+
   return (
     <div className="space-y-6">
       <Card className="shadow-card">
@@ -24,12 +46,13 @@ export const DemoCrewBrief = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
-            {/* Header */}
             <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground p-6 rounded-lg">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="text-2xl font-bold">Mission Brief DIS-2024-047</h2>
-                  <p className="text-primary-foreground/80 mt-1">Organ Transport - Heart Transplant</p>
+                  <h2 className="text-2xl font-bold">Mission Brief {missionId}</h2>
+                  <p className="text-primary-foreground/80 mt-1">
+                    Organ Transport - {tripData.originHospital} → {tripData.destinationHospital}
+                  </p>
                 </div>
                 <Badge className="bg-primary-foreground/20 text-primary-foreground border-primary-foreground/30">
                   TIME CRITICAL
@@ -37,16 +60,18 @@ export const DemoCrewBrief = () => {
               </div>
               <div className="grid md:grid-cols-3 gap-4 text-sm">
                 <div>
+                  <p className="text-primary-foreground/70">Route</p>
+                  <p className="font-semibold">{tripData.originAirport?.code} → {tripData.destAirport?.code}</p>
+                </div>
+                <div>
                   <p className="text-primary-foreground/70">Departure</p>
-                  <p className="font-semibold">14:30 EST</p>
+                  <p className="font-semibold">{departureTime} EST</p>
                 </div>
                 <div>
-                  <p className="text-primary-foreground/70">Estimated Duration</p>
-                  <p className="font-semibold">3h 30m</p>
-                </div>
-                <div>
-                  <p className="text-primary-foreground/70">Viability Window</p>
-                  <p className="font-semibold">6.2 hours</p>
+                  <p className="text-primary-foreground/70">Distance</p>
+                  <p className="font-semibold">
+                    {((tripData.originAirport?.distance_nm || 0) + (tripData.destAirport?.distance_nm || 0)).toFixed(0)} nm
+                  </p>
                 </div>
               </div>
             </div>
