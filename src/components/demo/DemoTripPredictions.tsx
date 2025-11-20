@@ -156,6 +156,32 @@ export const DemoTripPredictions = ({
     toast
   } = useToast();
   
+  // Restore state from initialTripData when provided
+  useEffect(() => {
+    if (initialTripData) {
+      setOriginHospital(initialTripData.originHospital || '');
+      setDestinationHospital(initialTripData.destinationHospital || '');
+      setSelectedOrigin(initialTripData.origin || null);
+      setSelectedDestination(initialTripData.destination || null);
+      setOrganType(initialTripData.missionType?.organ_type || '');
+      setSelectedLeadDoctor(initialTripData.leadDoctor || null);
+      setSurgicalTeam(initialTripData.surgicalTeam || []);
+      setSelectedCoordinator(initialTripData.coordinator || null);
+      setSelectedCrew(initialTripData.crewMembers || []);
+      
+      // Reconstruct tripCalc from TripData if available
+      if (initialTripData.originAirport && initialTripData.destAirport) {
+        setTripCalc({
+          origin: initialTripData.origin,
+          destination: initialTripData.destination,
+          originAirport: initialTripData.originAirport,
+          destAirport: initialTripData.destAirport,
+          baseTime: initialTripData.estimatedTimeMinutes || 0
+        });
+      }
+    }
+  }, [initialTripData]);
+  
   // Organ icon mapping
   const getOrganIcon = (organType: string) => {
     const iconMap: { [key: string]: typeof Heart } = {
