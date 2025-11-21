@@ -10,6 +10,68 @@ import { Send, Bot, User, Sparkles, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { TripData } from '@/types/trip';
 
+// Section-aware normalizer: converts crew response section labels into proper Markdown headings
+const normalizeCrewResponseMarkdown = (text: string): string => {
+  const lines = text.split('\n');
+  const output: string[] = [];
+  
+  const sectionLabels: Record<string, string> = {
+    'summary': '## Summary',
+    'regulatory requirements': '## Regulatory Requirements',
+    'best practices / sop': '## Best Practices / SOP',
+    'best practices/sop': '## Best Practices / SOP',
+    'practical rule of thumb': '## Practical Rule of Thumb',
+    'takeaway': '## Takeaway',
+  };
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim().toLowerCase();
+    
+    // Check if this line is a section label (exact match or with colon/dash)
+    let isHeading = false;
+    let headingText = '';
+    let remainingContent = '';
+    
+    for (const [key, heading] of Object.entries(sectionLabels)) {
+      if (trimmed === key) {
+        isHeading = true;
+        headingText = heading;
+        break;
+      } else if (trimmed.startsWith(key + ':') || trimmed.startsWith(key + ' -') || trimmed.startsWith(key + ' —')) {
+        isHeading = true;
+        headingText = heading;
+        // Extract any content after the colon/dash
+        const colonIdx = line.indexOf(':');
+        const dashIdx = Math.max(line.indexOf(' -'), line.indexOf(' —'));
+        const splitIdx = colonIdx !== -1 ? colonIdx : dashIdx;
+        if (splitIdx !== -1 && splitIdx < line.length - 1) {
+          remainingContent = line.slice(splitIdx + 1).trim();
+        }
+        break;
+      }
+    }
+    
+    if (isHeading) {
+      // Add blank line before heading if previous line wasn't blank
+      if (output.length > 0 && output[output.length - 1] !== '') {
+        output.push('');
+      }
+      output.push(headingText);
+      // Add blank line after heading
+      output.push('');
+      // If there was content after colon/dash, add it
+      if (remainingContent) {
+        output.push(remainingContent);
+      }
+    } else {
+      output.push(line);
+    }
+  }
+  
+  return output.join('\n');
+};
+
 // Fallback formatter: adds paragraph breaks if AI returns long unbroken text
 const formatLongText = (text: string): string => {
   // If already has blank lines or is short, return as-is
@@ -271,9 +333,9 @@ export const DemoChatbot = ({ tripData }: DemoChatbotProps) => {
                             }`}
                           >
                             {msg.role === 'assistant' ? (
-                              <div className="text-sm prose prose-sm max-w-none dark:prose-invert prose-p:my-4 prose-p:leading-relaxed prose-ul:my-4 prose-li:my-1.5 prose-headings:my-4 prose-headings:font-semibold prose-strong:font-bold prose-strong:text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                              <div className="text-sm prose prose-sm max-w-none dark:prose-invert prose-p:my-4 prose-p:leading-relaxed prose-ul:my-4 prose-li:my-1.5 prose-headings:mt-5 prose-headings:mb-3 prose-headings:font-semibold prose-strong:font-bold prose-strong:text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
                                 <ReactMarkdown remarkPlugins={[remarkBreaks]}>
-                                  {formatLongText(msg.content)}
+                                  {formatLongText(normalizeCrewResponseMarkdown(msg.content))}
                                 </ReactMarkdown>
                               </div>
                             ) : (
