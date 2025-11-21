@@ -914,7 +914,6 @@ async function calculateFlightTime(
   }
 
   // Parse departure weather (always use METAR for weather delays and surface winds)
-  let headwind = 0;
   let weatherDelay = 0;
   let departureMetar = null;
   let arrivalMetar = null;
@@ -981,10 +980,52 @@ async function calculateFlightTime(
     console.log('Using departure/arrival endpoints for wind sampling');
   }
 
-  // Fetch averaged winds along route using multi-point sampling
+  // Fetch multi-altitude wind profile for climb, cruise, and descent phases
+  let climbHeadwind = 0;
+  let cruiseHeadwind = 0;
+  let descentHeadwind = 0;
   let cruiseWinds = null;
+  
   try {
-    cruiseWinds = await fetchAverageWindsAlongRoute(
+    // Define altitude bands for climb phase (based on actual PC24 climb profile)
+    const climbBands = [
+      { altitude: 6000, timeMinutes: 2.0 },   // 0-6k ft
+      { altitude: 12000, timeMinutes: 2.0 },  // 6-12k ft
+      { altitude: 18000, timeMinutes: 2.0 },  // 12-18k ft
+      { altitude: 24000, timeMinutes: 2.3 },  // 18-24k ft
+      { altitude: 34000, timeMinutes: 3.8 },  // 24-34k ft
+      { altitude: Math.min(cruiseAltitudeFt, 45000), timeMinutes: 4.9 }  // 34k-cruise
+    ].filter(band => band.altitude <= cruiseAltitudeFt);
+    
+    // Define altitude bands for descent phase (reverse order)
+    const descentBands = [
+      { altitude: Math.min(cruiseAltitudeFt, 45000), timeMinutes: 5.5 },  // cruise-34k ft
+      { altitude: 34000, timeMinutes: 4.2 },  // 34-24k ft
+      { altitude: 24000, timeMinutes: 2.9 },  // 24-18k ft
+      { altitude: 18000, timeMinutes: 2.9 },  // 18-12k ft
+      { altitude: 12000, timeMinutes: 2.9 },  // 12-6k ft
+      { altitude: 6000, timeMinutes: 2.9 }    // 6k-0 ft
+    ].filter(band => band.altitude <= cruiseAltitudeFt);
+    
+    console.log(`🌬️ Fetching multi-altitude wind profile:`);
+    console.log(`   Climb bands: ${climbBands.map(b => `${b.altitude}ft`).join(', ')}`);
+    console.log(`   Cruise: ${cruiseAltitudeFt}ft`);
+    console.log(`   Descent bands: ${descentBands.map(b => `${b.altitude}ft`).join(', ')}`);
+    
+    // Fetch winds for climb phase
+    const climbWindPromises = climbBands.map(band => 
+      fetchAverageWindsAlongRoute(
+        windSampleWaypoints,
+        band.altitude,
+        distanceNM,
+        climbPhaseNM,
+        descentPhaseNM,
+        forecastHours
+      ).then(winds => ({ ...band, winds }))
+    );
+    
+    // Fetch winds for cruise phase
+    const cruiseWindPromise = fetchAverageWindsAlongRoute(
       windSampleWaypoints,
       cruiseAltitudeFt,
       distanceNM,
@@ -993,31 +1034,85 @@ async function calculateFlightTime(
       forecastHours
     );
     
+    // Fetch winds for descent phase
+    const descentWindPromises = descentBands.map(band => 
+      fetchAverageWindsAlongRoute(
+        windSampleWaypoints,
+        band.altitude,
+        distanceNM,
+        climbPhaseNM,
+        descentPhaseNM,
+        forecastHours
+      ).then(winds => ({ ...band, winds }))
+    );
+    
+    // Await all wind fetches in parallel
+    const [climbResults, cruiseResult, descentResults] = await Promise.all([
+      Promise.all(climbWindPromises),
+      cruiseWindPromise,
+      Promise.all(descentWindPromises)
+    ]);
+    
+    cruiseWinds = cruiseResult;
+    
+    // Calculate time-weighted headwind for climb phase
+    let totalClimbHeadwindTime = 0;
+    let totalClimbTime = 0;
+    
+    for (const band of climbResults) {
+      if (band.winds && band.winds.direction !== 'VRB') {
+        const headwindComponent = calculateHeadwindComponent(
+          band.winds.direction,
+          band.winds.speed,
+          course
+        );
+        totalClimbHeadwindTime += headwindComponent * band.timeMinutes;
+        totalClimbTime += band.timeMinutes;
+        console.log(`   Climb @ ${band.altitude}ft: ${band.winds.direction}° @ ${band.winds.speed}kt = ${headwindComponent.toFixed(1)}kt headwind (weight: ${band.timeMinutes.toFixed(1)}min)`);
+      }
+    }
+    
+    climbHeadwind = totalClimbTime > 0 ? totalClimbHeadwindTime / totalClimbTime : 0;
+    console.log(`   ✈️ CLIMB weighted avg: ${climbHeadwind.toFixed(1)}kt headwind across ${totalClimbTime.toFixed(1)} min`);
+    
+    // Calculate headwind for cruise phase
     if (cruiseWinds) {
-      console.log(`✓ Averaged winds from ${cruiseWinds.sampleCount} points using stations: ${cruiseWinds.stations?.join(', ')}`);
-      console.log(`  Wind samples collected: ${cruiseWinds.sampleCount}, Stations: ${cruiseWinds.stations?.join(', ')}`);
-      console.log(`  Result: ${cruiseWinds.direction}° @ ${cruiseWinds.speed}kt`);
+      if (cruiseWinds.direction === 'VRB') {
+        cruiseHeadwind = 0;
+        console.log(`   ✈️ CRUISE @ ${cruiseAltitudeFt}ft: Light and variable (${cruiseWinds.speed}kt)`);
+      } else {
+        cruiseHeadwind = calculateHeadwindComponent(
+          cruiseWinds.direction,
+          cruiseWinds.speed,
+          course
+        );
+        console.log(`   ✈️ CRUISE @ ${cruiseAltitudeFt}ft: ${cruiseWinds.direction}° @ ${cruiseWinds.speed}kt = ${cruiseHeadwind.toFixed(1)}kt headwind`);
+      }
     }
+    
+    // Calculate time-weighted headwind for descent phase
+    let totalDescentHeadwindTime = 0;
+    let totalDescentTime = 0;
+    
+    for (const band of descentResults) {
+      if (band.winds && band.winds.direction !== 'VRB') {
+        const headwindComponent = calculateHeadwindComponent(
+          band.winds.direction,
+          band.winds.speed,
+          course
+        );
+        totalDescentHeadwindTime += headwindComponent * band.timeMinutes;
+        totalDescentTime += band.timeMinutes;
+        console.log(`   Descent @ ${band.altitude}ft: ${band.winds.direction}° @ ${band.winds.speed}kt = ${headwindComponent.toFixed(1)}kt headwind (weight: ${band.timeMinutes.toFixed(1)}min)`);
+      }
+    }
+    
+    descentHeadwind = totalDescentTime > 0 ? totalDescentHeadwindTime / totalDescentTime : 0;
+    console.log(`   ✈️ DESCENT weighted avg: ${descentHeadwind.toFixed(1)}kt headwind across ${totalDescentTime.toFixed(1)} min`);
+    
   } catch (error) {
-    console.warn('Failed to fetch route-averaged winds, calculation will use fallback:', error);
-  }
-
-  // Calculate headwind component using winds aloft for cruise or fallback to surface winds
-  if (cruiseWinds) {
-    // Use winds aloft for the main flight calculation
-    if (cruiseWinds.direction === 'VRB') {
-      // Light and variable winds - minimal headwind component
-      headwind = 0;
-      console.log(`Cruise winds at ${cruiseAltitudeFt}ft: Light and variable (${cruiseWinds.speed}kts) from station ${cruiseWinds.station}`);
-    } else {
-      headwind = calculateHeadwindComponent(
-        cruiseWinds.direction,
-        cruiseWinds.speed,
-        course
-      );
-      console.log(`Cruise winds at ${cruiseAltitudeFt}ft: ${cruiseWinds.direction}° at ${cruiseWinds.speed}kts = ${headwind.toFixed(1)}kt headwind component on course ${course.toFixed(0)}°`);
-    }
-  } else {
+    console.warn('Failed to fetch multi-altitude winds, using fallback:', error);
+    
     // Fallback to surface winds (old method)
     if (departureMetar && arrivalWind) {
       const depWindDir = typeof departureMetar.wind.direction === 'number' ? departureMetar.wind.direction : 0;
@@ -1033,43 +1128,61 @@ async function calculateFlightTime(
         arrivalWind.speed,
         course
       );
-      headwind = (depHeadwind + arrHeadwind) / 2;
+      const avgHeadwind = (depHeadwind + arrHeadwind) / 2;
+      
+      // Apply same wind to all phases as fallback
+      climbHeadwind = avgHeadwind;
+      cruiseHeadwind = avgHeadwind;
+      descentHeadwind = avgHeadwind;
     } else if (departureMetar) {
       const depWindDir = typeof departureMetar.wind.direction === 'number' ? departureMetar.wind.direction : 0;
-      headwind = calculateHeadwindComponent(
+      const avgHeadwind = calculateHeadwindComponent(
         depWindDir,
         departureMetar.wind.speed,
         course
       );
+      climbHeadwind = avgHeadwind;
+      cruiseHeadwind = avgHeadwind;
+      descentHeadwind = avgHeadwind;
     } else if (arrivalWind) {
       const arrWindDir = typeof arrivalWind.direction === 'number' ? arrivalWind.direction : 0;
-      headwind = calculateHeadwindComponent(
+      const avgHeadwind = calculateHeadwindComponent(
         arrWindDir,
         arrivalWind.speed,
         course
       );
+      climbHeadwind = avgHeadwind;
+      cruiseHeadwind = avgHeadwind;
+      descentHeadwind = avgHeadwind;
     }
   }
+  
+  // Keep backward compatibility with legacy headwind variable
+  const headwind = cruiseHeadwind;
 
-  // Calculate flight time with proper altitude-based performance
+  // Calculate flight time with proper altitude-based performance and phase-specific winds
   const climbTimeMin = cruiseAltitudeFt / config.climb_rate_fpm;
   const descentTimeMin = cruiseAltitudeFt / config.descent_rate_fpm;
   
-  // Realistic climb/descent distance: aircraft maintains forward speed while climbing/descending
-  const climbAvgSpeed = 320; // ktas average during climb (between 200 and 440)
-  const descentAvgSpeed = 370; // ktas average during descent (higher than climb, stepped down)
-  const climbNM = (climbTimeMin / 60) * climbAvgSpeed;
-  const descentNM = (descentTimeMin / 60) * descentAvgSpeed;
+  // Apply phase-specific winds to groundspeed calculations
+  const climbAvgTAS = 320; // ktas average during climb (between 200 and 440)
+  const descentAvgTAS = 370; // ktas average during descent (higher than climb, stepped down)
+  
+  // Calculate ground speeds with phase-specific headwinds
+  const climbGroundSpeed = Math.max(50, climbAvgTAS - climbHeadwind);
+  const descentGroundSpeed = Math.max(50, descentAvgTAS - descentHeadwind);
+  
+  const climbNM = (climbTimeMin / 60) * climbGroundSpeed;
+  const descentNM = (descentTimeMin / 60) * descentGroundSpeed;
   
   const cruiseDistanceNM = Math.max(0, distanceNM * 1.05 - climbNM - descentNM);
-  // Negative headwind = tailwind, which increases groundspeed
   const cruiseSpeed = config.cruise_speed_ktas || 440; // Fallback to PC-24 default
-  const cruiseGroundSpeed = Math.max(50, cruiseSpeed - headwind); // Clamp to minimum 50 kt
+  const cruiseGroundSpeed = Math.max(50, cruiseSpeed - cruiseHeadwind);
   const cruiseTimeMin = cruiseDistanceNM / cruiseGroundSpeed * 60;
   
-  console.log(`✈️  CLIMB: ${climbTimeMin.toFixed(1)}min covering ${climbNM.toFixed(1)}nm @ ${climbAvgSpeed}ktas avg`);
-  console.log(`✈️  CRUISE: ${cruiseDistanceNM.toFixed(1)}nm @ ${cruiseGroundSpeed.toFixed(1)}kt GS (${cruiseSpeed}kt - ${headwind.toFixed(1)}kt headwind) = ${cruiseTimeMin.toFixed(1)}min`);
-  console.log(`✈️  DESCENT: ${descentTimeMin.toFixed(1)}min covering ${descentNM.toFixed(1)}nm @ ${descentAvgSpeed}ktas avg`);
+  console.log(`✈️  CLIMB: ${climbTimeMin.toFixed(1)}min covering ${climbNM.toFixed(1)}nm @ ${climbGroundSpeed.toFixed(1)}kt GS (${climbAvgTAS}kt - ${climbHeadwind.toFixed(1)}kt headwind)`);
+  console.log(`✈️  CRUISE: ${cruiseDistanceNM.toFixed(1)}nm @ ${cruiseGroundSpeed.toFixed(1)}kt GS (${cruiseSpeed}kt - ${cruiseHeadwind.toFixed(1)}kt headwind) = ${cruiseTimeMin.toFixed(1)}min`);
+  console.log(`✈️  DESCENT: ${descentTimeMin.toFixed(1)}min covering ${descentNM.toFixed(1)}nm @ ${descentGroundSpeed.toFixed(1)}kt GS (${descentAvgTAS}kt - ${descentHeadwind.toFixed(1)}kt headwind)`);
   
   // Add taxi time (taxi-out + taxi-in = 2 operations per flight leg)
   const taxiTimeTotal = (config.taxi_time_per_airport_min ?? 0) * 2;
