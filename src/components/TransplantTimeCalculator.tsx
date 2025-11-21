@@ -1182,14 +1182,16 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       <div className="flex items-center justify-between p-4 bg-primary/5 rounded-lg">
                         <div className="flex items-center gap-2">
                           <CheckCircle className="w-5 h-5 text-primary" />
-                          <span className="text-lg font-semibold">Total Trip Time</span>
+                          <span className="text-lg font-semibold">
+                            {showFullTrip ? 'Total Trip Time' : 'Total Organ Transport Time'}
+                          </span>
                         </div>
                         <div className="text-right">
                           <div className="text-2xl font-bold text-primary">
-                            {formatDuration(tripResult.totalTime)}
+                            {formatDuration(displayTotalTime)}
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            Door to door
+                            {showFullTrip ? 'Door to door' : 'Pickup to delivery'}
                           </div>
                         </div>
                       </div>
