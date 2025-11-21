@@ -149,58 +149,53 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
   const handleAirportCodeInput = async (code: string, isOrigin: boolean) => {
     const normalizedCode = code.trim().toUpperCase();
     
-    try {
-      // Try to find airport in database
-      const { data: airport, error } = await supabase
+    // Helper to try looking up a specific code
+    const tryLookupCode = async (searchCode: string) => {
+      // Try airports table first
+      const { data: airport } = await supabase
         .from('airports')
         .select('icao_code, iata_code, name, lat, lng')
-        .or(`icao_code.eq.${normalizedCode},iata_code.eq.${normalizedCode}`)
-        .single();
+        .or(`icao_code.eq.${searchCode},iata_code.eq.${searchCode}`)
+        .maybeSingle();
       
-      if (error || !airport) {
-        // If not found in airports table, check airport_cache
-        const { data: cachedAirport, error: cacheError } = await supabase
-          .from('airport_cache')
-          .select('airport_code, name, lat, lng')
-          .eq('airport_code', normalizedCode)
-          .single();
-        
-        if (cacheError || !cachedAirport) {
-          toast({
-            title: 'Airport Not Found',
-            description: `Could not find airport "${normalizedCode}". Please enter a valid airport code.`,
-            variant: 'destructive',
-          });
-          return false;
-        }
-        
-        // Use cached airport data
-        const location: GeocodeResult = {
+      if (airport) return airport;
+      
+      // Try airport_cache
+      const { data: cachedAirport } = await supabase
+        .from('airport_cache')
+        .select('airport_code, name, lat, lng')
+        .eq('airport_code', searchCode)
+        .maybeSingle();
+      
+      if (cachedAirport) {
+        return {
+          icao_code: cachedAirport.airport_code,
+          name: cachedAirport.name,
           lat: cachedAirport.lat,
-          lon: cachedAirport.lng,
-          displayName: `${normalizedCode} - ${cachedAirport.name || 'Airport'}`,
-          address: cachedAirport.name || normalizedCode,
-          placeId: normalizedCode
+          lng: cachedAirport.lng
         };
-        
-        if (isOrigin) {
-          setSelectedOrigin(location);
-          setOriginHospital(`${normalizedCode} - ${cachedAirport.name || 'Airport'}`);
-          setPreferredPickupAirport(normalizedCode);
-        } else {
-          setSelectedDestination(location);
-          setDestinationHospital(`${normalizedCode} - ${cachedAirport.name || 'Airport'}`);
-          setPreferredDestinationAirport(normalizedCode);
-        }
-        
-        toast({
-          title: 'Airport Selected',
-          description: `Using ${normalizedCode} as forced airport`,
-        });
-        return true;
       }
       
-      // Use airport from main table
+      return null;
+    };
+    
+    try {
+      // Try original code
+      let airport = await tryLookupCode(normalizedCode);
+      
+      // If 3-letter code not found, try with K prefix (common for US airports)
+      if (!airport && normalizedCode.length === 3) {
+        const kCode = `K${normalizedCode}`;
+        console.log(`Trying ${kCode} for 3-letter code ${normalizedCode}`);
+        airport = await tryLookupCode(kCode);
+      }
+      
+      // If still not found, return false to allow normal geocoding
+      if (!airport) {
+        return false;
+      }
+      
+      // Use airport data
       const location: GeocodeResult = {
         lat: airport.lat,
         lon: airport.lng,
@@ -226,11 +221,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       return true;
     } catch (error) {
       console.error('Error looking up airport:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to lookup airport code',
-        variant: 'destructive',
-      });
       return false;
     }
   };
@@ -773,12 +763,16 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               <div className="grid gap-6">
                 <LocationAutocomplete
                   value={originHospital}
-                  onChange={(value) => {
-                    setOriginHospital(value);
-                    // Check if input looks like an airport code
+                  onChange={async (value) => {
+                    // Check if input looks like an airport code first
                     if (isAirportCode(value)) {
-                      handleAirportCodeInput(value, true);
+                      const handled = await handleAirportCodeInput(value, true);
+                      if (handled) {
+                        return; // Airport found and set, don't trigger geocoding
+                      }
                     }
+                    // Normal hospital/location search
+                    setOriginHospital(value);
                   }}
                   onLocationSelect={(location) => {
                     setSelectedOrigin(location);
@@ -793,12 +787,16 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 />
                 <LocationAutocomplete
                   value={destinationHospital}
-                  onChange={(value) => {
-                    setDestinationHospital(value);
-                    // Check if input looks like an airport code
+                  onChange={async (value) => {
+                    // Check if input looks like an airport code first
                     if (isAirportCode(value)) {
-                      handleAirportCodeInput(value, false);
+                      const handled = await handleAirportCodeInput(value, false);
+                      if (handled) {
+                        return; // Airport found and set, don't trigger geocoding
+                      }
                     }
+                    // Normal hospital/location search
+                    setDestinationHospital(value);
                   }}
                   onLocationSelect={(location) => {
                     setSelectedDestination(location);
