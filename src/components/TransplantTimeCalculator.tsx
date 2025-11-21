@@ -12,6 +12,7 @@ import { Slider } from '@/components/ui/slider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CalendarIcon, MapPin, Plane, Zap, Clock, Car, Timer, AlertTriangle, CheckCircle, Target, ChevronDown, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { GeocodeResult } from '@/lib/geocoding';
@@ -31,6 +32,7 @@ interface TripSegment {
   polyline?: number[][];
   hasTrafficData?: boolean;
   route?: string;
+  isOrganTransport?: boolean;
 }
 
 interface Airport {
@@ -56,6 +58,10 @@ interface TripResult {
   segments: TripSegment[];
   totalTime: number;
   arrivalTime: Date;
+  segmentMode?: 'organ-transport' | 'full-roundtrip';
+  organTransportTime?: number;
+  fullRoundtripTime?: number;
+  positioningTime?: number;
   route?: {
     pickupLocation?: GeocodeResult;
     deliveryLocation?: GeocodeResult;
@@ -124,6 +130,7 @@ interface TransplantTimeCalculatorProps {
 export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCalculatorProps) {
   const [originHospital, setOriginHospital] = useState('');
   const [destinationHospital, setDestinationHospital] = useState('');
+  const [segmentMode, setSegmentMode] = useState<'organ-transport' | 'full-roundtrip'>('organ-transport');
 
   // Helper function to decode HTML entities in airport names
   const decodeHtmlEntities = (text: string): string => {
@@ -311,7 +318,8 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
           departureDateTime: departureDateTime.toISOString(),
           passengers: passengerCount,
           preferredPickupAirport: preferredPickupAirport || undefined,
-          preferredDestinationAirport: preferredDestinationAirport || undefined
+          preferredDestinationAirport: preferredDestinationAirport || undefined,
+          segmentMode: segmentMode
         }
       });
 
@@ -326,6 +334,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         segments: data.segments,
         totalTime: data.totalTime,
         arrivalTime: new Date(data.arrivalTime),
+        segmentMode: data.segmentMode || segmentMode,
+        organTransportTime: data.organTransportTime,
+        fullRoundtripTime: data.fullRoundtripTime,
+        positioningTime: data.positioningTime,
         route: {
           pickupLocation: selectedOrigin,
           deliveryLocation: selectedDestination,
@@ -747,6 +759,27 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 />
               </div>
 
+              <div className="flex items-start space-x-3 rounded-lg border border-border p-4 bg-muted/20">
+                <Checkbox
+                  id="segment-mode"
+                  checked={segmentMode === 'organ-transport'}
+                  onCheckedChange={(checked) => 
+                    setSegmentMode(checked ? 'organ-transport' : 'full-roundtrip')
+                  }
+                />
+                <div className="space-y-1 leading-none">
+                  <Label
+                    htmlFor="segment-mode"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    Show organ transport time only (pickup to delivery)
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Uncheck to see full round-trip including positioning flights
+                  </p>
+                </div>
+              </div>
+
               <Button
                 onClick={calculateTrip}
                 disabled={calculating || !selectedOrigin || !selectedDestination}
@@ -804,9 +837,22 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 <div className="grid md:grid-cols-3 gap-6">
                   <div className="text-center space-y-3">
                     <Clock className="w-8 h-8 mx-auto text-primary" />
-                    <div className="text-sm text-muted-foreground">Total Trip Time</div>
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="text-sm text-muted-foreground">
+                        {tripResult.segmentMode === 'organ-transport' ? 'Organ Transport Time' : 'Total Trip Time'}
+                      </div>
+                      {tripResult.segmentMode === 'organ-transport' && (
+                        <Badge variant="secondary" className="text-xs">
+                          🏥 Critical
+                        </Badge>
+                      )}
+                    </div>
                     <div className="text-4xl font-bold text-primary">
-                      {formatDuration(tripResult.totalTime)}
+                      {formatDuration(
+                        tripResult.segmentMode === 'organ-transport' 
+                          ? (tripResult.organTransportTime || tripResult.totalTime)
+                          : tripResult.totalTime
+                      )}
                     </div>
                     <div className="space-y-1 pt-2 border-t border-primary/20">
                       <div className="text-xs text-muted-foreground">
@@ -894,7 +940,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               </div>
               
               <div className="mt-4 flex justify-end">
-                <Button onClick={() => setTripResult(null)} variant="outline">
+                <Button onClick={() => {
+                  setTripResult(null);
+                  setSegmentMode('organ-transport');
+                }} variant="outline">
                   New Calculation
                 </Button>
               </div>
@@ -919,7 +968,12 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 </div>
                 <div className="px-4 py-4">
                   <div className="text-2xl font-semibold text-foreground">
-                    {Math.floor((tripResult.totalTime * 1.27) / 60)}h {Math.round((tripResult.totalTime * 1.27) % 60)}m
+                    {(() => {
+                      const displayTime = tripResult.segmentMode === 'organ-transport' 
+                        ? (tripResult.organTransportTime || tripResult.totalTime)
+                        : tripResult.totalTime;
+                      return `${Math.floor((displayTime * 1.27) / 60)}h ${Math.round((displayTime * 1.27) % 60)}m`;
+                    })()}
                   </div>
                 </div>
               </div>
@@ -934,7 +988,12 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 </div>
                 <div className="px-4 py-4">
                   <div className="text-2xl font-semibold text-foreground">
-                    {Math.floor(tripResult.totalTime / 60)}h {Math.round(tripResult.totalTime % 60)}m
+                    {(() => {
+                      const displayTime = tripResult.segmentMode === 'organ-transport' 
+                        ? (tripResult.organTransportTime || tripResult.totalTime)
+                        : tripResult.totalTime;
+                      return `${Math.floor(displayTime / 60)}h ${Math.round(displayTime % 60)}m`;
+                    })()}
                   </div>
                 </div>
               </div>
@@ -949,7 +1008,12 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 </div>
                 <div className="px-4 py-4">
                   <div className="text-2xl font-semibold text-foreground">
-                    {Math.floor((tripResult.totalTime * 0.85) / 60)}h {Math.round((tripResult.totalTime * 0.85) % 60)}m
+                    {(() => {
+                      const displayTime = tripResult.segmentMode === 'organ-transport' 
+                        ? (tripResult.organTransportTime || tripResult.totalTime)
+                        : tripResult.totalTime;
+                      return `${Math.floor((displayTime * 0.85) / 60)}h ${Math.round((displayTime * 0.85) % 60)}m`;
+                    })()}
                   </div>
                 </div>
               </div>
@@ -981,6 +1045,8 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                     {tripResult.segments.map((segment, index) => {
                       const isPickupHospital = segment.to.toLowerCase().includes('pickup hospital');
                       const isDeliveryHospital = segment.to.toLowerCase().includes('delivery hospital');
+                      const isOrganTransportSegment = segment.isOrganTransport || false;
+                      const isPositioningSegment = tripResult.segmentMode === 'organ-transport' && !isOrganTransportSegment;
                       
                       // Calculate cumulative time up to this segment's arrival
                       const cumulativeMinutes = tripResult.segments
@@ -1047,9 +1113,18 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       return (
                         <React.Fragment key={index}>
                           <div 
-                            className="p-4 rounded-lg border border-border bg-background hover:bg-muted/50 transition-all"
+                            className={cn(
+                              "p-4 rounded-lg border border-border transition-all",
+                              isPositioningSegment 
+                                ? "bg-muted/30 opacity-60" 
+                                : "bg-background hover:bg-muted/50"
+                            )}
                             style={{
-                              borderLeft: `4px solid ${segment.type === 'flight' ? '#3b82f6' : '#10b981'}`
+                              borderLeft: `4px solid ${
+                                isPositioningSegment 
+                                  ? '#9ca3af' 
+                                  : segment.type === 'flight' ? '#3b82f6' : '#10b981'
+                              }`
                             }}
                           >
                             <div className="flex items-start justify-between gap-4">
@@ -1063,6 +1138,16 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                                   <span className="font-semibold text-sm uppercase tracking-wide">
                                     {segment.type === 'flight' ? 'Flight' : 'Ground Transport'}
                                   </span>
+                                  {isOrganTransportSegment && tripResult.segmentMode === 'organ-transport' && (
+                                    <Badge variant="secondary" className="text-xs ml-2">
+                                      🏥 Critical Segment
+                                    </Badge>
+                                  )}
+                                  {isPositioningSegment && (
+                                    <Badge variant="outline" className="text-xs ml-2 opacity-60">
+                                      Positioning
+                                    </Badge>
+                                  )}
                                 </div>
                                 
                                 <div className="flex items-center gap-2 text-base font-medium mb-1">
@@ -1107,14 +1192,29 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       <div className="flex items-center justify-between p-4 bg-primary/5 rounded-lg">
                         <div className="flex items-center gap-2">
                           <CheckCircle className="w-5 h-5 text-primary" />
-                          <span className="text-lg font-semibold">Total Trip Time</span>
+                          <div>
+                            <span className="text-lg font-semibold">
+                              {tripResult.segmentMode === 'organ-transport' 
+                                ? 'Organ Transport Time' 
+                                : 'Total Trip Time'}
+                            </span>
+                            {tripResult.segmentMode === 'full-roundtrip' && tripResult.organTransportTime && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                Critical segment: {formatDuration(tripResult.organTransportTime)}
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <div className="text-right">
                           <div className="text-2xl font-bold text-primary">
-                            {formatDuration(tripResult.totalTime)}
+                            {formatDuration(
+                              tripResult.segmentMode === 'organ-transport' 
+                                ? (tripResult.organTransportTime || tripResult.totalTime)
+                                : tripResult.totalTime
+                            )}
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            Door to door
+                            {tripResult.segmentMode === 'organ-transport' ? 'Pickup to delivery' : 'Door to door'}
                           </div>
                         </div>
                       </div>
