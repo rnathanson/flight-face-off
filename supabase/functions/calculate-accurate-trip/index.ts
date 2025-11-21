@@ -995,10 +995,14 @@ async function calculateFlightTime(
   const longLegThresholdNM = 500;
   const longLegTimeFactor = config.long_leg_time_factor ?? 1.0;
   
-  if (distanceNM > longLegThresholdNM && longLegTimeFactor !== 1.0) {
+  // Only apply conservatism factor for long legs WITH HEADWINDS
+  // Tailwind legs don't need the factor (or could use < 1.0)
+  if (distanceNM > longLegThresholdNM && longLegTimeFactor !== 1.0 && headwind > 0) {
     const originalMinutes = totalMinutes;
     totalMinutes = Math.round(totalMinutes * longLegTimeFactor);
-    console.log(`⚠️  LONG LEG FACTOR: ${originalMinutes}min × ${longLegTimeFactor} = ${totalMinutes}min (${distanceNM.toFixed(0)}nm > ${longLegThresholdNM}nm threshold)`);
+    console.log(`⚠️  LONG LEG HEADWIND FACTOR: ${originalMinutes}min × ${longLegTimeFactor} = ${totalMinutes}min (${distanceNM.toFixed(0)}nm, ${headwind.toFixed(0)}kt headwind)`);
+  } else if (distanceNM > longLegThresholdNM && headwind < 0) {
+    console.log(`✅  LONG LEG TAILWIND: No factor applied (${distanceNM.toFixed(0)}nm, ${Math.abs(headwind).toFixed(0)}kt tailwind)`);
   }
   
   return {

@@ -213,7 +213,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     return coords[middleIndex] || null;
   };
 
-  const createSegmentLabel = (segment: TripSegment, index: number, midpoint: [number, number] | null) => {
+  const createSegmentLabel = (segment: TripSegment, index: number, midpoint: [number, number] | null, flightIndex?: number) => {
     if (!map.current || !midpoint || midpoint.length !== 2 || 
         typeof midpoint[0] !== 'number' || typeof midpoint[1] !== 'number') {
       console.warn('Invalid midpoint for segment label:', midpoint);
@@ -263,7 +263,15 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
 
     // Calculate offset based on segment position to prevent overlap
     let offset: [number, number] = [0, 0];
-    if (segment.type === 'ground') {
+    
+    if (segment.type === 'flight') {
+      // Separate flight labels vertically
+      if (flightIndex === 0) {
+        offset = [0, -35]; // First flight: above the line
+      } else if (flightIndex === 1) {
+        offset = [0, 35];  // Second flight: below the line
+      }
+    } else if (segment.type === 'ground') {
       if (index === 0) { // First ground segment (pickup)
         offset = [-30, 20]; // Shift left and down
       } else { // Second ground segment (delivery)
@@ -511,7 +519,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       
       console.log(`Found ${flightSegments.length} flight segments to display on map`);
       
-      flightSegments.forEach((flightSeg) => {
+      flightSegments.forEach((flightSeg, flightIndex) => {
         // Extract airport codes from segment names (e.g., "KFRG → KSTP")
         const fromCode = flightSeg.from.split(' ')[0]; // Get first word (airport code)
         const toCode = flightSeg.to.split(' ')[0];
@@ -541,10 +549,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
           const midpoint = calculateMidpoint([fromCoords, toCoords]);
           if (midpoint) {
             const segmentIndex = segments.indexOf(flightSeg);
-            const label = createSegmentLabel(flightSeg, segmentIndex, midpoint);
+            const label = createSegmentLabel(flightSeg, segmentIndex, midpoint, flightIndex);
             if (label) {
               label.addTo(map.current);
-              console.log(`Added label for ${fromCode}→${toCode}: ${flightSeg.duration}min, ${flightSeg.distance}nm`);
+              console.log(`Added label for ${fromCode}→${toCode}: ${flightSeg.duration}min, ${flightSeg.distance}nm (flight ${flightIndex + 1})`);
             }
           }
         } else {
