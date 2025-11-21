@@ -214,10 +214,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         setPreferredDestinationAirport(airport.icao_code);
       }
       
-      toast({
-        title: 'Airport Selected',
-        description: `Using ${airport.icao_code} as forced airport`,
-      });
       return true;
     } catch (error) {
       console.error('Error looking up airport:', error);
