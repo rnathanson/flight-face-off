@@ -722,10 +722,96 @@ serve(async (req) => {
     segments.forEach((seg, i) => {
       console.log(`Segment ${i} (${seg.type}): polyline has ${seg.polyline?.length || 0} points`);
     });
+
+    // ============= AI SCENARIO VALIDATION =============
+    // Calculate preliminary scenario times with proportional adjustments
+    let conservativeTime = totalTime;
+    let optimisticTime = totalTime;
+    
+    segments.forEach(seg => {
+      if (seg.type === 'flight') {
+        const distanceNM = seg.distance;
+        let conservativeMultiplier = 1.15;
+        let optimisticMultiplier = 0.90;
+        
+        if (distanceNM > 50) { conservativeMultiplier = 1.20; optimisticMultiplier = 0.88; }
+        if (distanceNM > 200) { conservativeMultiplier = 1.25; optimisticMultiplier = 0.85; }
+        
+        conservativeTime += seg.duration * (conservativeMultiplier - 1);
+        optimisticTime -= seg.duration * (1 - optimisticMultiplier);
+      } else if (seg.type === 'ground') {
+        const durationMin = seg.duration;
+        let conservativeMultiplier = 1.30;
+        let optimisticMultiplier = 0.90;
+        
+        if (durationMin > 20) { conservativeMultiplier = 1.40; optimisticMultiplier = 0.88; }
+        if (durationMin > 45) { conservativeMultiplier = 1.50; optimisticMultiplier = 0.85; }
+        
+        conservativeTime += seg.duration * (conservativeMultiplier - 1);
+        optimisticTime -= seg.duration * (1 - optimisticMultiplier);
+      }
+    });
+    
+    conservativeTime = Math.round(conservativeTime);
+    optimisticTime = Math.round(optimisticTime);
+    
+    console.log(`📊 Preliminary scenarios: Conservative ${conservativeTime}min, Expected ${totalTime}min, Optimistic ${optimisticTime}min`);
+    
+    // AI validation with historical learning
+    try {
+      const routeComplexity = segments.length > 4 ? 'complex' : segments.length > 2 ? 'moderate' : 'simple';
+      const weatherConditions = totalWeatherDelay > 10 ? 'challenging' : maxHeadwind > 20 ? 'windy' : 'typical';
+      
+      const { data: validationResult, error: validationError } = await supabase.functions.invoke('validate-trip-scenarios', {
+        body: {
+          expectedTime: totalTime,
+          conservativeTime,
+          optimisticTime,
+          segments: segments.map(s => ({
+            type: s.type,
+            duration: s.duration,
+            distance: s.distance
+          })),
+          routeComplexity,
+          weatherConditions
+        }
+      });
+      
+      if (validationError) {
+        console.warn('⚠️  AI validation failed, using calculated scenarios:', validationError);
+      } else if (validationResult) {
+        if (!validationResult.isRealistic) {
+          console.log(`🤖 AI adjusted scenarios: ${validationResult.reasoning}`);
+          
+          if (validationResult.adjustedConservative) {
+            conservativeTime = Math.round(validationResult.adjustedConservative);
+          }
+          if (validationResult.adjustedOptimistic) {
+            optimisticTime = Math.round(validationResult.adjustedOptimistic);
+          }
+        } else {
+          console.log(`✅ AI validated scenarios: ${validationResult.reasoning}`);
+        }
+      }
+    } catch (validationError) {
+      console.warn('⚠️  Scenario validation error, using calculated values:', validationError);
+    }
+    
+    console.log(`✨ Final scenarios: Conservative ${conservativeTime}min (+${((conservativeTime-totalTime)/totalTime*100).toFixed(1)}%), Expected ${totalTime}min, Optimistic ${optimisticTime}min (-${((totalTime-optimisticTime)/totalTime*100).toFixed(1)}%)`);
+    
+    // Add scenarios to result
+    const resultWithScenarios = {
+      ...result,
+      scenarios: {
+        conservative: conservativeTime,
+        expected: totalTime,
+        optimistic: optimisticTime
+      }
+    };
     
     console.log(`⏱️  PERFORMANCE: Total calculation time: ${Date.now() - startTime}ms`);
 
-    return new Response(JSON.stringify(result), {
+    return new Response(JSON.stringify(resultWithScenarios), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {

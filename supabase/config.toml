@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.calculate-mission-success]
 verify_jwt = false
+
+[functions.validate-trip-scenarios]
+verify_jwt = false
