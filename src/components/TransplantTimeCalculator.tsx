@@ -137,6 +137,103 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     textarea.innerHTML = text;
     return textarea.value;
   };
+  
+  // Helper function to detect if input is an airport code
+  const isAirportCode = (input: string): boolean => {
+    const trimmed = input.trim().toUpperCase();
+    // Match 3-4 letter codes (FRG, KFRG, 8B0, etc.)
+    return /^[A-Z0-9]{3,4}$/.test(trimmed);
+  };
+  
+  // Helper function to lookup airport and set as forced preference
+  const handleAirportCodeInput = async (code: string, isOrigin: boolean) => {
+    const normalizedCode = code.trim().toUpperCase();
+    
+    try {
+      // Try to find airport in database
+      const { data: airport, error } = await supabase
+        .from('airports')
+        .select('icao_code, iata_code, name, lat, lng')
+        .or(`icao_code.eq.${normalizedCode},iata_code.eq.${normalizedCode}`)
+        .single();
+      
+      if (error || !airport) {
+        // If not found in airports table, check airport_cache
+        const { data: cachedAirport, error: cacheError } = await supabase
+          .from('airport_cache')
+          .select('airport_code, name, lat, lng')
+          .eq('airport_code', normalizedCode)
+          .single();
+        
+        if (cacheError || !cachedAirport) {
+          toast({
+            title: 'Airport Not Found',
+            description: `Could not find airport "${normalizedCode}". Please enter a valid airport code.`,
+            variant: 'destructive',
+          });
+          return false;
+        }
+        
+        // Use cached airport data
+        const location: GeocodeResult = {
+          lat: cachedAirport.lat,
+          lon: cachedAirport.lng,
+          displayName: `${normalizedCode} - ${cachedAirport.name || 'Airport'}`,
+          address: cachedAirport.name || normalizedCode,
+          placeId: normalizedCode
+        };
+        
+        if (isOrigin) {
+          setSelectedOrigin(location);
+          setOriginHospital(`${normalizedCode} - ${cachedAirport.name || 'Airport'}`);
+          setPreferredPickupAirport(normalizedCode);
+        } else {
+          setSelectedDestination(location);
+          setDestinationHospital(`${normalizedCode} - ${cachedAirport.name || 'Airport'}`);
+          setPreferredDestinationAirport(normalizedCode);
+        }
+        
+        toast({
+          title: 'Airport Selected',
+          description: `Using ${normalizedCode} as forced airport`,
+        });
+        return true;
+      }
+      
+      // Use airport from main table
+      const location: GeocodeResult = {
+        lat: airport.lat,
+        lon: airport.lng,
+        displayName: `${airport.icao_code} - ${airport.name}`,
+        address: airport.name,
+        placeId: airport.icao_code
+      };
+      
+      if (isOrigin) {
+        setSelectedOrigin(location);
+        setOriginHospital(`${airport.icao_code} - ${airport.name}`);
+        setPreferredPickupAirport(airport.icao_code);
+      } else {
+        setSelectedDestination(location);
+        setDestinationHospital(`${airport.icao_code} - ${airport.name}`);
+        setPreferredDestinationAirport(airport.icao_code);
+      }
+      
+      toast({
+        title: 'Airport Selected',
+        description: `Using ${airport.icao_code} as forced airport`,
+      });
+      return true;
+    } catch (error) {
+      console.error('Error looking up airport:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to lookup airport code',
+        variant: 'destructive',
+      });
+      return false;
+    }
+  };
   const [selectedOrigin, setSelectedOrigin] = useState<GeocodeResult | null>(null);
   const [selectedDestination, setSelectedDestination] = useState<GeocodeResult | null>(null);
   const [departureDate, setDepartureDate] = useState<Date>(new Date());
@@ -676,7 +773,13 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               <div className="grid gap-6">
                 <LocationAutocomplete
                   value={originHospital}
-                  onChange={setOriginHospital}
+                  onChange={(value) => {
+                    setOriginHospital(value);
+                    // Check if input looks like an airport code
+                    if (isAirportCode(value)) {
+                      handleAirportCodeInput(value, true);
+                    }
+                  }}
                   onLocationSelect={(location) => {
                     setSelectedOrigin(location);
                     // Only set the display name if it's a valid selection
@@ -684,13 +787,19 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       setOriginHospital(location.displayName);
                     }
                   }}
-                  placeholder="Enter hospital name or address"
+                  placeholder="Enter hospital name, address, or airport code"
                   label="Pick Up Hospital"
                   selectedLocation={selectedOrigin}
                 />
                 <LocationAutocomplete
                   value={destinationHospital}
-                  onChange={setDestinationHospital}
+                  onChange={(value) => {
+                    setDestinationHospital(value);
+                    // Check if input looks like an airport code
+                    if (isAirportCode(value)) {
+                      handleAirportCodeInput(value, false);
+                    }
+                  }}
                   onLocationSelect={(location) => {
                     setSelectedDestination(location);
                     // Only set the display name if it's a valid selection
@@ -698,7 +807,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       setDestinationHospital(location.displayName);
                     }
                   }}
-                  placeholder="Enter hospital name or address"
+                  placeholder="Enter hospital name, address, or airport code"
                   label="Delivery Hospital"
                   selectedLocation={selectedDestination}
                 />
