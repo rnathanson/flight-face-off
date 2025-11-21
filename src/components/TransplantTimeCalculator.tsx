@@ -130,7 +130,6 @@ interface TransplantTimeCalculatorProps {
 export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCalculatorProps) {
   const [originHospital, setOriginHospital] = useState('');
   const [destinationHospital, setDestinationHospital] = useState('');
-  const [selectedScenario, setSelectedScenario] = useState<'conservative' | 'expected' | 'optimistic'>('expected');
 
   // Helper function to decode HTML entities in airport names
   const decodeHtmlEntities = (text: string): string => {
@@ -984,28 +983,28 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       </div>
                     </div>
                     
-                    <div className="mt-4 flex justify-end">
+                    <div className="mt-4 flex justify-between items-center">
+                      {/* Toggle between Organ Transport Only and Full Trip */}
+                      <div className="flex items-center gap-3">
+                        <Label htmlFor="trip-view-toggle" className="text-sm font-medium">
+                          Organ Transport Only
+                        </Label>
+                        <Switch
+                          id="trip-view-toggle"
+                          checked={showFullTrip}
+                          onCheckedChange={setShowFullTrip}
+                        />
+                        <Label htmlFor="trip-view-toggle" className="text-sm font-medium">
+                          Full Trip
+                        </Label>
+                      </div>
+                      
                       <Button onClick={() => setTripResult(null)} variant="outline">
                         New Calculation
                       </Button>
                     </div>
                   </CardContent>
                 </Card>
-
-                {/* Toggle between Organ Transport Only and Full Trip */}
-                <div className="flex items-center justify-center gap-3 p-3 bg-muted/30 rounded-lg">
-                  <Label htmlFor="trip-view-toggle" className="text-sm font-medium">
-                    Organ Transport Only
-                  </Label>
-                  <Switch
-                    id="trip-view-toggle"
-                    checked={showFullTrip}
-                    onCheckedChange={setShowFullTrip}
-                  />
-                  <Label htmlFor="trip-view-toggle" className="text-sm font-medium">
-                    Full Trip
-                  </Label>
-                </div>
 
                 <div className="border-t pt-4 mt-4">
                   <div className="mb-3">
@@ -1014,13 +1013,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                   
                   <div className="grid md:grid-cols-3 gap-3">
                     {/* Conservative Estimate */}
-                    <div 
-                      className={cn(
-                        "border rounded-sm bg-card cursor-pointer transition-all hover:shadow-md",
-                        selectedScenario === 'conservative' && "border-2 border-amber-500 bg-amber-50/50"
-                      )}
-                      onClick={() => setSelectedScenario('conservative')}
-                    >
+                    <div className="border rounded-sm bg-card">
                       <div className="px-4 py-3 border-b bg-muted/20">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Conservative</span>
@@ -1035,17 +1028,11 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                     </div>
 
                     {/* Expected Estimate */}
-                    <div 
-                      className={cn(
-                        "border-2 rounded-sm bg-card cursor-pointer transition-all hover:shadow-md",
-                        selectedScenario === 'expected' ? "border-primary/40 bg-primary/5" : "border-border"
-                      )}
-                      onClick={() => setSelectedScenario('expected')}
-                    >
-                      <div className="px-4 py-3 border-b bg-primary/5">
+                    <div className="border rounded-sm bg-card">
+                      <div className="px-4 py-3 border-b bg-muted/20">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-medium text-primary uppercase tracking-wide">Expected</span>
-                          <div className="h-1 w-1 rounded-full bg-primary" />
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Expected</span>
+                          <div className="h-1 w-1 rounded-full bg-muted-foreground/40" />
                         </div>
                       </div>
                       <div className="px-4 py-4">
@@ -1056,13 +1043,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                     </div>
 
                     {/* Optimistic Estimate */}
-                    <div 
-                      className={cn(
-                        "border rounded-sm bg-card cursor-pointer transition-all hover:shadow-md",
-                        selectedScenario === 'optimistic' && "border-2 border-green-500 bg-green-50/50"
-                      )}
-                      onClick={() => setSelectedScenario('optimistic')}
-                    >
+                    <div className="border rounded-sm bg-card">
                       <div className="px-4 py-3 border-b bg-muted/20">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Optimistic</span>
