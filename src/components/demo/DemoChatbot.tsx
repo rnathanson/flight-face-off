@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -242,7 +243,13 @@ export const DemoChatbot = ({ tripData }: DemoChatbotProps) => {
                                 : 'bg-muted text-foreground'
                             }`}
                           >
-                            <p className="text-sm whitespace-pre-line">{msg.content}</p>
+                            {msg.role === 'assistant' ? (
+                              <div className="text-sm prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-ul:my-2 prose-li:my-1 prose-headings:my-2">
+                                <ReactMarkdown>{msg.content}</ReactMarkdown>
+                              </div>
+                            ) : (
+                              <p className="text-sm whitespace-pre-line">{msg.content}</p>
+                            )}
                             <p className={`text-xs mt-1 ${msg.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                               {msg.timestamp}
                             </p>
