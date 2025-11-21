@@ -505,50 +505,52 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     }
 
 
-    if (segments && segments.length >= 4 && pickupAirport && destAirport) {
-      // Add segment labels for flight legs
-      const firstFlightMidpoint = calculateMidpoint([
-        [KFRG.lng, KFRG.lat],
-        [pickupAirport.lng, pickupAirport.lat]
-      ]);
-      if (firstFlightMidpoint) {
-        const firstFlightSegment: TripSegment = {
-          type: 'flight',
-          from: 'KFRG',
-          to: pickupAirport.code,
-          duration: segments[0].duration,
-          distance: segments[0].distance
-        };
-        const label = createSegmentLabel(firstFlightSegment, 0, firstFlightMidpoint);
-        if (label) label.addTo(map.current);
-      }
-
-      // Add main flight leg label (pickup airport to dest airport)
-      const mainFlightMidpoint = calculateMidpoint([
-        [pickupAirport.lng, pickupAirport.lat],
-        [destAirport.lng, destAirport.lat]
-      ]);
-      if (mainFlightMidpoint) {
-        // Find the actual flight segment from pickup airport to destination airport
-        const actualMainFlight = segments.find(seg => 
-          seg.type === 'flight' && 
-          seg.from.includes(pickupAirport.code) && 
-          seg.to.includes(destAirport.code)
-        );
+    if (segments && pickupAirport && destAirport) {
+      // Find and display ALL flight segments dynamically
+      const flightSegments = segments.filter(seg => seg.type === 'flight');
+      
+      console.log(`Found ${flightSegments.length} flight segments to display on map`);
+      
+      flightSegments.forEach((flightSeg) => {
+        // Extract airport codes from segment names (e.g., "KFRG → KSTP")
+        const fromCode = flightSeg.from.split(' ')[0]; // Get first word (airport code)
+        const toCode = flightSeg.to.split(' ')[0];
         
-        if (actualMainFlight) {
-          const mainFlightSegment: TripSegment = {
-            type: 'flight',
-            from: pickupAirport.code,
-            to: destAirport.code,
-            duration: actualMainFlight.duration,
-            distance: actualMainFlight.distance
-          };
-          const segmentIndex = segments.indexOf(actualMainFlight);
-          const mainLabel = createSegmentLabel(mainFlightSegment, segmentIndex, mainFlightMidpoint);
-          if (mainLabel) mainLabel.addTo(map.current);
+        // Find coordinates for the airports
+        let fromCoords: [number, number] | null = null;
+        let toCoords: [number, number] | null = null;
+        
+        // Check if it's KFRG
+        if (fromCode === 'KFRG') {
+          fromCoords = [KFRG.lng, KFRG.lat];
+        } else if (fromCode === pickupAirport.code) {
+          fromCoords = [pickupAirport.lng, pickupAirport.lat];
+        } else if (fromCode === destAirport.code) {
+          fromCoords = [destAirport.lng, destAirport.lat];
         }
-      }
+        
+        if (toCode === 'KFRG') {
+          toCoords = [KFRG.lng, KFRG.lat];
+        } else if (toCode === pickupAirport.code) {
+          toCoords = [pickupAirport.lng, pickupAirport.lat];
+        } else if (toCode === destAirport.code) {
+          toCoords = [destAirport.lng, destAirport.lat];
+        }
+        
+        if (fromCoords && toCoords) {
+          const midpoint = calculateMidpoint([fromCoords, toCoords]);
+          if (midpoint) {
+            const segmentIndex = segments.indexOf(flightSeg);
+            const label = createSegmentLabel(flightSeg, segmentIndex, midpoint);
+            if (label) {
+              label.addTo(map.current);
+              console.log(`Added label for ${fromCode}→${toCode}: ${flightSeg.duration}min, ${flightSeg.distance}nm`);
+            }
+          }
+        } else {
+          console.warn(`Could not find coordinates for flight segment: ${flightSeg.from} → ${flightSeg.to}`);
+        }
+      });
     }
 
     if (segments) {
