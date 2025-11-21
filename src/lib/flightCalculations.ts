@@ -175,7 +175,8 @@ export function calculateFlight(
   aircraft: 'SR22' | 'VisionJet',
   passengers: number,
   bags: number,
-  headwindKts: number = 5
+  headwindKts: number = 5,
+  taxiTimePerAirportMin: number = 0
 ): FlightResult {
   // 1. Check if aircraft can handle the load (weight and capacity)
   const peopleWeight = passengers * config.avgPersonWeight;
@@ -216,8 +217,9 @@ export function calculateFlight(
   const cruiseTimeHours = distance / effectiveGroundSpeed;
   const tripFuel = cruiseTimeHours * config.fuelFlow;
   
-  // 3. Add taxi (10 min on each end = 20 min total), contingency, and reserve
-  const taxiTimeHours = 20 / 60; // 20 minutes total taxi time
+  // 3. Add taxi (from config), contingency, and reserve
+  const taxiTimeMinutesTotal = taxiTimePerAirportMin * 2; // origin + destination
+  const taxiTimeHours = taxiTimeMinutesTotal / 60;
   const taxiFuel = taxiTimeHours * config.fuelFlow;
   const contingency = Math.max(tripFuel * 0.05, config.contingencyFuelMin);
   const totalFuelNeeded = tripFuel + taxiFuel + contingency + config.reserveFuel;
@@ -242,13 +244,12 @@ export function calculateFlight(
     }
   }
   
-  // 6. Calculate times - include taxi time (20 min) + fuel stops
+  // 6. Calculate times - include taxi time from config + fuel stops
   const flightTimeMinutes = cruiseTimeHours * 60;
-  const taxiTimeMinutes = 20; // 10 min each end
-  const totalTime = Math.round(flightTimeMinutes + taxiTimeMinutes + (stops * 45)); // 45 min per fuel stop
+  const totalTime = Math.round(flightTimeMinutes + taxiTimeMinutesTotal + (stops * 45)); // 45 min per fuel stop
   
   // 7. Calculate costs based on total engine hours (flight + taxi)
-  const totalEngineHours = (flightTimeMinutes + taxiTimeMinutes) / 60;
+  const totalEngineHours = (flightTimeMinutes + taxiTimeMinutesTotal) / 60;
   const hourlyCost = config.maintenanceCost;
   const totalCost = Math.round((totalEngineHours * hourlyCost) / 10) * 10; // Round to $10
   
@@ -277,10 +278,11 @@ export function compareMissions(
   bags: number,
   sr22Config: AircraftConfig,
   jetConfig: AircraftConfig,
-  headwindKts: number
+  headwindKts: number,
+  taxiTimePerAirportMin: number = 0
 ): ComparisonResult {
-  const sr22 = calculateFlight(distance, sr22Config, 'SR22', passengers, bags, headwindKts);
-  const jet = calculateFlight(distance, jetConfig, 'VisionJet', passengers, bags, headwindKts);
+  const sr22 = calculateFlight(distance, sr22Config, 'SR22', passengers, bags, headwindKts, taxiTimePerAirportMin);
+  const jet = calculateFlight(distance, jetConfig, 'VisionJet', passengers, bags, headwindKts, taxiTimePerAirportMin);
   
   const timeSaved = sr22.time - jet.time;
   const costDifference = jet.cost - sr22.cost;
