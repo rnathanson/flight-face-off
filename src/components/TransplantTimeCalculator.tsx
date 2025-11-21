@@ -601,11 +601,13 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             }
           });
 
-          // Add label for ground segment
-          const midpoint = calculateMidpoint(segment.polyline as [number, number][]);
-          if (midpoint) {
-            const label = createSegmentLabel(segment, index, midpoint);
-            if (label) label.addTo(map.current);
+          // Add label only for ground segments here; flight labels handled separately
+          if (segment.type === 'ground') {
+            const midpoint = calculateMidpoint(segment.polyline as [number, number][]);
+            if (midpoint) {
+              const label = createSegmentLabel(segment, index, midpoint);
+              if (label) label.addTo(map.current);
+            }
           }
         }
       });
