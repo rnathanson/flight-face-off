@@ -425,7 +425,8 @@ serve(async (req) => {
           pickupAirport,
           false, // Use METAR for arrival
           pickupAirport.code,
-          leg1RouteWaypoints || undefined
+          leg1RouteWaypoints || undefined,
+          departureDateTime
         );
 
     // === PARALLEL: Calculate all ground routes simultaneously ===
@@ -497,7 +498,8 @@ serve(async (req) => {
           destinationAirport,
           true, // Use TAF for arrival (forecasted conditions)
           destinationAirport.code,
-          leg4RouteWaypoints || undefined
+          leg4RouteWaypoints || undefined,
+          departureDateTime
         );
 
     // LEG 5 already calculated in parallel above
@@ -760,9 +762,25 @@ async function calculateFlightTime(
   arrivalAirport: any,
   useArrivalTAF: boolean = false,
   nearestAirport?: string,
-  routeWaypoints?: Array<{lat: number, lng: number, code?: string}>
+  routeWaypoints?: Array<{lat: number, lng: number, code?: string}>,
+  departureDateTime?: string
 ): Promise<{ minutes: number; weatherDelay: number; headwind: number; cruiseAltitude: number; cruiseWinds: any | null }> {
-  const forecastHours = 0;
+  // Calculate hours until departure based on current time and departure time
+  let forecastHours = 0;
+  if (departureDateTime) {
+    const now = new Date();
+    const departureTime = new Date(departureDateTime);
+    const hoursUntilDeparture = Math.max(0, (departureTime.getTime() - now.getTime()) / (1000 * 60 * 60));
+    
+    // Round to nearest NOAA forecast period (6, 12, 18, 24)
+    if (hoursUntilDeparture >= 21) forecastHours = 24;
+    else if (hoursUntilDeparture >= 15) forecastHours = 18;
+    else if (hoursUntilDeparture >= 9) forecastHours = 12;
+    else if (hoursUntilDeparture >= 3) forecastHours = 6;
+    else forecastHours = 0; // Use current conditions for flights < 3 hours away
+    
+    console.log(`Flight departure in ${hoursUntilDeparture.toFixed(1)} hours, using ${forecastHours}hr forecast`);
+  }
   if (distanceNM === 0) return { minutes: 0, weatherDelay: 0, headwind: 0, cruiseAltitude: 0, cruiseWinds: null };
 
   // Determine altitude based on distance
@@ -851,7 +869,8 @@ async function calculateFlightTime(
       cruiseAltitudeFt,
       distanceNM,
       climbPhaseNM,
-      descentPhaseNM
+      descentPhaseNM,
+      forecastHours
     );
     
     if (cruiseWinds) {
