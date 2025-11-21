@@ -763,20 +763,19 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               <div className="grid gap-6">
                 <LocationAutocomplete
                   value={originHospital}
-                  onChange={async (value) => {
-                    // Check if input looks like an airport code first
-                    if (isAirportCode(value)) {
-                      const handled = await handleAirportCodeInput(value, true);
-                      if (handled) {
-                        return; // Airport found and set, don't trigger geocoding
-                      }
-                    }
-                    // Normal hospital/location search
+                  onChange={(value) => {
                     setOriginHospital(value);
                   }}
-                  onLocationSelect={(location) => {
+                  onLocationSelect={async (location) => {
+                    // Check if user typed an airport code before geocoding happened
+                    if (isAirportCode(originHospital)) {
+                      const handled = await handleAirportCodeInput(originHospital, true);
+                      if (handled) {
+                        return; // Airport found, use it instead
+                      }
+                    }
+                    // Normal location selection
                     setSelectedOrigin(location);
-                    // Only set the display name if it's a valid selection
                     if (location.placeId !== '0') {
                       setOriginHospital(location.displayName);
                     }
@@ -787,20 +786,19 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                 />
                 <LocationAutocomplete
                   value={destinationHospital}
-                  onChange={async (value) => {
-                    // Check if input looks like an airport code first
-                    if (isAirportCode(value)) {
-                      const handled = await handleAirportCodeInput(value, false);
-                      if (handled) {
-                        return; // Airport found and set, don't trigger geocoding
-                      }
-                    }
-                    // Normal hospital/location search
+                  onChange={(value) => {
                     setDestinationHospital(value);
                   }}
-                  onLocationSelect={(location) => {
+                  onLocationSelect={async (location) => {
+                    // Check if user typed an airport code before geocoding happened
+                    if (isAirportCode(destinationHospital)) {
+                      const handled = await handleAirportCodeInput(destinationHospital, false);
+                      if (handled) {
+                        return; // Airport found, use it instead
+                      }
+                    }
+                    // Normal location selection
                     setSelectedDestination(location);
-                    // Only set the display name if it's a valid selection
                     if (location.placeId !== '0') {
                       setDestinationHospital(location.displayName);
                     }
