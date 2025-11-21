@@ -265,11 +265,11 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     let offset: [number, number] = [0, 0];
     
     if (segment.type === 'flight') {
-      // Separate flight labels vertically
+      // Separate flight labels more clearly in both axes
       if (flightIndex === 0) {
-        offset = [0, -35]; // First flight: above the line
+        offset = [-120, -40]; // First flight: above and left of the line
       } else if (flightIndex === 1) {
-        offset = [0, 35];  // Second flight: below the line
+        offset = [120, 40];  // Second flight: below and right of the line
       }
     } else if (segment.type === 'ground') {
       if (index === 0) { // First ground segment (pickup)
