@@ -1,6 +1,183 @@
 // NOAA Aviation Weather Winds Aloft API Integration
 // Provides official flight-level wind and temperature data
 
+// Winds Aloft Station Lookup Table
+// These are the official NOAA winds aloft reporting stations with their coordinates
+// Each station's data is considered valid for the area around it
+interface WindsAloftStation {
+  code: string;
+  name: string;
+  lat: number;
+  lng: number;
+  region: string;
+}
+
+// Comprehensive lookup table of winds aloft stations (focusing on CONUS)
+const WINDS_ALOFT_STATIONS: WindsAloftStation[] = [
+  // Florida & Southeast
+  { code: 'MIA', name: 'Miami, FL', lat: 25.8, lng: -80.3, region: 'mia' },
+  { code: 'TPA', name: 'Tampa, FL', lat: 27.9, lng: -82.5, region: 'mia' },
+  { code: 'JAX', name: 'Jacksonville, FL', lat: 30.5, lng: -81.7, region: 'mia' },
+  { code: 'TLH', name: 'Tallahassee, FL', lat: 30.4, lng: -84.4, region: 'mia' },
+  { code: 'SAV', name: 'Savannah, GA', lat: 32.1, lng: -81.2, region: 'mia' },
+  { code: 'ATL', name: 'Atlanta, GA', lat: 33.6, lng: -84.4, region: 'mia' },
+  { code: 'BIJ', name: 'Albany, GA', lat: 31.5, lng: -84.2, region: 'mia' },
+  { code: 'AGS', name: 'Augusta, GA', lat: 33.4, lng: -82.0, region: 'mia' },
+  
+  // Carolinas & Virginia
+  { code: 'CAE', name: 'Columbia, SC', lat: 33.9, lng: -81.1, region: 'mia' },
+  { code: 'CHS', name: 'Charleston, SC', lat: 32.9, lng: -80.0, region: 'mia' },
+  { code: 'CLT', name: 'Charlotte, NC', lat: 35.2, lng: -80.9, region: 'bos' },
+  { code: 'GSO', name: 'Greensboro, NC', lat: 36.1, lng: -79.9, region: 'bos' },
+  { code: 'RDU', name: 'Raleigh-Durham, NC', lat: 35.9, lng: -78.8, region: 'bos' },
+  { code: 'ILM', name: 'Wilmington, NC', lat: 34.3, lng: -77.9, region: 'mia' },
+  { code: 'RIC', name: 'Richmond, VA', lat: 37.5, lng: -77.3, region: 'bos' },
+  { code: 'ORF', name: 'Norfolk, VA', lat: 36.9, lng: -76.2, region: 'bos' },
+  
+  // Mid-Atlantic
+  { code: 'DCA', name: 'Washington, DC', lat: 38.9, lng: -77.0, region: 'bos' },
+  { code: 'BWI', name: 'Baltimore, MD', lat: 39.3, lng: -76.6, region: 'bos' },
+  { code: 'PHL', name: 'Philadelphia, PA', lat: 39.9, lng: -75.2, region: 'bos' },
+  { code: 'ACY', name: 'Atlantic City, NJ', lat: 39.5, lng: -74.6, region: 'bos' },
+  { code: 'NYC', name: 'New York City, NY', lat: 40.8, lng: -74.0, region: 'bos' },
+  { code: 'JFK', name: 'New York JFK, NY', lat: 40.6, lng: -73.8, region: 'bos' },
+  { code: 'ISP', name: 'Long Island, NY', lat: 40.8, lng: -73.1, region: 'bos' },
+  { code: 'HPN', name: 'White Plains, NY', lat: 41.1, lng: -73.7, region: 'bos' },
+  
+  // Northeast
+  { code: 'BDL', name: 'Hartford, CT', lat: 41.9, lng: -72.7, region: 'bos' },
+  { code: 'PVD', name: 'Providence, RI', lat: 41.7, lng: -71.4, region: 'bos' },
+  { code: 'BOS', name: 'Boston, MA', lat: 42.4, lng: -71.1, region: 'bos' },
+  { code: 'ALB', name: 'Albany, NY', lat: 42.7, lng: -73.8, region: 'bos' },
+  { code: 'BUF', name: 'Buffalo, NY', lat: 42.9, lng: -78.7, region: 'bos' },
+  { code: 'BGR', name: 'Bangor, ME', lat: 44.8, lng: -68.8, region: 'bos' },
+  { code: 'PWM', name: 'Portland, ME', lat: 43.6, lng: -70.3, region: 'bos' },
+  { code: 'CAR', name: 'Caribou, ME', lat: 46.9, lng: -68.0, region: 'bos' },
+  
+  // Inland East
+  { code: 'PIT', name: 'Pittsburgh, PA', lat: 40.5, lng: -80.2, region: 'bos' },
+  { code: 'CLE', name: 'Cleveland, OH', lat: 41.4, lng: -81.9, region: 'bos' },
+  { code: 'CVG', name: 'Cincinnati, OH', lat: 39.0, lng: -84.7, region: 'chi' },
+  { code: 'CMH', name: 'Columbus, OH', lat: 40.0, lng: -82.9, region: 'chi' },
+  { code: 'BNA', name: 'Nashville, TN', lat: 36.1, lng: -86.7, region: 'dfw' },
+  { code: 'MEM', name: 'Memphis, TN', lat: 35.0, lng: -90.0, region: 'dfw' },
+  { code: 'BHM', name: 'Birmingham, AL', lat: 33.6, lng: -86.8, region: 'mia' },
+  { code: 'MGM', name: 'Montgomery, AL', lat: 32.3, lng: -86.4, region: 'mia' },
+  
+  // Great Lakes
+  { code: 'DTW', name: 'Detroit, MI', lat: 42.2, lng: -83.4, region: 'chi' },
+  { code: 'GRR', name: 'Grand Rapids, MI', lat: 42.9, lng: -85.5, region: 'chi' },
+  { code: 'MKE', name: 'Milwaukee, WI', lat: 43.0, lng: -88.0, region: 'chi' },
+  { code: 'CHI', name: 'Chicago, IL', lat: 41.8, lng: -87.8, region: 'chi' },
+  
+  // Midwest
+  { code: 'STL', name: 'St. Louis, MO', lat: 38.7, lng: -90.4, region: 'dfw' },
+  { code: 'MCI', name: 'Kansas City, MO', lat: 39.3, lng: -94.7, region: 'dfw' },
+  { code: 'DSM', name: 'Des Moines, IA', lat: 41.5, lng: -93.7, region: 'chi' },
+  { code: 'MSP', name: 'Minneapolis, MN', lat: 45.0, lng: -93.2, region: 'chi' },
+  { code: 'OMA', name: 'Omaha, NE', lat: 41.3, lng: -96.0, region: 'dfw' },
+  { code: 'ICT', name: 'Wichita, KS', lat: 37.6, lng: -97.4, region: 'dfw' },
+  { code: 'BRL', name: 'Burlington, IA', lat: 40.8, lng: -91.1, region: 'chi' },
+  
+  // South Central
+  { code: 'DFW', name: 'Dallas-Fort Worth, TX', lat: 32.9, lng: -97.0, region: 'dfw' },
+  { code: 'HOU', name: 'Houston, TX', lat: 29.6, lng: -95.3, region: 'dfw' },
+  { code: 'SAT', name: 'San Antonio, TX', lat: 29.5, lng: -98.5, region: 'dfw' },
+  { code: 'AUS', name: 'Austin, TX', lat: 30.2, lng: -97.7, region: 'dfw' },
+  { code: 'OKC', name: 'Oklahoma City, OK', lat: 35.4, lng: -97.6, region: 'dfw' },
+  { code: 'TUL', name: 'Tulsa, OK', lat: 36.2, lng: -95.9, region: 'dfw' },
+  { code: 'LIT', name: 'Little Rock, AR', lat: 34.7, lng: -92.2, region: 'dfw' },
+  { code: 'SHV', name: 'Shreveport, LA', lat: 32.5, lng: -93.7, region: 'dfw' },
+  { code: 'MSY', name: 'New Orleans, LA', lat: 30.0, lng: -90.3, region: 'mia' },
+  
+  // Mountain West
+  { code: 'DEN', name: 'Denver, CO', lat: 39.8, lng: -104.7, region: 'slc' },
+  { code: 'SLC', name: 'Salt Lake City, UT', lat: 40.8, lng: -112.0, region: 'slc' },
+  { code: 'PHX', name: 'Phoenix, AZ', lat: 33.4, lng: -112.0, region: 'slc' },
+  { code: 'ABQ', name: 'Albuquerque, NM', lat: 35.0, lng: -106.6, region: 'slc' },
+  { code: 'ELP', name: 'El Paso, TX', lat: 31.8, lng: -106.4, region: 'slc' },
+  
+  // Pacific Northwest
+  { code: 'SEA', name: 'Seattle, WA', lat: 47.4, lng: -122.3, region: 'sfo' },
+  { code: 'PDX', name: 'Portland, OR', lat: 45.6, lng: -122.6, region: 'sfo' },
+  { code: 'BOI', name: 'Boise, ID', lat: 43.6, lng: -116.2, region: 'slc' },
+  { code: 'GEG', name: 'Spokane, WA', lat: 47.6, lng: -117.5, region: 'sfo' },
+  
+  // California
+  { code: 'SFO', name: 'San Francisco, CA', lat: 37.6, lng: -122.4, region: 'sfo' },
+  { code: 'LAX', name: 'Los Angeles, CA', lat: 33.9, lng: -118.4, region: 'sfo' },
+  { code: 'SAN', name: 'San Diego, CA', lat: 32.7, lng: -117.2, region: 'sfo' },
+  { code: 'SAC', name: 'Sacramento, CA', lat: 38.5, lng: -121.5, region: 'sfo' },
+  { code: 'SBA', name: 'Santa Barbara, CA', lat: 34.4, lng: -119.8, region: 'sfo' },
+  { code: 'FAT', name: 'Fresno, CA', lat: 36.8, lng: -119.7, region: 'sfo' },
+  
+  // Alaska & Hawaii
+  { code: 'ANC', name: 'Anchorage, AK', lat: 61.2, lng: -150.0, region: 'anc' },
+  { code: 'FAI', name: 'Fairbanks, AK', lat: 64.8, lng: -147.9, region: 'anc' },
+  { code: 'HNL', name: 'Honolulu, HI', lat: 21.3, lng: -157.9, region: 'hnl' },
+];
+
+// Create a fast lookup map by station code
+const STATION_LOOKUP = new Map(
+  WINDS_ALOFT_STATIONS.map(station => [station.code, station])
+);
+
+/**
+ * Calculate the great circle distance between two points using Haversine formula
+ * Returns distance in nautical miles
+ */
+function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 3440.065; // Earth's radius in nautical miles
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * Find the closest winds aloft station to a given lat/lng
+ * Returns the station code, or null if no stations found within maxDistance
+ */
+function findClosestStation(lat: number, lng: number, maxDistanceNM: number = 500): string | null {
+  let closestStation: string | null = null;
+  let minDistance = Infinity;
+  
+  for (const station of WINDS_ALOFT_STATIONS) {
+    const distance = calculateDistance(lat, lng, station.lat, station.lng);
+    if (distance < minDistance && distance <= maxDistanceNM) {
+      minDistance = distance;
+      closestStation = station.code;
+    }
+  }
+  
+  if (closestStation) {
+    console.log(`Closest station to (${lat.toFixed(2)}, ${lng.toFixed(2)}): ${closestStation} at ${minDistance.toFixed(0)}nm`);
+  }
+  
+  return closestStation;
+}
+
+/**
+ * Find multiple closest stations in order of proximity
+ * Returns array of station codes sorted by distance
+ */
+function findClosestStations(lat: number, lng: number, count: number = 3, maxDistanceNM: number = 500): string[] {
+  const stationsWithDistance = WINDS_ALOFT_STATIONS
+    .map(station => ({
+      code: station.code,
+      distance: calculateDistance(lat, lng, station.lat, station.lng)
+    }))
+    .filter(s => s.distance <= maxDistanceNM)
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, count);
+  
+  return stationsWithDistance.map(s => s.code);
+}
+
 export interface WindsAloftData {
   direction: number | 'VRB';
   speed: number;
@@ -30,7 +207,7 @@ function determineRegion(lat: number, lng: number): string {
   return 'chi'; // Default to central US
 }
 
-// Station code mapping for common airports
+// Station code mapping for common airports (legacy support)
 const STATION_CODES: { [key: string]: string } = {
   'KFRG': 'JFK', 'KJFK': 'JFK', 'KLGA': 'JFK', 'KEWR': 'JFK',
   'KRDU': 'RDU', 'KATL': 'ATL', 'KCLT': 'CAE',
@@ -45,9 +222,6 @@ const STATION_CODES: { [key: string]: string } = {
 function getStationCode(icao: string): string | null {
   return STATION_CODES[icao] || icao.replace('K', '').toUpperCase();
 }
-
-// Use 6-hour forecast (fcst parameter represents hours ahead, not cycle time)
-// Valid values: '06', '12', '24' for 6-hour, 12-hour, or 24-hour forecasts
 
 /**
  * Fetch winds aloft from NOAA Aviation Weather API
@@ -79,7 +253,7 @@ export async function fetchWindsAloft(
     
     let url = `https://aviationweather.gov/api/data/windtemp?region=${region}&level=${level}&fcst=${fcst}`;
     
-    console.log(`Fetching NOAA winds aloft: region=${region}, level=${level}, fcst=${fcst}hr, alt=${altitudeFt}ft, airport=${nearestAirport || 'none'}`);
+    console.log(`Fetching NOAA winds aloft: region=${region}, level=${level}, fcst=${fcst}hr, alt=${altitudeFt}ft, position=(${lat.toFixed(2)}, ${lng.toFixed(2)})`);
     
     let response = await fetch(url, {
       headers: { 'Accept': 'text/plain' }
@@ -141,18 +315,20 @@ export async function fetchWindsAloft(
 
     const altIndex = altitudes.indexOf(closestAlt);
 
-    // Determine which station to use
-    let targetStation: string | null = null;
+    // Determine target station using proximity-based selection
+    // Priority: 1) Closest station to lat/lng, 2) Legacy airport code mapping, 3) First available
+    const closestStationCode = findClosestStation(lat, lng);
+    const legacyStationCode = nearestAirport ? getStationCode(nearestAirport) : null;
     
-    if (nearestAirport) {
-      targetStation = getStationCode(nearestAirport);
-      console.log(`Looking for target station: ${targetStation} (from ${nearestAirport})`);
-    }
+    // Try closest station first, then legacy mapping as fallback
+    const preferredStations = [closestStationCode, legacyStationCode].filter(Boolean) as string[];
+    
+    console.log(`Station priority: ${preferredStations.join(' > ')} (closest to route position)`);
 
     // Parse station data (starts after FT line)
     let windData: string | null = null;
     let foundStation: string | null = null;
-    let stationLines: string[] = [];
+    let availableStations: string[] = [];
 
     for (let i = ftLineIndex + 1; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -161,28 +337,29 @@ export async function fetchWindsAloft(
       const parts = line.split(/\s+/);
       if (parts.length < 2) continue;
       
-      stationLines.push(line);
       const station = parts[0];
+      availableStations.push(station);
       
-      // If we have a target station, look for exact match
-      if (targetStation && station === targetStation) {
-        foundStation = station;
-        windData = parts[altIndex + 1]; // +1 because parts[0] is station name
-        console.log(`Found target station ${targetStation} with data: ${windData}`);
-        break;
+      // Check if this station matches any of our preferred stations
+      if (preferredStations.includes(station)) {
+        if (parts.length > altIndex + 1) {
+          foundStation = station;
+          windData = parts[altIndex + 1];
+          console.log(`✓ Found preferred station ${station} with data: ${windData}`);
+          break;
+        }
       }
       
-      // Otherwise, use first valid station as fallback
+      // Keep first valid station as absolute fallback
       if (!foundStation && parts.length > altIndex + 1) {
         foundStation = station;
         windData = parts[altIndex + 1];
-        // Continue looking in case we find a better match
       }
     }
 
-    // If target station not found in regional data and we haven't tried national yet, retry with region=us
-    if (targetStation && foundStation !== targetStation && !url.includes('region=us')) {
-      console.log(`Target station ${targetStation} not found in regional data, retrying with region=us`);
+    // If preferred stations not found in regional data, retry with national
+    if (preferredStations.length > 0 && !preferredStations.includes(foundStation!) && !url.includes('region=us')) {
+      console.log(`Preferred stations not found in regional data (available: ${availableStations.slice(0, 5).join(', ')}), retrying with region=us`);
       url = `https://aviationweather.gov/api/data/windtemp?region=us&level=${level}&fcst=${fcst}`;
       
       const nationalResponse = await fetch(url, {
@@ -193,10 +370,8 @@ export async function fetchWindsAloft(
         const nationalText = await nationalResponse.text();
         const nationalLines = nationalText.split('\n').filter(line => line.trim());
         
-        // Find FT line in national data
         const nationalFtLineIndex = nationalLines.findIndex(line => line.trim().startsWith('FT'));
         if (nationalFtLineIndex !== -1) {
-          // Search for target station in national data
           for (let i = nationalFtLineIndex + 1; i < nationalLines.length; i++) {
             const line = nationalLines[i].trim();
             if (!line || line.startsWith('FD') || line.startsWith('DATA')) continue;
@@ -206,30 +381,29 @@ export async function fetchWindsAloft(
             
             const station = parts[0];
             
-            if (station === targetStation) {
-              foundStation = station;
-              windData = parts[altIndex + 1];
-              console.log(`Found target station ${targetStation} in national data with data: ${windData}`);
-              break;
+            if (preferredStations.includes(station)) {
+              if (parts.length > altIndex + 1) {
+                foundStation = station;
+                windData = parts[altIndex + 1];
+                console.log(`✓ Found preferred station ${station} in national data with data: ${windData}`);
+                break;
+              }
             }
           }
         }
-      } else {
-        console.warn(`National NOAA API request failed: ${nationalResponse.status}`);
       }
     }
 
     if (!windData || !foundStation) {
-      console.warn(`No wind data found for altitude ${closestAlt}ft, target=${targetStation}`);
+      console.warn(`No wind data found for altitude ${closestAlt}ft`);
       return null;
     }
     
-    if (targetStation && foundStation !== targetStation) {
-      console.warn(`Target station ${targetStation} not found in regional or national data, using ${foundStation} as fallback`);
+    if (preferredStations.length > 0 && !preferredStations.includes(foundStation)) {
+      console.warn(`⚠️  Using fallback station ${foundStation} (preferred ${preferredStations[0]} not available)`);
     }
 
     // Parse 6-digit wind code: DDSSTT
-    // DD = direction (tens of degrees), SS = speed (knots), TT = temperature
     const cleanData = windData.trim();
     
     // Handle special cases
@@ -248,7 +422,7 @@ export async function fetchWindsAloft(
       return null;
     }
 
-    // Parse direction and speed (minimum 4 digits needed)
+    // Parse direction and speed
     const direction = parseInt(cleanData.substring(0, 2)) * 10;
     const speed = parseInt(cleanData.substring(2, 4));
     
@@ -258,7 +432,6 @@ export async function fetchWindsAloft(
       const tempStr = cleanData.substring(4, 6);
       const tempVal = parseInt(tempStr);
       if (!isNaN(tempVal)) {
-        // Negative above FL240
         temperature = closestAlt >= 24000 ? -tempVal : tempVal;
       }
     }
@@ -298,17 +471,17 @@ async function fetchLowLevelWinds(
   try {
     const region = determineRegion(lat, lng);
     
-    // Map forecastHours to NOAA's available forecast periods: 06, 12, 18, 24
+    // Map forecastHours to NOAA's available forecast periods
     let fcst = '06';
     if (forecastHours >= 24) fcst = '24';
     else if (forecastHours >= 18) fcst = '18';
     else if (forecastHours >= 12) fcst = '12';
     else if (forecastHours >= 6) fcst = '06';
-    else fcst = '06'; // Use 6-hour for flights < 6 hours away
+    else fcst = '06';
     
     let url = `https://aviationweather.gov/api/data/windtemp?region=${region}&level=low&fcst=${fcst}`;
     
-    console.log(`Fetching NOAA low-level winds: region=${region}, fcst=${fcst}hr, alt=${altitudeFt}ft`);
+    console.log(`Fetching NOAA low-level winds: region=${region}, fcst=${fcst}hr, alt=${altitudeFt}ft, position=(${lat.toFixed(2)}, ${lng.toFixed(2)})`);
     
     let response = await fetch(url, {
       headers: { 'Accept': 'text/plain' }
@@ -335,18 +508,16 @@ async function fetchLowLevelWinds(
       return null;
     }
 
-    // Find the FT line dynamically (contains altitude columns)
     const ftLineIndex = lines.findIndex(line => line.trim().startsWith('FT'));
     if (ftLineIndex === -1) {
       console.warn('No FT line found in low-level NOAA response');
       return null;
     }
 
-    // Parse altitudes from FT line (e.g., "FT  3000    6000    9000   12000   18000")
     const ftLine = lines[ftLineIndex];
     const altitudes = ftLine
       .split(/\s+/)
-      .slice(1) // Skip "FT"
+      .slice(1)
       .map(alt => parseInt(alt))
       .filter(alt => !isNaN(alt));
 
@@ -357,7 +528,7 @@ async function fetchLowLevelWinds(
 
     console.log(`Found FT line at index ${ftLineIndex}, altitudes: ${altitudes.join(', ')}`);
     
-    // Find closest altitude to requested (minimum 6000ft)
+    // Find closest altitude
     const requestedAlt = Math.max(altitudeFt, 6000);
     let targetAlt = altitudes[0];
     let minDiff = Math.abs(requestedAlt - altitudes[0]);
@@ -372,14 +543,14 @@ async function fetchLowLevelWinds(
     const altIndex = altitudes.indexOf(targetAlt);
     console.log(`Requested ${altitudeFt}ft (clamped to ${requestedAlt}ft), using ${targetAlt}ft at column ${altIndex}`);
 
-    // Determine target station
-    let targetStation: string | null = null;
-    if (nearestAirport) {
-      targetStation = getStationCode(nearestAirport);
-      console.log(`Looking for station: ${targetStation}`);
-    }
+    // Determine target station using proximity-based selection
+    const closestStationCode = findClosestStation(lat, lng);
+    const legacyStationCode = nearestAirport ? getStationCode(nearestAirport) : null;
+    
+    const preferredStations = [closestStationCode, legacyStationCode].filter(Boolean) as string[];
+    console.log(`Station priority: ${preferredStations.join(' > ')}`);
 
-    // Parse station data (starts after FT line)
+    // Parse station data
     let foundStation: string | null = null;
     let windData: string | null = null;
     
@@ -392,18 +563,17 @@ async function fetchLowLevelWinds(
 
       const stationCode = parts[0];
       
-      // If we have a target station, look for exact match
-      if (targetStation && stationCode === targetStation) {
-        foundStation = stationCode;
-        // parts[0] is station code, parts[1+] are wind data columns
+      // Check if this is a preferred station
+      if (preferredStations.includes(stationCode)) {
         if (parts.length > altIndex + 1) {
+          foundStation = stationCode;
           windData = parts[altIndex + 1];
-          console.log(`Found target station ${targetStation} with wind data: ${windData}`);
+          console.log(`✓ Found preferred station ${stationCode} with wind data: ${windData}`);
           break;
         }
       }
       
-      // Use first valid station as fallback
+      // Keep first valid station as fallback
       if (!foundStation && parts.length > altIndex + 1) {
         foundStation = stationCode;
         windData = parts[altIndex + 1];
@@ -411,18 +581,17 @@ async function fetchLowLevelWinds(
     }
 
     if (!windData || !foundStation) {
-      console.warn(`No wind data found at ${targetAlt}ft for station ${targetStation || 'any'}`);
+      console.warn(`No wind data found at ${targetAlt}ft`);
       return null;
     }
     
-    if (targetStation && foundStation !== targetStation) {
-      console.log(`Using fallback station ${foundStation} instead of ${targetStation}`);
+    if (preferredStations.length > 0 && !preferredStations.includes(foundStation)) {
+      console.log(`⚠️  Using fallback station ${foundStation} instead of ${preferredStations[0]}`);
     }
 
-    // Parse NOAA format: DDSSTT (direction, speed, temperature)
+    // Parse NOAA format: DDSSTT
     const cleanData = windData.trim();
     
-    // Handle light and variable
     if (cleanData === '9900' || cleanData.startsWith('99')) {
       console.log(`Light and variable winds at ${targetAlt}ft from ${foundStation}`);
       return {
@@ -442,7 +611,7 @@ async function fetchLowLevelWinds(
       let direction = parseInt(cleanData.substring(0, 2)) * 10;
       let speed = parseInt(cleanData.substring(2, 4));
       
-      // Handle speeds > 100kt (direction + 50, speed - 100)
+      // Handle speeds > 100kt
       if (speed > 100) {
         direction += 50;
         speed -= 100;
@@ -490,7 +659,7 @@ export async function fetchAverageWindsAlongRoute(
   forecastHours: number = 0
 ): Promise<WindsAloftData | null> {
   try {
-    console.log(`\n🌬️  WINDS ALOFT SAMPLING:`);
+    console.log(`\n🌬️  WINDS ALOFT SAMPLING (Using Closest-Station Selection):`);
     console.log(`   Route: ${waypoints.length} waypoints, ${distanceNM.toFixed(0)}nm total`);
     console.log(`   Target cruise altitude: ${cruiseAltitudeFt.toFixed(0)}ft`);
     console.log(`   Climb phase: ${climbPhaseNM.toFixed(1)}nm, Descent phase: ${descentPhaseNM.toFixed(1)}nm`);
@@ -522,7 +691,7 @@ export async function fetchAverageWindsAlongRoute(
         samplePoints.push({ ...lastWp, fraction: 1.0 });
       }
     } else {
-      // Interpolate based on distance - increase sampling density for better wind accuracy
+      // Interpolate based on distance
       const numSamples = distanceNM < 100 ? 3 : 
                          distanceNM < 250 ? 5 : 
                          distanceNM < 500 ? 8 : 
@@ -546,13 +715,12 @@ export async function fetchAverageWindsAlongRoute(
       
       // Determine phase based on distance along route
       if (distanceAlongRoute < climbPhaseNM) {
-        // Climb phase - sample at multiple altitudes, weighted toward lower
+        // Climb phase
         phase = 'climb';
         const climbFraction = distanceAlongRoute / climbPhaseNM;
         altitude = Math.max(6000, 6000 + (cruiseAltitudeFt - 6000) * climbFraction);
-        weight = 1.0; // Equal weight for simplicity
+        weight = 1.0;
         
-        // Fetch low-level winds
         const winds = await fetchLowLevelWinds(point.lat, point.lng, altitude, forecastHours, point.code);
         if (winds && winds.direction !== 'VRB') {
           console.log(`  🔼 CLIMB phase at ${altitude.toFixed(0)}ft from ${winds.station}: ${winds.direction}° @ ${winds.speed}kt`);
@@ -564,17 +732,14 @@ export async function fetchAverageWindsAlongRoute(
             phase: `climb-${altitude.toFixed(0)}ft`
           });
           stationsUsed.add(winds.station);
-        } else {
-          console.log(`  🔼 CLIMB phase at ${altitude.toFixed(0)}ft: No wind data available`);
         }
       } else if (distanceAlongRoute > distanceNM - descentPhaseNM) {
-        // Descent phase - sample at multiple altitudes, weighted toward lower
+        // Descent phase
         phase = 'descent';
         const descentFraction = (distanceNM - distanceAlongRoute) / descentPhaseNM;
         altitude = Math.max(6000, 6000 + (cruiseAltitudeFt - 6000) * descentFraction);
         weight = 1.0;
         
-        // Fetch low-level winds
         const winds = await fetchLowLevelWinds(point.lat, point.lng, altitude, forecastHours, point.code);
         if (winds && winds.direction !== 'VRB') {
           console.log(`  🔽 DESCENT phase at ${altitude.toFixed(0)}ft from ${winds.station}: ${winds.direction}° @ ${winds.speed}kt`);
@@ -586,16 +751,13 @@ export async function fetchAverageWindsAlongRoute(
             phase: `descent-${altitude.toFixed(0)}ft`
           });
           stationsUsed.add(winds.station);
-        } else {
-          console.log(`  🔽 DESCENT phase at ${altitude.toFixed(0)}ft: No wind data available`);
         }
       } else {
-        // Cruise phase - sample at cruise altitude
+        // Cruise phase
         phase = 'cruise';
         altitude = cruiseAltitudeFt;
-        weight = 1.5; // Give cruise phase more weight since we spend most time there
+        weight = 1.5; // Give cruise more weight
         
-        // Fetch high-level winds
         const winds = await fetchWindsAloft(point.lat, point.lng, altitude, forecastHours, point.code);
         if (winds && winds.direction !== 'VRB') {
           console.log(`  ✈️  CRUISE phase at FL${Math.round(altitude / 100)} from ${winds.station}: ${winds.direction}° @ ${winds.speed}kt`);
@@ -607,13 +769,11 @@ export async function fetchAverageWindsAlongRoute(
             phase: `cruise-${altitude.toFixed(0)}ft`
           });
           stationsUsed.add(winds.station);
-        } else {
-          console.log(`  ✈️  CRUISE phase at FL${Math.round(altitude / 100)}: No wind data available`);
         }
       }
     }
     
-    // Fallback: if no samples, try cruise altitude at departure, midpoint, and arrival
+    // Fallback if no samples
     if (windSamples.length === 0) {
       console.warn('No valid wind samples found, trying cruise-altitude fallback...');
       
@@ -630,7 +790,6 @@ export async function fetchAverageWindsAlongRoute(
       for (const point of fallbackPoints) {
         const winds = await fetchWindsAloft(point.lat, point.lng, cruiseAltitudeFt, forecastHours, point.code);
         if (winds && winds.direction !== 'VRB') {
-          console.log(`  ✈️  CRUISE fallback at ${cruiseAltitudeFt.toFixed(0)}ft: ${winds.direction}° @ ${winds.speed}kt (station: ${winds.station})`);
           windSamples.push({
             direction: winds.direction as number,
             speed: winds.speed,
@@ -642,7 +801,6 @@ export async function fetchAverageWindsAlongRoute(
         }
       }
       
-      // If still no samples, return calm winds as last resort
       if (windSamples.length === 0) {
         console.warn('All wind fetching failed, returning calm winds');
         return {
@@ -655,7 +813,7 @@ export async function fetchAverageWindsAlongRoute(
       }
     }
     
-    console.log(`Collected ${windSamples.length} wind samples from ${stationsUsed.size} stations`);
+    console.log(`Collected ${windSamples.length} wind samples from ${stationsUsed.size} stations: ${Array.from(stationsUsed).join(', ')}`);
     
     // Vector average the winds
     let totalU = 0;
@@ -664,8 +822,8 @@ export async function fetchAverageWindsAlongRoute(
     
     for (const sample of windSamples) {
       const radians = sample.direction * Math.PI / 180;
-      const u = -sample.speed * Math.sin(radians); // East-west component
-      const v = -sample.speed * Math.cos(radians); // North-south component
+      const u = -sample.speed * Math.sin(radians);
+      const v = -sample.speed * Math.cos(radians);
       
       totalU += u * sample.weight;
       totalV += v * sample.weight;
@@ -677,10 +835,10 @@ export async function fetchAverageWindsAlongRoute(
     const avgSpeed = Math.sqrt(avgU * avgU + avgV * avgV);
     let avgDirection = (Math.atan2(-avgU, -avgV) * 180 / Math.PI + 360) % 360;
     
-    // Round to nearest 10 degrees (standard reporting)
+    // Round to nearest 10 degrees
     avgDirection = Math.round(avgDirection / 10) * 10;
     
-    console.log(`Averaged winds: ${avgDirection}° @ ${avgSpeed.toFixed(0)}kt from ${stationsUsed.size} stations`);
+    console.log(`✅ Averaged winds: ${avgDirection}° @ ${avgSpeed.toFixed(0)}kt from ${stationsUsed.size} stations (${Array.from(stationsUsed).join(', ')})`);
     
     return {
       direction: avgDirection,
