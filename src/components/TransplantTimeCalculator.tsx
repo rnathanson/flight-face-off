@@ -57,6 +57,11 @@ interface TripResult {
   segments: TripSegment[];
   totalTime: number;
   arrivalTime: Date;
+  scenarios?: {
+    conservative: number;
+    expected: number;
+    optimistic: number;
+  };
   route?: {
     pickupLocation?: GeocodeResult;
     deliveryLocation?: GeocodeResult;
@@ -125,6 +130,7 @@ interface TransplantTimeCalculatorProps {
 export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCalculatorProps) {
   const [originHospital, setOriginHospital] = useState('');
   const [destinationHospital, setDestinationHospital] = useState('');
+  const [selectedScenario, setSelectedScenario] = useState<'conservative' | 'expected' | 'optimistic'>('expected');
 
   // Helper function to decode HTML entities in airport names
   const decodeHtmlEntities = (text: string): string => {
@@ -992,26 +998,48 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                   
                   <div className="grid md:grid-cols-3 gap-3">
                     {/* Conservative Estimate */}
-                    <div className="border rounded-sm bg-card">
+                    <div 
+                      className={cn(
+                        "border rounded-sm bg-card cursor-pointer transition-all hover:shadow-md",
+                        selectedScenario === 'conservative' && "border-2 border-amber-500 bg-amber-50/50"
+                      )}
+                      onClick={() => setSelectedScenario('conservative')}
+                    >
                       <div className="px-4 py-3 border-b bg-muted/20">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Conservative</span>
-                          <div className="h-1 w-1 rounded-full bg-muted-foreground/40" />
+                          <div className="flex items-center gap-2">
+                            {selectedScenario === 'conservative' && (
+                              <Badge variant="secondary" className="text-xs bg-amber-500 text-white">ACTIVE</Badge>
+                            )}
+                            <div className="h-1 w-1 rounded-full bg-muted-foreground/40" />
+                          </div>
                         </div>
                       </div>
                       <div className="px-4 py-4">
                         <div className="text-2xl font-semibold text-foreground">
-                          {Math.floor((displayTotalTime * 1.27) / 60)}h {Math.round((displayTotalTime * 1.27) % 60)}m
+                          {Math.floor((tripResult?.scenarios?.conservative || displayTotalTime * 1.27) / 60)}h {Math.round((tripResult?.scenarios?.conservative || displayTotalTime * 1.27) % 60)}m
                         </div>
                       </div>
                     </div>
 
                     {/* Expected Estimate */}
-                    <div className="border-2 rounded-sm bg-card border-primary/40">
+                    <div 
+                      className={cn(
+                        "border-2 rounded-sm bg-card cursor-pointer transition-all hover:shadow-md",
+                        selectedScenario === 'expected' ? "border-primary/40 bg-primary/5" : "border-border"
+                      )}
+                      onClick={() => setSelectedScenario('expected')}
+                    >
                       <div className="px-4 py-3 border-b bg-primary/5">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-medium text-primary uppercase tracking-wide">Expected</span>
-                          <div className="h-1 w-1 rounded-full bg-primary" />
+                          <div className="flex items-center gap-2">
+                            {selectedScenario === 'expected' && (
+                              <Badge variant="secondary" className="text-xs bg-primary text-primary-foreground">ACTIVE</Badge>
+                            )}
+                            <div className="h-1 w-1 rounded-full bg-primary" />
+                          </div>
                         </div>
                       </div>
                       <div className="px-4 py-4">
@@ -1022,19 +1050,53 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                     </div>
 
                     {/* Optimistic Estimate */}
-                    <div className="border rounded-sm bg-card">
+                    <div 
+                      className={cn(
+                        "border rounded-sm bg-card cursor-pointer transition-all hover:shadow-md",
+                        selectedScenario === 'optimistic' && "border-2 border-green-500 bg-green-50/50"
+                      )}
+                      onClick={() => setSelectedScenario('optimistic')}
+                    >
                       <div className="px-4 py-3 border-b bg-muted/20">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Optimistic</span>
-                          <div className="h-1 w-1 rounded-full bg-muted-foreground/40" />
+                          <div className="flex items-center gap-2">
+                            {selectedScenario === 'optimistic' && (
+                              <Badge variant="secondary" className="text-xs bg-green-500 text-white">ACTIVE</Badge>
+                            )}
+                            <div className="h-1 w-1 rounded-full bg-muted-foreground/40" />
+                          </div>
                         </div>
                       </div>
                       <div className="px-4 py-4">
                         <div className="text-2xl font-semibold text-foreground">
-                          {Math.floor((displayTotalTime * 0.85) / 60)}h {Math.round((displayTotalTime * 0.85) % 60)}m
+                          {Math.floor((tripResult?.scenarios?.optimistic || displayTotalTime * 0.85) / 60)}h {Math.round((tripResult?.scenarios?.optimistic || displayTotalTime * 0.85) % 60)}m
                         </div>
                       </div>
                     </div>
+                  </div>
+                  
+                  <div className="mt-3 p-3 bg-muted/30 rounded-lg">
+                    <p className="text-xs text-muted-foreground">
+                      {selectedScenario === 'conservative' && (
+                        <>
+                          <strong>Conservative scenario:</strong> Assumes stronger headwinds (+15-25% flight time based on distance) 
+                          and heavier traffic (+30-50% ground time based on duration). AI-validated for realism.
+                        </>
+                      )}
+                      {selectedScenario === 'expected' && (
+                        <>
+                          <strong>Expected scenario:</strong> Uses baseline calculations with current weather and typical traffic 
+                          conditions. Most realistic estimate based on real-time data.
+                        </>
+                      )}
+                      {selectedScenario === 'optimistic' && (
+                        <>
+                          <strong>Optimistic scenario:</strong> Assumes favorable winds (-10-15% flight time) and light traffic 
+                          (-10-15% ground time). AI-validated best case scenario.
+                        </>
+                      )}
+                    </p>
                   </div>
                 </div>
 
