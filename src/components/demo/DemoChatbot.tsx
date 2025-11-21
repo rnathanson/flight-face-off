@@ -28,7 +28,7 @@ const normalizeCrewResponseMarkdown = (text: string): string => {
     const line = lines[i];
     const trimmed = line.trim().toLowerCase();
     
-    // Check if this line is a section label (exact match or with colon/dash)
+    // Check if this line is a section label (exact match, with colon/dash, or followed by space and content)
     let isHeading = false;
     let headingText = '';
     let remainingContent = '';
@@ -49,6 +49,14 @@ const normalizeCrewResponseMarkdown = (text: string): string => {
           remainingContent = line.slice(splitIdx + 1).trim();
         }
         break;
+      } else if (trimmed.startsWith(key + ' ')) {
+        // Handle "Summary For a 400 nm flight..." case
+        isHeading = true;
+        headingText = heading;
+        // Extract content after the key and space
+        const startIdx = line.toLowerCase().indexOf(key) + key.length;
+        remainingContent = line.slice(startIdx).trim();
+        break;
       }
     }
     
@@ -60,7 +68,7 @@ const normalizeCrewResponseMarkdown = (text: string): string => {
       output.push(headingText);
       // Add blank line after heading
       output.push('');
-      // If there was content after colon/dash, add it
+      // If there was content after the label, add it as a new line
       if (remainingContent) {
         output.push(remainingContent);
       }
@@ -74,8 +82,8 @@ const normalizeCrewResponseMarkdown = (text: string): string => {
 
 // Fallback formatter: adds paragraph breaks if AI returns long unbroken text
 const formatLongText = (text: string): string => {
-  // If already has blank lines or is short, return as-is
-  if (text.includes('\n\n') || text.length < 300) return text;
+  // If the text is short, keep it as is
+  if (text.length < 300) return text;
   
   // Split on sentence boundaries and insert blank lines every 2-3 sentences
   const sentences = text.split(/([.!?])\s+/);
