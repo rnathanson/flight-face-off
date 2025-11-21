@@ -764,7 +764,24 @@ async function calculateFlightTime(
   nearestAirport?: string,
   routeWaypoints?: Array<{lat: number, lng: number, code?: string}>,
   departureDateTime?: string
-): Promise<{ minutes: number; weatherDelay: number; headwind: number; cruiseAltitude: number; cruiseWinds: any | null }> {
+): Promise<{ 
+  minutes: number; 
+  weatherDelay: number; 
+  headwind: number; 
+  cruiseAltitude: number; 
+  cruiseWinds: any | null;
+  breakdown?: {
+    climbMinutes: number;
+    cruiseMinutes: number;
+    descentMinutes: number;
+    taxiMinutes: number;
+  };
+  cruiseDetails?: {
+    cruiseTAS: number;
+    cruiseGroundSpeed: number;
+    cruiseDistanceNM: number;
+  };
+}> {
   // Calculate hours until departure based on current time and departure time
   let forecastHours = 0;
   if (departureDateTime) {
@@ -781,7 +798,24 @@ async function calculateFlightTime(
     
     console.log(`Flight departure in ${hoursUntilDeparture.toFixed(1)} hours, using ${forecastHours}hr forecast`);
   }
-  if (distanceNM === 0) return { minutes: 0, weatherDelay: 0, headwind: 0, cruiseAltitude: 0, cruiseWinds: null };
+  if (distanceNM === 0) return { 
+    minutes: 0, 
+    weatherDelay: 0, 
+    headwind: 0, 
+    cruiseAltitude: 0, 
+    cruiseWinds: null,
+    breakdown: {
+      climbMinutes: 0,
+      cruiseMinutes: 0,
+      descentMinutes: 0,
+      taxiMinutes: 0
+    },
+    cruiseDetails: {
+      cruiseTAS: 0,
+      cruiseGroundSpeed: 0,
+      cruiseDistanceNM: 0
+    }
+  };
 
   // Determine altitude based on distance
   let cruiseAltitudeFt: number;
@@ -875,6 +909,7 @@ async function calculateFlightTime(
     
     if (cruiseWinds) {
       console.log(`✓ Averaged winds from ${cruiseWinds.sampleCount} points using stations: ${cruiseWinds.stations?.join(', ')}`);
+      console.log(`  Wind samples collected: ${cruiseWinds.sampleCount}, Stations: ${cruiseWinds.stations?.join(', ')}`);
       console.log(`  Result: ${cruiseWinds.direction}° @ ${cruiseWinds.speed}kt`);
     }
   } catch (error) {
@@ -951,17 +986,38 @@ async function calculateFlightTime(
   console.log(`✈️  DESCENT: ${descentTimeMin.toFixed(1)}min covering ${descentNM.toFixed(1)}nm @ ${descentAvgSpeed}ktas avg`);
   
   // Add taxi time (taxi-out + taxi-in = 2 operations per flight leg)
-  const taxiTimeTotal = (config.taxi_time_per_airport_min || 5) * 2;
-  console.log(`🚕 TAXI: ${taxiTimeTotal}min (${config.taxi_time_per_airport_min || 5}min × 2 airports)`);
+  const taxiTimeTotal = (config.taxi_time_per_airport_min ?? 5) * 2;
+  console.log(`🚕 TAXI: ${taxiTimeTotal}min (${config.taxi_time_per_airport_min ?? 5}min × 2 airports)`);
   
-  const totalMinutes = Math.round(climbTimeMin + cruiseTimeMin + descentTimeMin + weatherDelay + taxiTimeTotal);
+  let totalMinutes = Math.round(climbTimeMin + cruiseTimeMin + descentTimeMin + weatherDelay + taxiTimeTotal);
+  
+  // Apply conservatism factor for long legs if configured
+  const longLegThresholdNM = 500;
+  const longLegTimeFactor = config.long_leg_time_factor ?? 1.0;
+  
+  if (distanceNM > longLegThresholdNM && longLegTimeFactor !== 1.0) {
+    const originalMinutes = totalMinutes;
+    totalMinutes = Math.round(totalMinutes * longLegTimeFactor);
+    console.log(`⚠️  LONG LEG FACTOR: ${originalMinutes}min × ${longLegTimeFactor} = ${totalMinutes}min (${distanceNM.toFixed(0)}nm > ${longLegThresholdNM}nm threshold)`);
+  }
   
   return {
     minutes: totalMinutes,
     weatherDelay,
     headwind,
     cruiseAltitude: cruiseAltitudeFt,
-    cruiseWinds: cruiseWinds
+    cruiseWinds: cruiseWinds,
+    breakdown: {
+      climbMinutes: Math.round(climbTimeMin),
+      cruiseMinutes: Math.round(cruiseTimeMin),
+      descentMinutes: Math.round(descentTimeMin),
+      taxiMinutes: taxiTimeTotal
+    },
+    cruiseDetails: {
+      cruiseTAS: cruiseSpeed,
+      cruiseGroundSpeed: Math.round(cruiseGroundSpeed),
+      cruiseDistanceNM: Math.round(cruiseDistanceNM)
+    }
   };
 }
 
