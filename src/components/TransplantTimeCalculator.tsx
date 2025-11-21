@@ -9,6 +9,7 @@ import { LocationAutocomplete } from '@/components/LocationAutocomplete';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CalendarIcon, MapPin, Plane, Zap, Clock, Car, Timer, AlertTriangle, CheckCircle, Target, ChevronDown, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -148,6 +149,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
   const [showDestinationAirportPrefs, setShowDestinationAirportPrefs] = useState(false);
   const [showAirportInputs, setShowAirportInputs] = useState(false);
   const [showChiefPilotModal, setShowChiefPilotModal] = useState(false);
+  const [showFullTrip, setShowFullTrip] = useState(false);
   const { toast } = useToast();
   
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -196,7 +198,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         });
       }
     }
-  }, [mapboxToken, tripResult]);
+  }, [mapboxToken, tripResult, showFullTrip]);
 
   const formatDuration = (minutes: number): string => {
     const hours = Math.floor(minutes / 60);
@@ -429,11 +431,25 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       return;
     }
 
+    // Filter segments based on showFullTrip toggle
+    const pickupHospitalIndex = result.segments.findIndex(seg => 
+      seg.to.toLowerCase().includes('pickup hospital')
+    );
+    const deliveryHospitalIndex = result.segments.findIndex(seg => 
+      seg.to.toLowerCase().includes('delivery hospital')
+    );
+    
+    const displaySegments = showFullTrip 
+      ? result.segments 
+      : result.segments.slice(pickupHospitalIndex, deliveryHospitalIndex + 1);
+
     console.log('Updating map with trip result:', {
       segmentCount: result.segments?.length,
+      displaySegmentCount: displaySegments.length,
+      showFullTrip,
       pickupAirport: result.route?.pickupAirport,
       destAirport: result.route?.destinationAirport,
-      hasPolylines: result.segments?.some(s => s.polyline && s.polyline.length > 0)
+      hasPolylines: displaySegments?.some(s => s.polyline && s.polyline.length > 0)
     });
 
     // Clean up existing layers and sources MORE SAFELY
@@ -481,10 +497,13 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
 
     const KFRG = { lat: 40.728889, lng: -73.413333 };
 
-    new mapboxgl.Marker({ color: '#3b82f6' })
-      .setLngLat([KFRG.lng, KFRG.lat])
-      .setPopup(new mapboxgl.Popup().setHTML('<h3>KFRG - Home Base</h3>'))
-      .addTo(map.current);
+    // Only show KFRG in full trip mode
+    if (showFullTrip) {
+      new mapboxgl.Marker({ color: '#3b82f6' })
+        .setLngLat([KFRG.lng, KFRG.lat])
+        .setPopup(new mapboxgl.Popup().setHTML('<h3>KFRG - Home Base</h3>'))
+        .addTo(map.current);
+    }
 
     if (pickupAirport) {
       const decodedPickupName = decodeHtmlEntities(pickupAirport.name || '');
@@ -513,9 +532,9 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     }
 
 
-    if (segments && pickupAirport && destAirport) {
-      // Find and display ALL flight segments dynamically
-      const flightSegments = segments.filter(seg => seg.type === 'flight');
+    if (displaySegments && pickupAirport && destAirport) {
+      // Find and display flight segments from displaySegments
+      const flightSegments = displaySegments.filter(seg => seg.type === 'flight');
       
       console.log(`Found ${flightSegments.length} flight segments to display on map`);
       
@@ -548,8 +567,8 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         if (fromCoords && toCoords) {
           const midpoint = calculateMidpoint([fromCoords, toCoords]);
           if (midpoint) {
-            const segmentIndex = segments.indexOf(flightSeg);
-            const label = createSegmentLabel(flightSeg, segmentIndex, midpoint, flightIndex);
+            const displayIndex = displaySegments.indexOf(flightSeg);
+            const label = createSegmentLabel(flightSeg, displayIndex, midpoint, flightIndex);
             if (label) {
               label.addTo(map.current);
               console.log(`Added label for ${fromCode}→${toCode}: ${flightSeg.duration}min, ${flightSeg.distance}nm (flight ${flightIndex + 1})`);
@@ -561,10 +580,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       });
     }
 
-    if (segments) {
-      segments.forEach((segment, index) => {
+    if (displaySegments) {
+      displaySegments.forEach((segment, displayIndex) => {
         if (segment.polyline && segment.polyline.length > 0) {
-          console.log(`Rendering ${segment.type} segment ${index}:`, {
+          console.log(`Rendering ${segment.type} segment ${displayIndex}:`, {
             from: segment.from,
             to: segment.to,
             coordinateCount: segment.polyline.length,
@@ -572,7 +591,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             lastCoord: segment.polyline[segment.polyline.length - 1]
           });
           
-          const sourceId = `route-${segment.type}-${index + 1}`;
+          const sourceId = `route-${segment.type}-${displayIndex + 1}`;
           
           map.current?.addSource(sourceId, {
             type: 'geojson',
@@ -605,7 +624,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
           if (segment.type === 'ground') {
             const midpoint = calculateMidpoint(segment.polyline as [number, number][]);
             if (midpoint) {
-              const label = createSegmentLabel(segment, index, midpoint);
+              const label = createSegmentLabel(segment, displayIndex, midpoint);
               if (label) label.addTo(map.current);
             }
           }
@@ -613,8 +632,11 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       });
     }
 
+    // Calculate map bounds based on displaySegments
     const bounds = new mapboxgl.LngLatBounds();
-    bounds.extend([KFRG.lng, KFRG.lat]);
+    if (showFullTrip) {
+      bounds.extend([KFRG.lng, KFRG.lat]);
+    }
     if (pickupAirport) bounds.extend([pickupAirport.lng, pickupAirport.lat]);
     bounds.extend([origin.lon, origin.lat]);
     bounds.extend([destination.lon, destination.lat]);
@@ -785,9 +807,46 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         </div>
       ) : (
         <div className="space-y-6">
-          <Card className="border-2 border-primary/20">
-            <CardContent className="pt-6">
-              <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-4 border-b pb-6 mb-6">
+          {/* Calculate filtered segments and display values */}
+          {(() => {
+            const pickupHospitalIndex = tripResult.segments.findIndex(seg => 
+              seg.to.toLowerCase().includes('pickup hospital')
+            );
+            const deliveryHospitalIndex = tripResult.segments.findIndex(seg => 
+              seg.to.toLowerCase().includes('delivery hospital')
+            );
+            
+            const displaySegments = showFullTrip 
+              ? tripResult.segments 
+              : tripResult.segments.slice(pickupHospitalIndex, deliveryHospitalIndex + 1);
+            
+            const displayTotalTime = displaySegments.reduce((sum, seg) => sum + seg.duration, 0);
+            
+            const timeToPickup = tripResult.segments
+              .slice(0, pickupHospitalIndex + 1)
+              .reduce((sum, seg) => sum + seg.duration, 0);
+            
+            const effectiveDepartureTime = showFullTrip
+              ? new Date(
+                  departureDate.getFullYear(),
+                  departureDate.getMonth(),
+                  departureDate.getDate(),
+                  parseInt(departureTime.split(':')[0]),
+                  parseInt(departureTime.split(':')[1])
+                )
+              : new Date(
+                  departureDate.getFullYear(),
+                  departureDate.getMonth(),
+                  departureDate.getDate(),
+                  parseInt(departureTime.split(':')[0]),
+                  parseInt(departureTime.split(':')[1])
+                ).getTime() + timeToPickup * 60000;
+
+            return (
+              <>
+                <Card className="border-2 border-primary/20">
+                  <CardContent className="pt-6">
+                    <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-4 border-b pb-6 mb-6">
                 <div className="flex items-center gap-2">
                   <div className="text-base text-muted-foreground font-medium">From:</div>
                   <div className="space-y-0.5">
@@ -820,254 +879,246 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                     'h:mm a'
                   )}</div>
                 </div>
-              </div>
-              
-              <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-lg p-6">
-                <div className="grid md:grid-cols-3 gap-6">
-                  <div className="text-center space-y-3">
-                    <Clock className="w-8 h-8 mx-auto text-primary" />
-                    <div className="text-sm text-muted-foreground">Total Trip Time</div>
-                    <div className="text-4xl font-bold text-primary">
-                      {formatDuration(tripResult.totalTime)}
                     </div>
-                    <div className="space-y-1 pt-2 border-t border-primary/20">
-                      <div className="text-xs text-muted-foreground">
-                        Time to Pickup: <span className="font-semibold text-foreground">
-                          {formatDuration(
-                            tripResult.segments
-                              .slice(0, tripResult.segments.findIndex(seg => seg.to.toLowerCase().includes('pickup hospital')) + 1)
-                              .reduce((sum, seg) => sum + seg.duration, 0)
-                          )}
-                        </span>
+                    
+                    <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-lg p-6">
+                      <div className="grid md:grid-cols-3 gap-6">
+                        <div className="text-center space-y-3">
+                          <Clock className="w-8 h-8 mx-auto text-primary" />
+                          <div className="text-sm text-muted-foreground">
+                            {showFullTrip ? 'Total Trip Time' : 'Organ Transport Time'}
+                          </div>
+                          <div className="text-4xl font-bold text-primary">
+                            {formatDuration(displayTotalTime)}
+                          </div>
+                          <div className="space-y-1 pt-2 border-t border-primary/20">
+                            {showFullTrip && (
+                              <div className="text-xs text-muted-foreground">
+                                Time to Pickup: <span className="font-semibold text-foreground">
+                                  {formatDuration(timeToPickup)}
+                                </span>
+                              </div>
+                            )}
+                            <div className="text-xs text-muted-foreground">
+                              {showFullTrip ? 'Time to Delivery:' : 'Organ Transport Time:'} <span className="font-semibold text-foreground">
+                                {formatDuration(displayTotalTime)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-center space-y-3">
+                          <Target className="w-8 h-8 mx-auto text-green-600" />
+                          <div className="text-sm text-muted-foreground">Estimated Arrival</div>
+                          <div className="text-3xl font-bold">
+                            {format(tripResult.arrivalTime, 'h:mm a')}
+                          </div>
+                          <div className="space-y-1 pt-2 border-t border-green-600/20">
+                            <div className="text-xs text-muted-foreground">
+                              {showFullTrip ? 'Pickup:' : 'Departs:'} <span className="font-semibold text-foreground">
+                                {format(effectiveDepartureTime, 'h:mm a')}
+                              </span>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {showFullTrip ? 'Delivery:' : 'Arrives:'} <span className="font-semibold text-foreground">
+                                {format(tripResult.arrivalTime, 'h:mm a')}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-center space-y-2">
+                          <div className="flex items-center justify-center gap-2">
+                            <Plane className="w-8 h-8 text-blue-600" />
+                            {tripResult.chiefPilotApproval?.required && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger>
+                                    <AlertTriangle className="w-5 h-5 text-amber-500" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p className="text-sm">Chief pilot approval required</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </div>
+                          <div className="text-sm text-muted-foreground">Pickup Airport</div>
+                          <div className="text-2xl font-bold">
+                            {tripResult.route?.pickupAirport?.code || 'N/A'}
+                          </div>
+                          <div className="text-sm font-medium">
+                            {tripResult.route?.pickupAirport?.name ? decodeHtmlEntities(tripResult.route.pickupAirport.name) : ''}
+                          </div>
+                          <div className="text-xs text-muted-foreground max-w-[250px] mx-auto">
+                            {tripResult.route?.pickupAirport?.address || ''}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {tripResult.route?.pickupAirport?.distance_from_pickup !== undefined && 
+                              `${tripResult.route.pickupAirport.distance_from_pickup.toFixed(1)} nm from pickup`
+                            }
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        Time to Delivery: <span className="font-semibold text-foreground">
-                          {formatDuration(
-                            (() => {
-                              const pickupIndex = tripResult.segments.findIndex(seg => seg.to.toLowerCase().includes('pickup hospital'));
-                              return tripResult.segments
-                                .slice(pickupIndex + 1)
-                                .reduce((sum, seg) => sum + seg.duration, 0);
-                            })()
-                          )}
-                        </span>
+                    </div>
+                    
+                    <div className="mt-4 flex justify-end">
+                      <Button onClick={() => setTripResult(null)} variant="outline">
+                        New Calculation
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Toggle between Organ Transport Only and Full Trip */}
+                <div className="flex items-center justify-center gap-3 p-3 bg-muted/30 rounded-lg">
+                  <Label htmlFor="trip-view-toggle" className="text-sm font-medium">
+                    Organ Transport Only
+                  </Label>
+                  <Switch
+                    id="trip-view-toggle"
+                    checked={showFullTrip}
+                    onCheckedChange={setShowFullTrip}
+                  />
+                  <Label htmlFor="trip-view-toggle" className="text-sm font-medium">
+                    Full Trip
+                  </Label>
+                </div>
+
+                <div className="border-t pt-4 mt-4">
+                  <div className="mb-3">
+                    <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Time Analysis</h3>
+                  </div>
+                  
+                  <div className="grid md:grid-cols-3 gap-3">
+                    {/* Conservative Estimate */}
+                    <div className="border rounded-sm bg-card">
+                      <div className="px-4 py-3 border-b bg-muted/20">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Conservative</span>
+                          <div className="h-1 w-1 rounded-full bg-muted-foreground/40" />
+                        </div>
+                      </div>
+                      <div className="px-4 py-4">
+                        <div className="text-2xl font-semibold text-foreground">
+                          {Math.floor((displayTotalTime * 1.27) / 60)}h {Math.round((displayTotalTime * 1.27) % 60)}m
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Expected Estimate */}
+                    <div className="border-2 rounded-sm bg-card border-primary/40">
+                      <div className="px-4 py-3 border-b bg-primary/5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-primary uppercase tracking-wide">Expected</span>
+                          <div className="h-1 w-1 rounded-full bg-primary" />
+                        </div>
+                      </div>
+                      <div className="px-4 py-4">
+                        <div className="text-2xl font-semibold text-foreground">
+                          {Math.floor(displayTotalTime / 60)}h {Math.round(displayTotalTime % 60)}m
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Optimistic Estimate */}
+                    <div className="border rounded-sm bg-card">
+                      <div className="px-4 py-3 border-b bg-muted/20">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Optimistic</span>
+                          <div className="h-1 w-1 rounded-full bg-muted-foreground/40" />
+                        </div>
+                      </div>
+                      <div className="px-4 py-4">
+                        <div className="text-2xl font-semibold text-foreground">
+                          {Math.floor((displayTotalTime * 0.85) / 60)}h {Math.round((displayTotalTime * 0.85) % 60)}m
+                        </div>
                       </div>
                     </div>
                   </div>
-                  <div className="text-center space-y-3">
-                    <Target className="w-8 h-8 mx-auto text-green-600" />
-                    <div className="text-sm text-muted-foreground">Estimated Arrival</div>
-                    <div className="text-3xl font-bold">
-                      {format(tripResult.arrivalTime, 'h:mm a')}
-                    </div>
-                    <div className="space-y-1 pt-2 border-t border-green-600/20">
-                      <div className="text-xs text-muted-foreground">
-                        Pickup: <span className="font-semibold text-foreground">
-                          {format(
-                            new Date(departureDate.getFullYear(), departureDate.getMonth(), departureDate.getDate(), 
-                              parseInt(departureTime.split(':')[0]), parseInt(departureTime.split(':')[1])).getTime() + 
-                              tripResult.segments
-                                .slice(0, tripResult.segments.findIndex(seg => seg.to.toLowerCase().includes('pickup hospital')) + 1)
-                                .reduce((sum, seg) => sum + seg.duration, 0) * 60000,
-                            'h:mm a'
-                          )}
-                        </span>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Delivery: <span className="font-semibold text-foreground">
-                          {format(tripResult.arrivalTime, 'h:mm a')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-center space-y-2">
-                    <div className="flex items-center justify-center gap-2">
-                      <Plane className="w-8 h-8 text-blue-600" />
-                      {tripResult.chiefPilotApproval?.required && (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <AlertTriangle className="w-5 h-5 text-amber-500" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="text-sm">Chief pilot approval required</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      )}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Pickup Airport</div>
-                    <div className="text-2xl font-bold">
-                      {tripResult.route?.pickupAirport?.code || 'N/A'}
-                    </div>
-                    <div className="text-sm font-medium">
-                      {tripResult.route?.pickupAirport?.name ? decodeHtmlEntities(tripResult.route.pickupAirport.name) : ''}
-                    </div>
-                    <div className="text-xs text-muted-foreground max-w-[250px] mx-auto">
-                      {tripResult.route?.pickupAirport?.address || ''}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {tripResult.route?.pickupAirport?.distance_from_pickup !== undefined && 
-                        `${tripResult.route.pickupAirport.distance_from_pickup.toFixed(1)} nm from pickup`
-                      }
-                    </div>
-                  </div>
                 </div>
-              </div>
-              
-              <div className="mt-4 flex justify-end">
-                <Button onClick={() => setTripResult(null)} variant="outline">
-                  New Calculation
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
 
-
-
-          <div className="border-t pt-4 mt-4">
-            <div className="mb-3">
-              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Time Analysis</h3>
-            </div>
-            
-            <div className="grid md:grid-cols-3 gap-3">
-              {/* Conservative Estimate */}
-              <div className="border rounded-sm bg-card">
-                <div className="px-4 py-3 border-b bg-muted/20">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Conservative</span>
-                    <div className="h-1 w-1 rounded-full bg-muted-foreground/40" />
-                  </div>
-                </div>
-                <div className="px-4 py-4">
-                  <div className="text-2xl font-semibold text-foreground">
-                    {Math.floor((tripResult.totalTime * 1.27) / 60)}h {Math.round((tripResult.totalTime * 1.27) % 60)}m
-                  </div>
-                </div>
-              </div>
-
-              {/* Expected Estimate */}
-              <div className="border-2 rounded-sm bg-card border-primary/40">
-                <div className="px-4 py-3 border-b bg-primary/5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-primary uppercase tracking-wide">Expected</span>
-                    <div className="h-1 w-1 rounded-full bg-primary" />
-                  </div>
-                </div>
-                <div className="px-4 py-4">
-                  <div className="text-2xl font-semibold text-foreground">
-                    {Math.floor(tripResult.totalTime / 60)}h {Math.round(tripResult.totalTime % 60)}m
-                  </div>
-                </div>
-              </div>
-
-              {/* Optimistic Estimate */}
-              <div className="border rounded-sm bg-card">
-                <div className="px-4 py-3 border-b bg-muted/20">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Optimistic</span>
-                    <div className="h-1 w-1 rounded-full bg-muted-foreground/40" />
-                  </div>
-                </div>
-                <div className="px-4 py-4">
-                  <div className="text-2xl font-semibold text-foreground">
-                    {Math.floor((tripResult.totalTime * 0.85) / 60)}h {Math.round((tripResult.totalTime * 0.85) % 60)}m
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Leg-by-Leg Summary - Collapsible */}
-          <Collapsible defaultOpen={true}>
-            <Card>
-              <CollapsibleTrigger className="w-full">
-                <CardHeader className="pb-3 hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2 text-xl">
-                      <Plane className="w-6 h-6 text-primary" />
-                      Trip Breakdown
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">
-                        {tripResult.segments.length} segments • {formatDuration(tripResult.totalTime)}
-                      </span>
-                      <ChevronDown className="w-5 h-5 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                    </div>
-                  </div>
-                </CardHeader>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <CardContent>
-                  <div className="space-y-4">
-                    {tripResult.segments.map((segment, index) => {
-                      const isPickupHospital = segment.to.toLowerCase().includes('pickup hospital');
-                      const isDeliveryHospital = segment.to.toLowerCase().includes('delivery hospital');
-                      
-                      // Calculate cumulative time up to this segment's arrival
-                      const cumulativeMinutes = tripResult.segments
-                        .slice(0, index + 1)
-                        .reduce((sum, seg) => sum + seg.duration, 0);
-                      
-                      // Calculate arrival time for this segment
-                      const segmentArrivalTime = new Date(
-                        departureDate.getFullYear(), 
-                        departureDate.getMonth(), 
-                        departureDate.getDate(), 
-                        parseInt(departureTime.split(':')[0]), 
-                        parseInt(departureTime.split(':')[1])
-                      ).getTime() + cumulativeMinutes * 60000;
+                {/* Leg-by-Leg Summary - Collapsible */}
+                <Collapsible defaultOpen={true}>
+                  <Card>
+                    <CollapsibleTrigger className="w-full">
+                      <CardHeader className="pb-3 hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="flex items-center gap-2 text-xl">
+                            <Plane className="w-6 h-6 text-primary" />
+                            Trip Breakdown
+                          </CardTitle>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">
+                              {displaySegments.length} segments • {formatDuration(displayTotalTime)}
+                            </span>
+                            <ChevronDown className="w-5 h-5 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                          </div>
+                        </div>
+                      </CardHeader>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <CardContent>
+                        <div className="space-y-4">
+                          {displaySegments.map((segment, displayIndex) => {
+                            const originalIndex = tripResult.segments.indexOf(segment);
+                            const isPickupHospital = segment.to.toLowerCase().includes('pickup hospital');
+                            const isDeliveryHospital = segment.to.toLowerCase().includes('delivery hospital');
+                            
+                            // Calculate cumulative time from effective departure
+                            const cumulativeMinutesFromStart = showFullTrip
+                              ? tripResult.segments
+                                  .slice(0, originalIndex + 1)
+                                  .reduce((sum, seg) => sum + seg.duration, 0)
+                              : displaySegments
+                                  .slice(0, displayIndex + 1)
+                                  .reduce((sum, seg) => sum + seg.duration, 0);
+                            
+                            // Calculate arrival time for this segment
+                            const segmentArrivalTime = typeof effectiveDepartureTime === 'number'
+                              ? effectiveDepartureTime + cumulativeMinutesFromStart * 60000
+                              : effectiveDepartureTime.getTime() + cumulativeMinutesFromStart * 60000;
                       
                       const arrivalDate = new Date(segmentArrivalTime);
                       const isSameDay = arrivalDate.getDate() === departureDate.getDate() && 
                                        arrivalDate.getMonth() === departureDate.getMonth() &&
                                        arrivalDate.getFullYear() === departureDate.getFullYear();
                       
-                      // Calculate time to pickup for subtotal after pickup hospital segment
-                      let timeToPickupSubtotal = null;
-                      if (isPickupHospital) {
-                        const timeToPickup = tripResult.segments
-                          .slice(0, index + 1)
-                          .reduce((sum, seg) => sum + seg.duration, 0);
-                        timeToPickupSubtotal = (
-                          <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg my-3">
-                            <div className="flex items-center gap-2">
-                              <Timer className="w-4 h-4 text-muted-foreground" />
-                              <span className="font-medium text-sm">Time to Pick Up</span>
-                            </div>
-                            <div className="text-base font-semibold text-foreground">
-                              {formatDuration(timeToPickup)}
-                            </div>
-                          </div>
-                        );
-                      }
+                            // Only show "Time to Pick Up" in full trip mode
+                            let timeToPickupSubtotal = null;
+                            if (isPickupHospital && showFullTrip) {
+                              timeToPickupSubtotal = (
+                                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg my-3">
+                                  <div className="flex items-center gap-2">
+                                    <Timer className="w-4 h-4 text-muted-foreground" />
+                                    <span className="font-medium text-sm">Time to Pick Up</span>
+                                  </div>
+                                  <div className="text-base font-semibold text-foreground">
+                                    {formatDuration(timeToPickup)}
+                                  </div>
+                                </div>
+                              );
+                            }
+                            
+                            // Show delivery subtotal with appropriate label
+                            let pickupToDeliverySubtotal = null;
+                            if (isDeliveryHospital) {
+                              const label = showFullTrip 
+                                ? 'Time from Pick Up to Delivery' 
+                                : 'Total Organ Transport Time';
+                              pickupToDeliverySubtotal = (
+                                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg my-3">
+                                  <div className="flex items-center gap-2">
+                                    <Timer className="w-4 h-4 text-muted-foreground" />
+                                    <span className="font-medium text-sm">{label}</span>
+                                  </div>
+                                  <div className="text-base font-semibold text-foreground">
+                                    {formatDuration(displayTotalTime)}
+                                  </div>
+                                </div>
+                              );
+                            }
                       
-                      // Calculate time from pickup to delivery for subtotal after delivery hospital segment
-                      let pickupToDeliverySubtotal = null;
-                      if (isDeliveryHospital) {
-                        const pickupIndex = tripResult.segments.findIndex(seg => 
-                          seg.to.toLowerCase().includes('pickup hospital')
-                        );
-                        if (pickupIndex >= 0) {
-                          const timeToDeliver = tripResult.segments
-                            .slice(pickupIndex + 1, index + 1)
-                            .reduce((sum, seg) => sum + seg.duration, 0);
-                          pickupToDeliverySubtotal = (
-                            <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg my-3">
-                              <div className="flex items-center gap-2">
-                                <Timer className="w-4 h-4 text-muted-foreground" />
-                                <span className="font-medium text-sm">Time from Pick Up to Delivery</span>
-                              </div>
-                              <div className="text-base font-semibold text-foreground">
-                                {formatDuration(timeToDeliver)}
-                              </div>
-                            </div>
-                          );
-                        }
-                      }
-                      
-                      return (
-                        <React.Fragment key={index}>
+                            return (
+                              <React.Fragment key={displayIndex}>
                           <div 
                             className="p-4 rounded-lg border border-border bg-background hover:bg-muted/50 transition-all"
                             style={{
@@ -1147,45 +1198,48 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
             </Card>
           </Collapsible>
 
-          {/* Interactive Map */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <MapPin className="w-6 h-6 text-primary" />
-                Route Map
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 relative">
-              <div ref={mapContainer} className="h-[600px] w-full rounded-b-lg" />
-              
-              {/* Map Legend */}
-              <div className="absolute bottom-4 right-4 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm p-3 rounded-lg shadow-lg text-xs z-10 border border-border">
-                <div className="font-semibold mb-2 text-foreground">Route Legend</div>
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-blue-500 flex-shrink-0"></div>
-                    <span className="text-foreground">KFRG Home Base</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></div>
-                    <span className="text-foreground">Pickup Location</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></div>
-                    <span className="text-foreground">Delivery Location</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-0.5 border-t-2 border-dashed border-blue-500 flex-shrink-0"></div>
-                    <span className="text-foreground">Flight Path</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-0.5 bg-green-500 flex-shrink-0"></div>
-                    <span className="text-foreground">Ground Transport</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                {/* Interactive Map */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-xl">
+                      <MapPin className="w-6 h-6 text-primary" />
+                      Route Map
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0 relative">
+                    <div ref={mapContainer} className="h-[600px] w-full rounded-b-lg" />
+                    
+                    {/* Map Legend */}
+                    <div className="absolute bottom-4 right-4 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm p-3 rounded-lg shadow-lg text-xs z-10 border border-border">
+                      <div className="font-semibold mb-2 text-foreground">Route Legend</div>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-blue-500 flex-shrink-0"></div>
+                          <span className="text-foreground">KFRG Home Base</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></div>
+                          <span className="text-foreground">Pickup Location</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></div>
+                          <span className="text-foreground">Delivery Location</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-0.5 border-t-2 border-dashed border-blue-500 flex-shrink-0"></div>
+                          <span className="text-foreground">Flight Path</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-0.5 bg-green-500 flex-shrink-0"></div>
+                          <span className="text-foreground">Ground Transport</span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            );
+          })()}
         </div>
       )}
 
