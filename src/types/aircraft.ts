@@ -19,15 +19,15 @@ export interface AircraftConfig {
   reserveFuel: number; // gallons (legal reserve)
   // Weight & balance
   maxTakeoffWeight: number; // pounds (MTOW)
-  // Payload & Range (optional - for Vision Jet)
+  // Payload & Range (optional - for PC24)
   payloadRangeFormula?: {
-    constant: number; // 1600 for SF50
+    constant: number; // 1600 for PC24
     description: string; // "Payload (lbs) + Range (nm) = 1600"
   };
 }
 
 export interface FlightResult {
-  aircraft: 'SR22' | 'VisionJet';
+  aircraft: 'SR22' | 'PC24';
   time: number; // minutes
   fuel: number; // gallons
   cost: number; // total cost
@@ -40,10 +40,10 @@ export interface FlightResult {
 export interface ComparisonResult {
   sr22: FlightResult;
   jet: FlightResult;
-  winner: 'SR22' | 'VisionJet' | 'tie';
+  winner: 'SR22' | 'PC24' | 'tie';
   timeSaved: number; // minutes
   costDifference: number;
-  payloadRangeWarning?: string; // Warning about payload/range for Vision Jet
+  payloadRangeWarning?: string; // Warning about payload/range for PC24
   isCloseCall?: boolean; // True when time is within 30min OR SR22 is 60%+ cheaper
 }
 
@@ -89,15 +89,15 @@ export const DEFAULT_CONFIG = {
     // Fuel planning
     taxiFuel: 6, // gallons (busy field default)
     contingencyFuelMin: 10, // gallons (floor)
-    reserveFuel: 40, // gallons (45 min at long range cruise)
-    // Weight & balance
-    maxTakeoffWeight: 6000, // pounds (MTOW)
-    // Payload & Range rule for SF50
-    payloadRangeFormula: {
-      constant: 1600,
-      description: "Payload (lbs) + Range (nm) = 1600. With 800 lbs, expect ~800 nm with reserves. With 1000 lbs (5 pax + bags), expect ~600 nm."
-    }
-  },
+        reserveFuel: 40, // gallons (45 min at long range cruise)
+        // Weight & balance
+        maxTakeoffWeight: 6000, // pounds (MTOW)
+        // Payload & Range rule for PC24
+        payloadRangeFormula: {
+          constant: 1600,
+          description: "Payload (lbs) + Range (nm) = 1600. With 800 lbs, expect ~800 nm with reserves. With 1000 lbs (5 pax + bags), expect ~600 nm."
+        }
+      },
   reserveMinutes: 45,
   timeValueDefault: 250,
   headwindKts: 5, // Conservative headwind assumption
@@ -151,19 +151,19 @@ export const DEFAULT_CONFIG = {
     rangeExplorer: { public: true, admin: true },
     leasebackCalculator: { public: false, admin: true },
   },
-  // SF50 Vision Jet Ownership Configuration
-  sf50Ownership: {
+  // PC24 Ownership Configuration
+  pc24Ownership: {
     // Purchase & Financing Defaults
     defaultAircraftCost: 3800000,
     defaultDownPaymentPercent: 100,
     defaultInterestRate: 6.0,
     defaultLoanTermYears: 20,
-    defaultResalePercent: 95,      // SF50 specific resale percentage
+    defaultResalePercent: 95,      // PC24 specific resale percentage
     // Fixed Monthly Costs
-    hangarCost: 3000,          // Only hangar for SF50, no tiedown option
+    hangarCost: 3000,          // Only hangar for PC24, no tiedown option
     insuranceAnnual: 48000,    // Professionally flown insurance
     managementFee: 2500,
-    subscriptions: 0,          // No subscriptions for SF50
+    subscriptions: 0,          // No subscriptions for PC24
     cleaningMonthly: 500,
     pilotServicesAnnual: 100000, // $100k salary (editable by admin)
     // Variable Hourly Costs
@@ -199,7 +199,7 @@ export const DEFAULT_CONFIG = {
       label: '3 years or 600 flight hours',
     },
   },
-  // Owner's Fleet Configuration (identical to SF50 but different aircraft cost)
+  // Owner's Fleet Configuration (identical to PC24 but different aircraft cost)
   ownersFleetOwnership: {
     // Purchase & Financing Defaults
     defaultAircraftCost: 1250000,
@@ -214,11 +214,11 @@ export const DEFAULT_CONFIG = {
     cleaningMonthly: 500,
     pilotServicesAnnual: 100000, // $100k salary (editable by admin)
     professionalServicesAnnual: 30000, // Legal, Financial & Administration
-    // SF50 Variable Hourly Costs
-    sf50JetstreamHourly: 625,      // JetStream prepaid program
-    sf50FuelBurnPerHour: 80,       // gallons/hour
-    sf50FuelPricePerGallon: 6.50,
-    sf50PilotServicesHourly: 200,  // Hourly rate when owner flown
+    // PC24 Variable Hourly Costs
+    pc24JetstreamHourly: 625,      // JetStream prepaid program
+    pc24FuelBurnPerHour: 80,       // gallons/hour
+    pc24FuelPricePerGallon: 6.50,
+    pc24PilotServicesHourly: 200,  // Hourly rate when owner flown
     // SR22 Variable Hourly Costs
     sr22MaintenancePerHour: 110,   // Direct maintenance cost for SR22
     sr22FuelBurnPerHour: 18.5,     // gallons/hour
@@ -235,7 +235,7 @@ export const DEFAULT_CONFIG = {
 export type ConfigType = typeof DEFAULT_CONFIG & {
   leaseback?: typeof DEFAULT_CONFIG.sr22Leaseback;
   sr20?: typeof DEFAULT_CONFIG.sr20Leaseback;
-  sf50?: typeof DEFAULT_CONFIG.sf50Ownership;
+  pc24?: typeof DEFAULT_CONFIG.pc24Ownership;
   ownersFleet?: typeof DEFAULT_CONFIG.ownersFleetOwnership;
   jetstreamPackages?: typeof DEFAULT_CONFIG.jetstreamPackages;
 };

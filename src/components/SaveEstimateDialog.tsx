@@ -35,7 +35,7 @@ interface SaveEstimateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   calculatorValues: {
-    aircraftType: 'SR20' | 'SR22' | 'SF50' | 'OwnersFleet';
+    aircraftType: 'SR20' | 'SR22' | 'PC24' | 'OwnersFleet';
     ownershipShare: 1 | 0.5 | 0.333 | 0.25;
     aircraftCost: number;
     downPaymentPercent: number;
@@ -56,7 +56,7 @@ interface SaveEstimateDialogProps {
     rentalRevenueRate: number;
     ownerUsageRate: number;
     pilotServicesRate: number;
-    // SF50-specific fields
+    // PC24-specific fields
     cleaningMonthly?: number;
     pilotServicesAnnual?: number;
     jetstreamHourly?: number;
@@ -65,11 +65,11 @@ interface SaveEstimateDialogProps {
     fuelPricePerGallon?: number;
     pilotServicesHourly?: number;
     pilotPoolContribution?: number;
-    sf50OwnerFlown?: boolean;
+    pc24OwnerFlown?: boolean;
     aircraftCostBase?: number;
     includeJetstreamReserve?: boolean;
   };
-  ownersFleetHours?: { sr22HoursMonth: number; sf50HoursMonth: number; sr22PilotServicesHours: number };
+  ownersFleetHours?: { sr22HoursMonth: number; pc24HoursMonth: number; sr22PilotServicesHours: number };
 }
 
 export function SaveEstimateDialog({ open, onOpenChange, calculatorValues, ownersFleetHours }: SaveEstimateDialogProps) {
@@ -136,7 +136,7 @@ export function SaveEstimateDialog({ open, onOpenChange, calculatorValues, owner
         interest_rate: n(calculatorValues.interestRate),
         loan_term_years: nInt(calculatorValues.loanTermYears),
         owner_hours: nInt(calculatorValues.ownerHours, 0),
-        rental_hours: (calculatorValues.aircraftType === 'SF50' || calculatorValues.aircraftType === 'OwnersFleet')
+        rental_hours: (calculatorValues.aircraftType === 'PC24' || calculatorValues.aircraftType === 'OwnersFleet')
           ? 0
           : nInt(calculatorValues.rentalHours, 0),
         pilot_services_hours: nInt(calculatorValues.pilotServicesHours, 0),
@@ -152,7 +152,7 @@ export function SaveEstimateDialog({ open, onOpenChange, calculatorValues, owner
         rental_revenue_rate: n(calculatorValues.rentalRevenueRate, 0),
         owner_usage_rate: n(calculatorValues.ownerUsageRate, 0),
         pilot_services_rate: n(calculatorValues.pilotServicesRate, 0),
-        // SF50-specific / Owner's Fleet fields
+        // PC24-specific / Owner's Fleet fields
         cleaning_monthly: n(calculatorValues.cleaningMonthly, 0),
         pilot_services_annual: n(calculatorValues.pilotServicesAnnual, 0),
         jetstream_hourly: n(calculatorValues.jetstreamHourly, 0),
@@ -161,7 +161,7 @@ export function SaveEstimateDialog({ open, onOpenChange, calculatorValues, owner
         fuel_price_per_gallon: n(calculatorValues.fuelPricePerGallon, 6.5),
         pilot_services_hourly: n(calculatorValues.pilotServicesHourly, 200),
         pilot_pool_contribution: n(calculatorValues.pilotPoolContribution, 25000),
-        sf50_owner_flown: Boolean(calculatorValues.sf50OwnerFlown ?? false),
+        pc24_owner_flown: Boolean(calculatorValues.pc24OwnerFlown ?? false),
         aircraft_cost_base: n(calculatorValues.aircraftCostBase, 3500000),
         include_jetstream_reserve: Boolean(calculatorValues.includeJetstreamReserve ?? false),
       };
@@ -171,7 +171,7 @@ export function SaveEstimateDialog({ open, onOpenChange, calculatorValues, owner
         ? {
             ...basePayload,
             ownersfleet_sr22_hours: nInt(ownersFleetHours.sr22HoursMonth, 0),
-            ownersfleet_sf50_hours: nInt(ownersFleetHours.sf50HoursMonth, 0),
+            ownersfleet_pc24_hours: nInt(ownersFleetHours.pc24HoursMonth, 0),
             ownersfleet_sr22_pilot_services_hours: nInt(ownersFleetHours.sr22PilotServicesHours, 0),
           }
         : basePayload;

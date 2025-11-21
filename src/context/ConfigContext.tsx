@@ -28,7 +28,7 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
-      // Ensure leasebackCalculator tab, sr22Leaseback, sf50Ownership, and ownersFleetOwnership config exists in loaded config
+      // Ensure leasebackCalculator tab, sr22Leaseback, pc24Ownership, and ownersFleetOwnership config exists in loaded config
       const configWithDefaults = {
         ...loadedConfig,
         ownershipShare: loadedConfig.ownershipShare ?? DEFAULT_CONFIG.ownershipShare,
@@ -40,9 +40,9 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
           ...DEFAULT_CONFIG.sr22Leaseback,
           ...loadedConfig.sr22Leaseback,
         },
-        sf50Ownership: {
-          ...DEFAULT_CONFIG.sf50Ownership,
-          ...loadedConfig.sf50Ownership,
+        pc24Ownership: {
+          ...DEFAULT_CONFIG.pc24Ownership,
+          ...loadedConfig.pc24Ownership,
         },
         ownersFleetOwnership: {
           ...DEFAULT_CONFIG.ownersFleetOwnership,
@@ -82,9 +82,9 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
         ...DEFAULT_CONFIG.sr22Leaseback,
         ...loadedConfig.sr22Leaseback,
       },
-      sf50Ownership: {
-        ...DEFAULT_CONFIG.sf50Ownership,
-        ...loadedConfig.sf50Ownership,
+      pc24Ownership: {
+        ...DEFAULT_CONFIG.pc24Ownership,
+        ...loadedConfig.pc24Ownership,
       },
       ownersFleetOwnership: {
         ...DEFAULT_CONFIG.ownersFleetOwnership,
