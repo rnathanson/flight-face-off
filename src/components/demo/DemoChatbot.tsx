@@ -10,6 +10,32 @@ import { Send, Bot, User, Sparkles, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { TripData } from '@/types/trip';
 
+// Fallback formatter: adds paragraph breaks if AI returns long unbroken text
+const formatLongText = (text: string): string => {
+  // If already has blank lines or is short, return as-is
+  if (text.includes('\n\n') || text.length < 300) return text;
+  
+  // Split on sentence boundaries and insert blank lines every 2-3 sentences
+  const sentences = text.split(/([.!?])\s+/);
+  let formatted = '';
+  let sentenceCount = 0;
+  
+  for (let i = 0; i < sentences.length; i++) {
+    formatted += sentences[i];
+    
+    // If this is a punctuation mark, increment counter
+    if (sentences[i].match(/[.!?]/)) {
+      sentenceCount++;
+      // Add blank line every 2-3 sentences
+      if (sentenceCount % 3 === 0 && i < sentences.length - 1) {
+        formatted += '\n\n';
+      }
+    }
+  }
+  
+  return formatted;
+};
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -246,7 +272,9 @@ export const DemoChatbot = ({ tripData }: DemoChatbotProps) => {
                           >
                             {msg.role === 'assistant' ? (
                               <div className="text-sm prose prose-sm max-w-none dark:prose-invert prose-p:my-4 prose-p:leading-relaxed prose-ul:my-4 prose-li:my-1.5 prose-headings:my-4 prose-headings:font-semibold prose-strong:font-bold prose-strong:text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-                                <ReactMarkdown remarkPlugins={[remarkBreaks]}>{msg.content}</ReactMarkdown>
+                                <ReactMarkdown remarkPlugins={[remarkBreaks]}>
+                                  {formatLongText(msg.content)}
+                                </ReactMarkdown>
                               </div>
                             ) : (
                               <p className="text-sm whitespace-pre-line">{msg.content}</p>
