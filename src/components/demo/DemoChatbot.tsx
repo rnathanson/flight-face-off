@@ -244,7 +244,7 @@ export const DemoChatbot = ({ tripData }: DemoChatbotProps) => {
                             }`}
                           >
                             {msg.role === 'assistant' ? (
-                              <div className="text-sm prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-ul:my-2 prose-li:my-1 prose-headings:my-2">
+                              <div className="text-sm prose prose-sm max-w-none dark:prose-invert prose-p:my-3 prose-ul:my-3 prose-li:my-1 prose-headings:my-3 prose-headings:font-semibold prose-strong:font-bold [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
                                 <ReactMarkdown>{msg.content}</ReactMarkdown>
                               </div>
                             ) : (
