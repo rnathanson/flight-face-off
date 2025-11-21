@@ -439,9 +439,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
       seg.to.toLowerCase().includes('delivery hospital')
     );
     
+    // In organ-only mode, start AFTER pickup hospital (organ is already there)
     const displaySegments = showFullTrip 
       ? result.segments 
-      : result.segments.slice(pickupHospitalIndex, deliveryHospitalIndex + 1);
+      : result.segments.slice(pickupHospitalIndex + 1, deliveryHospitalIndex + 1);
 
     console.log('Updating map with trip result:', {
       segmentCount: result.segments?.length,
@@ -816,9 +817,10 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
               seg.to.toLowerCase().includes('delivery hospital')
             );
             
+            // In organ-only mode, start AFTER pickup hospital (organ is already there)
             const displaySegments = showFullTrip 
               ? tripResult.segments 
-              : tripResult.segments.slice(pickupHospitalIndex, deliveryHospitalIndex + 1);
+              : tripResult.segments.slice(pickupHospitalIndex + 1, deliveryHospitalIndex + 1);
             
             const displayTotalTime = displaySegments.reduce((sum, seg) => sum + seg.duration, 0);
             
