@@ -367,6 +367,7 @@ export type Database = {
           ground_handling_time_min: number
           id: string
           ifr_requires_instrument_approach: boolean
+          long_leg_time_factor: number | null
           max_crosswind_kt: number | null
           max_landing_weight_lbs: number | null
           max_range_nm: number
@@ -406,6 +407,7 @@ export type Database = {
           ground_handling_time_min?: number
           id?: string
           ifr_requires_instrument_approach?: boolean
+          long_leg_time_factor?: number | null
           max_crosswind_kt?: number | null
           max_landing_weight_lbs?: number | null
           max_range_nm?: number
@@ -445,6 +447,7 @@ export type Database = {
           ground_handling_time_min?: number
           id?: string
           ifr_requires_instrument_approach?: boolean
+          long_leg_time_factor?: number | null
           max_crosswind_kt?: number | null
           max_landing_weight_lbs?: number | null
           max_range_nm?: number
