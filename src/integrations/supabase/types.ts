@@ -188,11 +188,12 @@ export type Database = {
           notes: string | null
           owner_hours: number
           owner_usage_rate: number
-          ownersfleet_sf50_hours: number
+          ownersfleet_pc24_hours: number
           ownersfleet_sr22_hours: number
           ownersfleet_sr22_pilot_services_hours: number
           ownership_share: number
           parking_type: string
+          pc24_owner_flown: boolean | null
           pilot_pool_contribution: number | null
           pilot_services_annual: number | null
           pilot_services_hourly: number | null
@@ -200,7 +201,6 @@ export type Database = {
           pilot_services_rate: number
           rental_hours: number
           rental_revenue_rate: number
-          sf50_owner_flown: boolean | null
           status: string
           subscriptions: number
           tci_training: number
@@ -238,11 +238,12 @@ export type Database = {
           notes?: string | null
           owner_hours: number
           owner_usage_rate: number
-          ownersfleet_sf50_hours?: number
+          ownersfleet_pc24_hours?: number
           ownersfleet_sr22_hours?: number
           ownersfleet_sr22_pilot_services_hours?: number
           ownership_share?: number
           parking_type: string
+          pc24_owner_flown?: boolean | null
           pilot_pool_contribution?: number | null
           pilot_services_annual?: number | null
           pilot_services_hourly?: number | null
@@ -250,7 +251,6 @@ export type Database = {
           pilot_services_rate: number
           rental_hours: number
           rental_revenue_rate: number
-          sf50_owner_flown?: boolean | null
           status?: string
           subscriptions: number
           tci_training: number
@@ -288,11 +288,12 @@ export type Database = {
           notes?: string | null
           owner_hours?: number
           owner_usage_rate?: number
-          ownersfleet_sf50_hours?: number
+          ownersfleet_pc24_hours?: number
           ownersfleet_sr22_hours?: number
           ownersfleet_sr22_pilot_services_hours?: number
           ownership_share?: number
           parking_type?: string
+          pc24_owner_flown?: boolean | null
           pilot_pool_contribution?: number | null
           pilot_services_annual?: number | null
           pilot_services_hourly?: number | null
@@ -300,7 +301,6 @@ export type Database = {
           pilot_services_rate?: number
           rental_hours?: number
           rental_revenue_rate?: number
-          sf50_owner_flown?: boolean | null
           status?: string
           subscriptions?: number
           tci_training?: number

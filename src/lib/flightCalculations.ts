@@ -114,20 +114,20 @@ export function calculateCommercialFlight(distance: number, passengers: number, 
   };
 }
 
-// Validate payload/range for Vision Jet
+// Validate payload/range for PC24
 function validatePayloadRange(
   payload: number,
   distance: number,
-  aircraft: 'SR22' | 'VisionJet',
+  aircraft: 'SR22' | 'PC24',
   config: AircraftConfig
 ): { isRealistic: boolean; warning?: string } {
-  if (aircraft === 'VisionJet' && config.payloadRangeFormula) {
+  if (aircraft === 'PC24' && config.payloadRangeFormula) {
     const sum = payload + distance;
     const buffer = 50; // 50 nm buffer
     if (sum > config.payloadRangeFormula.constant + buffer) {
       return {
         isRealistic: false,
-        warning: `Mission may require tech stop. Payload (${payload} lbs) + Range (${Math.round(distance)} nm) = ${sum}, exceeds SF50 rule of thumb (~${config.payloadRangeFormula.constant}).`
+        warning: `Mission may require tech stop. Payload (${payload} lbs) + Range (${Math.round(distance)} nm) = ${sum}, exceeds PC24 rule of thumb (~${config.payloadRangeFormula.constant}).`
       };
     }
   }
@@ -172,7 +172,7 @@ export function calculateAvailableFuel(
 export function calculateFlight(
   distance: number,
   config: AircraftConfig,
-  aircraft: 'SR22' | 'VisionJet',
+  aircraft: 'SR22' | 'PC24',
   passengers: number,
   bags: number,
   headwindKts: number = 5,
@@ -282,7 +282,7 @@ export function compareMissions(
   taxiTimePerAirportMin: number = 0
 ): ComparisonResult {
   const sr22 = calculateFlight(distance, sr22Config, 'SR22', passengers, bags, headwindKts, taxiTimePerAirportMin);
-  const jet = calculateFlight(distance, jetConfig, 'VisionJet', passengers, bags, headwindKts, taxiTimePerAirportMin);
+  const jet = calculateFlight(distance, jetConfig, 'PC24', passengers, bags, headwindKts, taxiTimePerAirportMin);
   
   const timeSaved = sr22.time - jet.time;
   const costDifference = jet.cost - sr22.cost;
@@ -297,15 +297,15 @@ export function compareMissions(
   const sr22WeightOk = sr22AvailableFuel > 10; // Need at least 10 gallons
   const jetWeightOk = jetAvailableFuel > 10;
   
-  // Validate payload/range for Vision Jet
+  // Validate payload/range for PC24
   const payload = (passengers * jetConfig.avgPersonWeight) + (bags * jetConfig.avgBagWeight);
-  const payloadRangeCheck = validatePayloadRange(payload, distance, 'VisionJet', jetConfig);
+  const payloadRangeCheck = validatePayloadRange(payload, distance, 'PC24', jetConfig);
   
-  let winner: 'SR22' | 'VisionJet' | 'tie' = 'tie';
+  let winner: 'SR22' | 'PC24' | 'tie' = 'tie';
   
   // If one can't fit due to capacity or weight, the other wins
   if ((!sr22CanFit || !sr22WeightOk) && (jetCanFit && jetWeightOk)) {
-    winner = 'VisionJet';
+    winner = 'PC24';
   } else if ((sr22CanFit && sr22WeightOk) && (!jetCanFit || !jetWeightOk)) {
     winner = 'SR22';
   } else if (sr22CanFit && jetCanFit && sr22WeightOk && jetWeightOk) {
@@ -324,13 +324,13 @@ export function compareMissions(
     else if (costDifference > 800 && timeSaved < 20) {
       winner = 'SR22';
     }
-    // Vision Jet wins if it saves considerable time (>20% faster or >45 min)
+    // PC24 wins if it saves considerable time (>20% faster or >45 min)
     else if (timeSavingsPercent > 20 || timeSaved > 45) {
-      winner = 'VisionJet';
+      winner = 'PC24';
     } 
-    // Vision Jet wins if it requires fewer stops (big operational advantage)
+    // PC24 wins if it requires fewer stops (big operational advantage)
     else if (jet.stops < sr22.stops) {
-      winner = 'VisionJet';
+      winner = 'PC24';
     }
     // SR22 wins if same stops but much cheaper
     else if (sr22.stops === jet.stops && costDifference > 500) {

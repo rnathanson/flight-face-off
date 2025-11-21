@@ -21,7 +21,7 @@ interface FinancingInfoDialogProps {
   interestRate: number;
   loanTermYears: number;
   ownershipShare: 1 | 0.5 | 0.333 | 0.25;
-  aircraftType: 'SR20' | 'SR22' | 'SF50' | 'OwnersFleet';
+  aircraftType: 'SR20' | 'SR22' | 'PC24' | 'OwnersFleet';
   disableShareSelection?: boolean;
   onApplyValues?: (values: {
     downPaymentPercent: number;
@@ -52,8 +52,8 @@ export function FinancingInfoDialog({
   const [interestRate, setInterestRate] = useState(6);
   const [loanTermYears, setLoanTermYears] = useState(15);
   const [ownershipShare, setOwnershipShare] = useState<1 | 0.5 | 0.333 | 0.25>(initialOwnershipShare);
-  // Default resale percent: 95% for SF50, 85% for others
-  const defaultResalePercent = aircraftType === 'SF50' ? 95 : 85;
+  // Default resale percent: 95% for PC24, 85% for others
+  const defaultResalePercent = aircraftType === 'PC24' ? 95 : 85;
   const [resalePercent, setResalePercent] = useState(defaultResalePercent);
   const [isEditingResale, setIsEditingResale] = useState(false);
   
@@ -66,7 +66,7 @@ export function FinancingInfoDialog({
       setLoanTermYears(15); // Always default to 15 years
       setOwnershipShare(initialOwnershipShare); // Use current share from calculator
       // Set default resale percent based on aircraft type
-      const defaultResale = aircraftType === 'SF50' ? 95 : 85;
+      const defaultResale = aircraftType === 'PC24' ? 95 : 85;
       setResalePercent(defaultResale);
       setIsEditingResale(false);
     }
@@ -150,7 +150,7 @@ export function FinancingInfoDialog({
               {!disableShareSelection && (
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">Ownership Share</Label>
-                  <div className={`grid gap-2 ${aircraftType === 'SF50' ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                  <div className={`grid gap-2 ${aircraftType === 'PC24' ? 'grid-cols-3' : 'grid-cols-2'}`}>
                     <Button
                       type="button"
                       size="sm"
@@ -169,7 +169,7 @@ export function FinancingInfoDialog({
                     >
                       1/2
                     </Button>
-                    {aircraftType === 'SF50' && (
+                    {aircraftType === 'PC24' && (
                       <Button
                         type="button"
                         size="sm"

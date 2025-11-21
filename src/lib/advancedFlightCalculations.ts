@@ -79,14 +79,15 @@ export function calculateRealisticFlightTime(
   // Calculate climb segment
   const climbTimeMin = cruiseAltitudeFt / config.climb_rate_fpm;
   
-  // Average speed during climb (acceleration from 0 to cruise)
-  // Below 10,000 ft: limited to 250 KIAS
-  // Above 10,000 ft: accelerating to cruise speed
-  const timeBelow10k = Math.min(climbTimeMin, 10000 / config.climb_rate_fpm);
+  // PC24-specific climb profile: 100nm in 17 minutes to FL450
+  // Below 10,000 ft: ~3.5 minutes
+  // Above 10,000 ft: ~13.5 minutes
+  const timeBelow10k = Math.min(climbTimeMin, 10000 / 3000); // ~3.5 min at 3000 fpm
   const timeAbove10k = Math.max(0, climbTimeMin - timeBelow10k);
   
-  const avgSpeedBelow10k = config.speed_below_fl100_kias * 0.7; // Average during acceleration
-  const avgSpeedAbove10k = (config.speed_above_fl100_kias + config.cruise_speed_ktas) / 2;
+  // PC24 climbs at higher speeds than generic aircraft
+  const avgSpeedBelow10k = 180; // Faster acceleration
+  const avgSpeedAbove10k = 400; // High-speed climb
   
   const climbDistanceBelow10k = (avgSpeedBelow10k * timeBelow10k) / 60;
   const climbDistanceAbove10k = (avgSpeedAbove10k * timeAbove10k) / 60;
@@ -95,12 +96,15 @@ export function calculateRealisticFlightTime(
   // Calculate descent segment
   const descentTimeMin = cruiseAltitudeFt / config.descent_rate_fpm;
   
-  // Average speed during descent
-  const timeDescentAbove10k = Math.min(descentTimeMin, (cruiseAltitudeFt - 10000) / config.descent_rate_fpm);
+  // PC24-specific descent profile: 150nm in 22 minutes from FL450
+  // Above 10,000 ft: ~17 minutes
+  // Below 10,000 ft: ~5 minutes
+  const timeDescentAbove10k = Math.min(descentTimeMin, (cruiseAltitudeFt - 10000) / 2060);
   const timeDescentBelow10k = Math.max(0, descentTimeMin - timeDescentAbove10k);
   
-  const avgSpeedDescentAbove10k = (config.cruise_speed_ktas + config.speed_above_fl100_kias) / 2;
-  const avgSpeedDescentBelow10k = config.speed_below_fl100_kias * 0.85;
+  // PC24 descends at high speeds
+  const avgSpeedDescentAbove10k = 420; // High-speed descent from cruise
+  const avgSpeedDescentBelow10k = 360; // Still fast below 10k
   
   const descentDistanceAbove10k = (avgSpeedDescentAbove10k * timeDescentAbove10k) / 60;
   const descentDistanceBelow10k = (avgSpeedDescentBelow10k * timeDescentBelow10k) / 60;
@@ -145,7 +149,7 @@ export function calculateRealisticFlightTime(
   const totalTimeMinutes = climbTimeMin + cruiseTimeMin + descentTimeMin + taxiTimeMin + bufferTimeMin;
 
   // Estimate fuel burn (simplified)
-  // PC-24 burns approximately 900 lbs/hr at cruise
+  // PC24 burns approximately 900 lbs/hr at cruise
   const cruiseHours = cruiseTimeMin / 60;
   const climbDescentHours = (climbTimeMin + descentTimeMin) / 60;
   const fuelBurnLbs = (cruiseHours * 900) + (climbDescentHours * 1100); // Higher burn during climb
