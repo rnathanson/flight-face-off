@@ -49,7 +49,8 @@ const DEFAULT_CONFIG = {
   fuel_weight_per_gallon: 6.8,
   max_takeoff_weight_lbs: 18740,
   max_landing_weight_lbs: 17340,
-  refueling_time_minutes: 30
+  refueling_time_minutes: 30,
+  long_leg_time_factor: 1.0
 };
 
 Deno.serve(async (req) => {

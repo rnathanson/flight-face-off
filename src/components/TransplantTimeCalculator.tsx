@@ -529,15 +529,25 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         [destAirport.lng, destAirport.lat]
       ]);
       if (mainFlightMidpoint) {
-        const mainFlightSegment: TripSegment = {
-          type: 'flight',
-          from: pickupAirport.code,
-          to: destAirport.code,
-          duration: segments[3]?.duration || 0,
-          distance: segments[3]?.distance || 0
-        };
-        const mainLabel = createSegmentLabel(mainFlightSegment, 3, mainFlightMidpoint);
-        if (mainLabel) mainLabel.addTo(map.current);
+        // Find the actual flight segment from pickup airport to destination airport
+        const actualMainFlight = segments.find(seg => 
+          seg.type === 'flight' && 
+          seg.from.includes(pickupAirport.code) && 
+          seg.to.includes(destAirport.code)
+        );
+        
+        if (actualMainFlight) {
+          const mainFlightSegment: TripSegment = {
+            type: 'flight',
+            from: pickupAirport.code,
+            to: destAirport.code,
+            duration: actualMainFlight.duration,
+            distance: actualMainFlight.distance
+          };
+          const segmentIndex = segments.indexOf(actualMainFlight);
+          const mainLabel = createSegmentLabel(mainFlightSegment, segmentIndex, mainFlightMidpoint);
+          if (mainLabel) mainLabel.addTo(map.current);
+        }
       }
     }
 
