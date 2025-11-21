@@ -1072,8 +1072,8 @@ async function calculateFlightTime(
   console.log(`✈️  DESCENT: ${descentTimeMin.toFixed(1)}min covering ${descentNM.toFixed(1)}nm @ ${descentAvgSpeed}ktas avg`);
   
   // Add taxi time (taxi-out + taxi-in = 2 operations per flight leg)
-  const taxiTimeTotal = (config.taxi_time_per_airport_min ?? 5) * 2;
-  console.log(`🚕 TAXI: ${taxiTimeTotal}min (${config.taxi_time_per_airport_min ?? 5}min × 2 airports)`);
+  const taxiTimeTotal = (config.taxi_time_per_airport_min ?? 0) * 2;
+  console.log(`🚕 TAXI: ${taxiTimeTotal}min (${config.taxi_time_per_airport_min ?? 0}min × 2 airports)`);
   
   let totalMinutes = Math.round(climbTimeMin + cruiseTimeMin + descentTimeMin + weatherDelay + taxiTimeTotal);
   
