@@ -53,11 +53,18 @@ export interface FlightSegment {
 export function calculateRealisticFlightTime(
   distanceNM: number,
   config: FlightOpsConfig,
-  headwindKts: number = 0,
+  headwindKts: number = 0,  // Legacy parameter: defaults to applying same wind to all phases
   originAirportSize: 'major' | 'regional' | 'private' = 'regional',
   destAirportSize: 'major' | 'regional' | 'private' = 'regional',
-  routeDistanceNM?: number // Actual route distance if available
+  routeDistanceNM?: number, // Actual route distance if available
+  climbHeadwindKts?: number,  // Optional: specific headwind for climb phase
+  cruiseHeadwindKts?: number, // Optional: specific headwind for cruise phase
+  descentHeadwindKts?: number // Optional: specific headwind for descent phase
 ): FlightCalculationResult {
+  // Use phase-specific winds if provided, otherwise use legacy single headwind for all phases
+  const climbWind = climbHeadwindKts !== undefined ? climbHeadwindKts : headwindKts;
+  const cruiseWind = cruiseHeadwindKts !== undefined ? cruiseHeadwindKts : headwindKts;
+  const descentWind = descentHeadwindKts !== undefined ? descentHeadwindKts : headwindKts;
   // Use actual route distance if provided, otherwise add routing factor
   const actualDistanceNM = routeDistanceNM || (distanceNM * 1.05); // 5% routing factor
   
@@ -76,7 +83,7 @@ export function calculateRealisticFlightTime(
     cruiseLevel = `FL${Math.round(cruiseAltitudeFt / 100)}`;
   }
 
-  // Calculate climb segment
+  // Calculate climb segment with phase-specific wind
   const climbTimeMin = cruiseAltitudeFt / config.climb_rate_fpm;
   
   // PC24-specific climb profile: 100nm in 17 minutes to FL450
@@ -86,14 +93,18 @@ export function calculateRealisticFlightTime(
   const timeAbove10k = Math.max(0, climbTimeMin - timeBelow10k);
   
   // PC24 climbs at higher speeds than generic aircraft
-  const avgSpeedBelow10k = 180; // Faster acceleration
-  const avgSpeedAbove10k = 400; // High-speed climb
+  const avgTASBelow10k = 180; // Faster acceleration
+  const avgTASAbove10k = 400; // High-speed climb
   
-  const climbDistanceBelow10k = (avgSpeedBelow10k * timeBelow10k) / 60;
-  const climbDistanceAbove10k = (avgSpeedAbove10k * timeAbove10k) / 60;
+  // Apply climb headwind to ground speeds
+  const avgGSBelow10k = Math.max(50, avgTASBelow10k - climbWind);
+  const avgGSAbove10k = Math.max(50, avgTASAbove10k - climbWind);
+  
+  const climbDistanceBelow10k = (avgGSBelow10k * timeBelow10k) / 60;
+  const climbDistanceAbove10k = (avgGSAbove10k * timeAbove10k) / 60;
   const climbNM = climbDistanceBelow10k + climbDistanceAbove10k;
 
-  // Calculate descent segment
+  // Calculate descent segment with phase-specific wind
   const descentTimeMin = cruiseAltitudeFt / config.descent_rate_fpm;
   
   // PC24-specific descent profile: 150nm in 22 minutes from FL450
@@ -103,16 +114,20 @@ export function calculateRealisticFlightTime(
   const timeDescentBelow10k = Math.max(0, descentTimeMin - timeDescentAbove10k);
   
   // PC24 descends at high speeds
-  const avgSpeedDescentAbove10k = 420; // High-speed descent from cruise
-  const avgSpeedDescentBelow10k = 360; // Still fast below 10k
+  const avgTASDescentAbove10k = 420; // High-speed descent from cruise
+  const avgTASDescentBelow10k = 360; // Still fast below 10k
   
-  const descentDistanceAbove10k = (avgSpeedDescentAbove10k * timeDescentAbove10k) / 60;
-  const descentDistanceBelow10k = (avgSpeedDescentBelow10k * timeDescentBelow10k) / 60;
+  // Apply descent headwind to ground speeds
+  const avgGSDescentAbove10k = Math.max(50, avgTASDescentAbove10k - descentWind);
+  const avgGSDescentBelow10k = Math.max(50, avgTASDescentBelow10k - descentWind);
+  
+  const descentDistanceAbove10k = (avgGSDescentAbove10k * timeDescentAbove10k) / 60;
+  const descentDistanceBelow10k = (avgGSDescentBelow10k * timeDescentBelow10k) / 60;
   const descentNM = descentDistanceAbove10k + descentDistanceBelow10k;
 
-  // Calculate cruise segment
+  // Calculate cruise segment with phase-specific wind
   const cruiseNM = Math.max(0, actualDistanceNM - climbNM - descentNM); // Use actual route distance
-  const cruiseGroundSpeed = config.cruise_speed_ktas - headwindKts;
+  const cruiseGroundSpeed = Math.max(50, config.cruise_speed_ktas - cruiseWind);
   const cruiseTimeMin = (cruiseNM / cruiseGroundSpeed) * 60;
 
   // Taxi time based on airport size
@@ -174,9 +189,9 @@ export function calculateRealisticFlightTime(
       cruiseLevel
     },
     speeds: {
-      climbAvgKIAS: (avgSpeedBelow10k + avgSpeedAbove10k) / 2,
+      climbAvgKIAS: (avgTASBelow10k + avgTASAbove10k) / 2,
       cruiseKTAS: config.cruise_speed_ktas,
-      descentAvgKIAS: (avgSpeedDescentAbove10k + avgSpeedDescentBelow10k) / 2
+      descentAvgKIAS: (avgTASDescentAbove10k + avgTASDescentBelow10k) / 2
     },
     fuelBurnLbs
   };
