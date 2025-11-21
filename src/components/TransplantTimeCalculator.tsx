@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { CalendarIcon, MapPin, Plane, Zap, Clock, Car, Timer, AlertTriangle, CheckCircle, Target, ChevronDown, AlertCircle } from 'lucide-react';
+import { CalendarIcon, MapPin, Plane, Zap, Clock, Car, Timer, AlertTriangle, CheckCircle, Target, ChevronDown, AlertCircle, Info } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -916,7 +916,23 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                         </div>
                         <div className="text-center space-y-3">
                           <Target className="w-8 h-8 mx-auto text-green-600" />
-                          <div className="text-sm text-muted-foreground">Estimated Arrival</div>
+                  <div className="flex items-center justify-center gap-1.5">
+                    <div className="text-sm text-muted-foreground">Estimated Arrival</div>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="w-4 h-4 text-muted-foreground/60 hover:text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-[280px]">
+                          <p className="text-sm">
+                            {showFullTrip 
+                              ? "Time when the aircraft completes the full mission and arrives at the delivery hospital."
+                              : "Based on dispatching now, this shows when the aircraft would be ready to pick up the organ and the estimated time it would arrive at the delivery hospital with the organ."}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
                           <div className="text-3xl font-bold">
                             {format(tripResult.arrivalTime, 'h:mm a')}
                           </div>
