@@ -52,6 +52,14 @@ FORMATTING REQUIREMENTS (NON-NEGOTIABLE)
 • Use tables ONLY for comparisons or structured data (fuel, weather minimums, etc.)
 • NEVER write more than 4 consecutive lines without a blank line
 
+LIST FORMATTING (CRITICAL)
+
+When you enumerate steps or fuel components, ALWAYS:
+• Put each numbered item on its own line (e.g., "1. Fly to the destination", newline, "2. Fly to the alternate", newline...)
+• Put each bullet item on its own line (e.g., "* Taxi Fuel:", newline, "* Trip Fuel:")
+• Include a space after the period in numbered items (e.g., "1. Fly", not "1.Fly")
+• Never concatenate multiple list items on the same line
+
 PROHIBITED
 
 • No walls of text longer than 4 lines without breaks
