@@ -68,7 +68,14 @@ export async function fetchWindsAloft(
   try {
     const region = determineRegion(lat, lng);
     const level = altitudeFt >= 18000 ? 'high' : 'low';
-    const fcst = '06'; // 6-hour forecast (most current data)
+    
+    // Map forecastHours to NOAA's available forecast periods: 06, 12, 18, 24
+    let fcst = '06';
+    if (forecastHours >= 24) fcst = '24';
+    else if (forecastHours >= 18) fcst = '18';
+    else if (forecastHours >= 12) fcst = '12';
+    else if (forecastHours >= 6) fcst = '06';
+    else fcst = '06'; // Use 6-hour for flights < 6 hours away
     
     let url = `https://aviationweather.gov/api/data/windtemp?region=${region}&level=${level}&fcst=${fcst}`;
     
@@ -285,11 +292,19 @@ async function fetchLowLevelWinds(
   lat: number,
   lng: number,
   altitudeFt: number,
+  forecastHours: number = 0,
   nearestAirport?: string
 ): Promise<WindsAloftData | null> {
   try {
     const region = determineRegion(lat, lng);
-    const fcst = '06'; // 6-hour forecast (most current data)
+    
+    // Map forecastHours to NOAA's available forecast periods: 06, 12, 18, 24
+    let fcst = '06';
+    if (forecastHours >= 24) fcst = '24';
+    else if (forecastHours >= 18) fcst = '18';
+    else if (forecastHours >= 12) fcst = '12';
+    else if (forecastHours >= 6) fcst = '06';
+    else fcst = '06'; // Use 6-hour for flights < 6 hours away
     
     let url = `https://aviationweather.gov/api/data/windtemp?region=${region}&level=low&fcst=${fcst}`;
     
@@ -471,7 +486,8 @@ export async function fetchAverageWindsAlongRoute(
   cruiseAltitudeFt: number,
   distanceNM: number,
   climbPhaseNM: number = 50,
-  descentPhaseNM: number = 50
+  descentPhaseNM: number = 50,
+  forecastHours: number = 0
 ): Promise<WindsAloftData | null> {
   try {
     console.log(`\n🌬️  WINDS ALOFT SAMPLING:`);
@@ -506,8 +522,11 @@ export async function fetchAverageWindsAlongRoute(
         samplePoints.push({ ...lastWp, fraction: 1.0 });
       }
     } else {
-      // Interpolate based on distance
-      const numSamples = distanceNM < 100 ? 2 : distanceNM < 350 ? 4 : 6;
+      // Interpolate based on distance - increase sampling density for better wind accuracy
+      const numSamples = distanceNM < 100 ? 3 : 
+                         distanceNM < 250 ? 5 : 
+                         distanceNM < 500 ? 8 : 
+                         distanceNM < 750 ? 10 : 12;
       for (let i = 0; i < numSamples; i++) {
         const fraction = i / (numSamples - 1);
         const lat = waypoints[0].lat + (waypoints[waypoints.length - 1].lat - waypoints[0].lat) * fraction;
@@ -534,7 +553,7 @@ export async function fetchAverageWindsAlongRoute(
         weight = 1.0; // Equal weight for simplicity
         
         // Fetch low-level winds
-        const winds = await fetchLowLevelWinds(point.lat, point.lng, altitude, point.code);
+        const winds = await fetchLowLevelWinds(point.lat, point.lng, altitude, forecastHours, point.code);
         if (winds && winds.direction !== 'VRB') {
           console.log(`  🔼 CLIMB phase at ${altitude.toFixed(0)}ft from ${winds.station}: ${winds.direction}° @ ${winds.speed}kt`);
           windSamples.push({
@@ -556,7 +575,7 @@ export async function fetchAverageWindsAlongRoute(
         weight = 1.0;
         
         // Fetch low-level winds
-        const winds = await fetchLowLevelWinds(point.lat, point.lng, altitude, point.code);
+        const winds = await fetchLowLevelWinds(point.lat, point.lng, altitude, forecastHours, point.code);
         if (winds && winds.direction !== 'VRB') {
           console.log(`  🔽 DESCENT phase at ${altitude.toFixed(0)}ft from ${winds.station}: ${winds.direction}° @ ${winds.speed}kt`);
           windSamples.push({
@@ -577,7 +596,7 @@ export async function fetchAverageWindsAlongRoute(
         weight = 1.5; // Give cruise phase more weight since we spend most time there
         
         // Fetch high-level winds
-        const winds = await fetchWindsAloft(point.lat, point.lng, altitude, 0, point.code);
+        const winds = await fetchWindsAloft(point.lat, point.lng, altitude, forecastHours, point.code);
         if (winds && winds.direction !== 'VRB') {
           console.log(`  ✈️  CRUISE phase at FL${Math.round(altitude / 100)} from ${winds.station}: ${winds.direction}° @ ${winds.speed}kt`);
           windSamples.push({
@@ -609,7 +628,7 @@ export async function fetchAverageWindsAlongRoute(
       ];
       
       for (const point of fallbackPoints) {
-        const winds = await fetchWindsAloft(point.lat, point.lng, cruiseAltitudeFt, 0, point.code);
+        const winds = await fetchWindsAloft(point.lat, point.lng, cruiseAltitudeFt, forecastHours, point.code);
         if (winds && winds.direction !== 'VRB') {
           console.log(`  ✈️  CRUISE fallback at ${cruiseAltitudeFt.toFixed(0)}ft: ${winds.direction}° @ ${winds.speed}kt (station: ${winds.station})`);
           windSamples.push({
