@@ -80,13 +80,36 @@ const normalizeCrewResponseMarkdown = (text: string): string => {
   return output.join('\n');
 };
 
+// Pre-normalize numbering and bullets before any Markdown/rendering
+const normalizeListsAndNumbers = (text: string): string => {
+  let result = text;
+
+  // 1) Ensure a space after patterns like "1.Fly", "2.Fly", etc.
+  //    "2.Fly" -> "2. Fly"
+  result = result.replace(/(\d)\.(?=\S)/g, '$1. ');
+
+  // 2) If multiple numbered items are stuck together on one line,
+  //    force a newline before each number *except* when it's already
+  //    at the start of the line.
+  result = result.replace(/(?<!^)(\s*)(\d+\.\s)/gm, '\n$2');
+
+  // 3) Make sure "*" bullets have a space after them: "*Taxi" -> "* Taxi"
+  result = result.replace(/\*(?=\S)/g, '* ');
+
+  // 4) If bullets are glued together on the same line,
+  //    insert a newline before each "* " when it appears after other text.
+  result = result.replace(/([^\n])\s*\*\s/g, '$1\n* ');
+
+  return result;
+};
+
 // Fallback formatter: adds paragraph breaks if AI returns long unbroken text
 const formatLongText = (text: string): string => {
   // If the text is short, keep it as is
   if (text.length < 300) return text;
   
-  // Split on sentence boundaries and insert blank lines every 2-3 sentences
-  const sentences = text.split(/([.!?])\s+/);
+  // Split on sentence boundaries using lookbehind to keep punctuation attached
+  const sentences = text.split(/(?<=[.!?])\s+/);
   let formatted = '';
   let sentenceCount = 0;
   
@@ -343,7 +366,7 @@ export const DemoChatbot = ({ tripData }: DemoChatbotProps) => {
                             {msg.role === 'assistant' ? (
                               <div className="text-sm prose prose-sm max-w-none dark:prose-invert prose-p:my-4 prose-p:leading-relaxed prose-ul:my-4 prose-li:my-1.5 prose-headings:mt-5 prose-headings:mb-3 prose-headings:font-semibold prose-strong:font-bold prose-strong:text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
                                 <ReactMarkdown remarkPlugins={[remarkBreaks]}>
-                                  {formatLongText(normalizeCrewResponseMarkdown(msg.content))}
+                                  {formatLongText(normalizeCrewResponseMarkdown(normalizeListsAndNumbers(msg.content)))}
                                 </ReactMarkdown>
                               </div>
                             ) : (
