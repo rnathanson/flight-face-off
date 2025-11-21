@@ -508,7 +508,7 @@ export async function fetchAverageWindsAlongRoute(
     // Determine sample points based on waypoints and distance
     let samplePoints: Array<{lat: number, lng: number, fraction: number, code?: string}> = [];
     
-    if (waypoints.length >= 2) {
+    if (waypoints.length > 2) {
       // Use actual waypoints, but limit to 6 for performance
       const step = waypoints.length <= 6 ? 1 : Math.ceil(waypoints.length / 6);
       for (let i = 0; i < waypoints.length; i += step) {
