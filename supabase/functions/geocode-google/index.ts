@@ -7,6 +7,11 @@ const corsHeaders = {
 
 const GOOGLE_MAPS_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
 
+// Detect if query looks like an airport code (3-4 alphanumeric characters)
+function isAirportCode(query: string): boolean {
+  return /^[A-Z0-9]{3,4}$/i.test(query.trim());
+}
+
 interface PlaceAutocompletePrediction {
   description: string;
   place_id: string;
@@ -65,10 +70,12 @@ serve(async (req) => {
       );
     }
 
-    console.log('Google Places Autocomplete request:', { query, limit });
+    const isAirport = isAirportCode(query);
+    console.log('Google Places Autocomplete request:', { query, limit, isAirportCode: isAirport });
 
     // Step 1: Get place predictions from Autocomplete API
-    const autocompleteUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${GOOGLE_MAPS_KEY}`;
+    // Restrict to US only and add airport type if searching for airport code
+    const autocompleteUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&components=country:us${isAirport ? '&types=airport' : ''}&key=${GOOGLE_MAPS_KEY}`;
     
     const autocompleteResponse = await fetch(autocompleteUrl);
     
@@ -112,50 +119,53 @@ serve(async (req) => {
         ? result.name
         : addressFirstPart || prediction.description.split(',')[0];
       
-      // Prefer hospitals/medical centers for the display name
+      // For airport code searches, skip hospital search and keep airport names
+      // For regular searches, prefer hospitals/medical centers
       const nameLooksMedical = /hospital|medical|clinic|center|health/i.test(placeName || '');
-      try {
-        const lat = result.geometry.location.lat;
-        const lng = result.geometry.location.lng;
-        if (!nameLooksMedical || !result.types?.includes('hospital')) {
-          const nearHospitalUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&type=hospital&key=${GOOGLE_MAPS_KEY}`;
-          const nearbyHospitalRes = await fetch(nearHospitalUrl);
-          const nearbyHospital = await nearbyHospitalRes.json();
+      if (!isAirport) {
+        try {
+          const lat = result.geometry.location.lat;
+          const lng = result.geometry.location.lng;
+          if (!nameLooksMedical || !result.types?.includes('hospital')) {
+            const nearHospitalUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&type=hospital&key=${GOOGLE_MAPS_KEY}`;
+            const nearbyHospitalRes = await fetch(nearHospitalUrl);
+            const nearbyHospital = await nearbyHospitalRes.json();
 
-          let nearbyPlace = null;
-          if (nearbyHospital.status === 'OK' && nearbyHospital.results && nearbyHospital.results.length > 0) {
-            // Prioritize the main hospital name (shortest name that contains "hospital")
-            // This helps prefer "North Shore University Hospital" over "Katz Women's Hospital at North Shore University Hospital"
-            const hospitals = nearbyHospital.results
-              .filter((p: any) => /hospital/i.test(p.name))
-              .sort((a: any, b: any) => {
-                // Prefer "University Hospital" or main campus names
-                const aIsMain = /university hospital|medical center|general hospital|regional hospital/i.test(a.name);
-                const bIsMain = /university hospital|medical center|general hospital|regional hospital/i.test(b.name);
-                if (aIsMain && !bIsMain) return -1;
-                if (bIsMain && !aIsMain) return 1;
-                // Otherwise prefer shorter names (likely main campus)
-                return a.name.length - b.name.length;
-              });
-            nearbyPlace = hospitals[0] || nearbyHospital.results[0];
-          } else {
-            // Fallback: try keyword-based medical search
-            const nearMedicalUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&keyword=medical%20center|hospital|clinic|health&key=${GOOGLE_MAPS_KEY}`;
-            const nearbyMedicalRes = await fetch(nearMedicalUrl);
-            const nearbyMedical = await nearbyMedicalRes.json();
-            if (nearbyMedical.status === 'OK' && nearbyMedical.results && nearbyMedical.results.length > 0) {
-              nearbyPlace = nearbyMedical.results.find((p: any) => /hospital|medical|clinic|center|health/i.test(p.name)) || nearbyMedical.results[0];
+            let nearbyPlace = null;
+            if (nearbyHospital.status === 'OK' && nearbyHospital.results && nearbyHospital.results.length > 0) {
+              // Prioritize the main hospital name (shortest name that contains "hospital")
+              // This helps prefer "North Shore University Hospital" over "Katz Women's Hospital at North Shore University Hospital"
+              const hospitals = nearbyHospital.results
+                .filter((p: any) => /hospital/i.test(p.name))
+                .sort((a: any, b: any) => {
+                  // Prefer "University Hospital" or main campus names
+                  const aIsMain = /university hospital|medical center|general hospital|regional hospital/i.test(a.name);
+                  const bIsMain = /university hospital|medical center|general hospital|regional hospital/i.test(b.name);
+                  if (aIsMain && !bIsMain) return -1;
+                  if (bIsMain && !aIsMain) return 1;
+                  // Otherwise prefer shorter names (likely main campus)
+                  return a.name.length - b.name.length;
+                });
+              nearbyPlace = hospitals[0] || nearbyHospital.results[0];
+            } else {
+              // Fallback: try keyword-based medical search
+              const nearMedicalUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&keyword=medical%20center|hospital|clinic|health&key=${GOOGLE_MAPS_KEY}`;
+              const nearbyMedicalRes = await fetch(nearMedicalUrl);
+              const nearbyMedical = await nearbyMedicalRes.json();
+              if (nearbyMedical.status === 'OK' && nearbyMedical.results && nearbyMedical.results.length > 0) {
+                nearbyPlace = nearbyMedical.results.find((p: any) => /hospital|medical|clinic|center|health/i.test(p.name)) || nearbyMedical.results[0];
+              }
+            }
+            
+            if (nearbyPlace && nearbyPlace.name && nearbyPlace.name !== addressFirstPart) {
+              placeName = nearbyPlace.name;
+              console.log(`Found nearby place: ${placeName} at ${addressFirstPart}`);
             }
           }
-          
-          if (nearbyPlace && nearbyPlace.name && nearbyPlace.name !== addressFirstPart) {
-            placeName = nearbyPlace.name;
-            console.log(`Found nearby place: ${placeName} at ${addressFirstPart}`);
-          }
+        } catch (error) {
+          console.warn('Nearby search failed:', error);
+          // Continue with existing placeName
         }
-      } catch (error) {
-        console.warn('Nearby search failed:', error);
-        // Continue with existing placeName
       }
       
       // Always provide both name and full address for comprehensive display
@@ -171,12 +181,22 @@ serve(async (req) => {
 
     let results = (await Promise.all(detailsPromises)).filter(r => r !== null) as any[];
 
-    // Prioritize hospitals/medical centers in the result ordering
+    // Prioritize hospitals/medical centers for regular searches
+    // For airport code searches, treat airports and hospitals equally
     const score = (name: string) => {
       const n = (name || '').toLowerCase();
       let s = 0;
-      if (/hospital/.test(n)) s += 100;
-      if (/medical center|medical|clinic|university hospital|health/.test(n)) s += 50;
+      
+      if (isAirport) {
+        // For airport codes, prioritize airports but allow hospitals too
+        if (/airport|airfield|air force base/.test(n)) s += 100;
+        if (/hospital|medical center/.test(n)) s += 90;
+      } else {
+        // For regular searches, prioritize hospitals
+        if (/hospital/.test(n)) s += 100;
+        if (/medical center|medical|clinic|university hospital|health/.test(n)) s += 50;
+      }
+      
       return s;
     };
 
@@ -206,7 +226,9 @@ serve(async (req) => {
 
 // Fallback to Geocoding API when Places API returns no results
 async function geocodingFallback(query: string, limit: number) {
-  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${GOOGLE_MAPS_KEY}`;
+  const isAirport = isAirportCode(query);
+  // Restrict to US only in fallback as well
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&components=country:us&key=${GOOGLE_MAPS_KEY}`;
   
   const response = await fetch(url);
   
@@ -226,24 +248,26 @@ async function geocodingFallback(query: string, limit: number) {
       const lat = result.geometry.location.lat;
       const lng = result.geometry.location.lng;
 
-      // Prefer a hospital near this result, else keep address label
+      // Skip hospital search for airport codes, keep original place name
       let placeName = addressFirstPart;
-      try {
-        const nearHospitalUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&type=hospital&key=${GOOGLE_MAPS_KEY}`;
-        const nearbyHospitalRes = await fetch(nearHospitalUrl);
-        const nearbyHospital = await nearbyHospitalRes.json();
-        if (nearbyHospital.status === 'OK' && nearbyHospital.results && nearbyHospital.results.length > 0) {
-          placeName = nearbyHospital.results[0].name || placeName;
-        } else {
-          const nearMedicalUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&keyword=medical%20center|hospital&key=${GOOGLE_MAPS_KEY}`;
-          const nearbyMedicalRes = await fetch(nearMedicalUrl);
-          const nearbyMedical = await nearbyMedicalRes.json();
-          if (nearbyMedical.status === 'OK' && nearbyMedical.results && nearbyMedical.results.length > 0) {
-            const preferred = nearbyMedical.results.find((p: any) => /hospital|medical|clinic|center/i.test(p.name)) || nearbyMedical.results[0];
-            placeName = preferred.name || placeName;
+      if (!isAirport) {
+        try {
+          const nearHospitalUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&type=hospital&key=${GOOGLE_MAPS_KEY}`;
+          const nearbyHospitalRes = await fetch(nearHospitalUrl);
+          const nearbyHospital = await nearbyHospitalRes.json();
+          if (nearbyHospital.status === 'OK' && nearbyHospital.results && nearbyHospital.results.length > 0) {
+            placeName = nearbyHospital.results[0].name || placeName;
+          } else {
+            const nearMedicalUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&keyword=medical%20center|hospital&key=${GOOGLE_MAPS_KEY}`;
+            const nearbyMedicalRes = await fetch(nearMedicalUrl);
+            const nearbyMedical = await nearbyMedicalRes.json();
+            if (nearbyMedical.status === 'OK' && nearbyMedical.results && nearbyMedical.results.length > 0) {
+              const preferred = nearbyMedical.results.find((p: any) => /hospital|medical|clinic|center/i.test(p.name)) || nearbyMedical.results[0];
+              placeName = preferred.name || placeName;
+            }
           }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
 
       return {
         name: placeName,
