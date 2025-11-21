@@ -1,6 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkBreaks from 'remark-breaks';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,125 +7,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Bot, User, Sparkles, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { TripData } from '@/types/trip';
-
-// Section-aware normalizer: converts crew response section labels into proper Markdown headings
-const normalizeCrewResponseMarkdown = (text: string): string => {
-  const lines = text.split('\n');
-  const output: string[] = [];
-  
-  const sectionLabels: Record<string, string> = {
-    'summary': '## Summary',
-    'regulatory requirements': '## Regulatory Requirements',
-    'best practices / sop': '## Best Practices / SOP',
-    'best practices/sop': '## Best Practices / SOP',
-    'practical rule of thumb': '## Practical Rule of Thumb',
-    'takeaway': '## Takeaway',
-  };
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim().toLowerCase();
-    
-    // Check if this line is a section label (exact match, with colon/dash, or followed by space and content)
-    let isHeading = false;
-    let headingText = '';
-    let remainingContent = '';
-    
-    for (const [key, heading] of Object.entries(sectionLabels)) {
-      if (trimmed === key) {
-        isHeading = true;
-        headingText = heading;
-        break;
-      } else if (trimmed.startsWith(key + ':') || trimmed.startsWith(key + ' -') || trimmed.startsWith(key + ' —')) {
-        isHeading = true;
-        headingText = heading;
-        // Extract any content after the colon/dash
-        const colonIdx = line.indexOf(':');
-        const dashIdx = Math.max(line.indexOf(' -'), line.indexOf(' —'));
-        const splitIdx = colonIdx !== -1 ? colonIdx : dashIdx;
-        if (splitIdx !== -1 && splitIdx < line.length - 1) {
-          remainingContent = line.slice(splitIdx + 1).trim();
-        }
-        break;
-      } else if (trimmed.startsWith(key + ' ')) {
-        // Handle "Summary For a 400 nm flight..." case
-        isHeading = true;
-        headingText = heading;
-        // Extract content after the key and space
-        const startIdx = line.toLowerCase().indexOf(key) + key.length;
-        remainingContent = line.slice(startIdx).trim();
-        break;
-      }
-    }
-    
-    if (isHeading) {
-      // Add blank line before heading if previous line wasn't blank
-      if (output.length > 0 && output[output.length - 1] !== '') {
-        output.push('');
-      }
-      output.push(headingText);
-      // Add blank line after heading
-      output.push('');
-      // If there was content after the label, add it as a new line
-      if (remainingContent) {
-        output.push(remainingContent);
-      }
-    } else {
-      output.push(line);
-    }
-  }
-  
-  return output.join('\n');
-};
-
-// Pre-normalize numbering and bullets before any Markdown/rendering
-const normalizeListsAndNumbers = (text: string): string => {
-  let result = text;
-
-  // 1) Ensure a space after patterns like "1.Fly", "2.Fly", etc.
-  //    "2.Fly" -> "2. Fly"
-  result = result.replace(/(\d)\.(?=\S)/g, '$1. ');
-
-  // 2) If multiple numbered items are stuck together on one line,
-  //    force a newline before each number *except* when it's already
-  //    at the start of the line.
-  result = result.replace(/(?<!^)(\s*)(\d+\.\s)/gm, '\n$2');
-
-  // 3) Make sure "*" bullets have a space after them: "*Taxi" -> "* Taxi"
-  result = result.replace(/\*(?=\S)/g, '* ');
-
-  // 4) If bullets are glued together on the same line,
-  //    insert a newline before each "* " when it appears after other text.
-  result = result.replace(/([^\n])\s*\*\s/g, '$1\n* ');
-
-  return result;
-};
-
-// Fallback formatter: adds paragraph breaks if AI returns long unbroken text
-const formatLongText = (text: string): string => {
-  // If the text is short, keep it as is
-  if (text.length < 300) return text;
-  
-  // Split on sentence boundaries using lookbehind to keep punctuation attached
-  const sentences = text.split(/(?<=[.!?])\s+/);
-  let formatted = '';
-  let sentenceCount = 0;
-  
-  for (let i = 0; i < sentences.length; i++) {
-    formatted += sentences[i];
-    
-    // If this is a punctuation mark, increment counter
-    if (sentences[i].match(/[.!?]/)) {
-      sentenceCount++;
-      // Add blank line every 2-3 sentences
-      if (sentenceCount % 3 === 0 && i < sentences.length - 1) {
-        formatted += '\n\n';
-      }
-    }
-  }
-  
-  return formatted;
-};
 
 interface Message {
   role: 'user' | 'assistant';
@@ -363,15 +242,7 @@ export const DemoChatbot = ({ tripData }: DemoChatbotProps) => {
                                 : 'bg-muted text-foreground'
                             }`}
                           >
-                            {msg.role === 'assistant' ? (
-                              <div className="text-sm prose prose-sm max-w-none dark:prose-invert prose-p:my-4 prose-p:leading-relaxed prose-ul:my-4 prose-li:my-1.5 prose-headings:mt-5 prose-headings:mb-3 prose-headings:font-semibold prose-strong:font-bold prose-strong:text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-                                <ReactMarkdown remarkPlugins={[remarkBreaks]}>
-                                  {formatLongText(normalizeCrewResponseMarkdown(normalizeListsAndNumbers(msg.content)))}
-                                </ReactMarkdown>
-                              </div>
-                            ) : (
-                              <p className="text-sm whitespace-pre-line">{msg.content}</p>
-                            )}
+                            <p className="text-sm whitespace-pre-line">{msg.content}</p>
                             <p className={`text-xs mt-1 ${msg.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                               {msg.timestamp}
                             </p>
@@ -430,7 +301,7 @@ export const DemoChatbot = ({ tripData }: DemoChatbotProps) => {
                     <Button
                       key={idx}
                       variant="outline"
-                      className="w-full justify-start text-left h-auto py-3 px-3 text-sm whitespace-normal break-words"
+                      className="w-full justify-start text-left h-auto p-3 text-sm"
                       onClick={() => handleQuickReply(reply)}
                       disabled={isLoading}
                     >
