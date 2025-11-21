@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -244,8 +245,8 @@ export const DemoChatbot = ({ tripData }: DemoChatbotProps) => {
                             }`}
                           >
                             {msg.role === 'assistant' ? (
-                              <div className="text-sm prose prose-sm max-w-none dark:prose-invert prose-p:my-6 prose-p:leading-relaxed prose-ul:my-4 prose-li:my-1.5 prose-headings:my-5 prose-headings:font-semibold prose-strong:font-bold prose-strong:text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p_strong:first-child]:block [&_p_strong:first-child]:mt-5 [&_p_strong:first-child]:mb-2">
-                                <ReactMarkdown>{msg.content}</ReactMarkdown>
+                              <div className="text-sm prose prose-sm max-w-none dark:prose-invert prose-p:my-4 prose-p:leading-relaxed prose-ul:my-4 prose-li:my-1.5 prose-headings:my-4 prose-headings:font-semibold prose-strong:font-bold prose-strong:text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                                <ReactMarkdown remarkPlugins={[remarkBreaks]}>{msg.content}</ReactMarkdown>
                               </div>
                             ) : (
                               <p className="text-sm whitespace-pre-line">{msg.content}</p>
