@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Checkbox } from '@/components/ui/checkbox';
 import { LocationAutocomplete } from '@/components/LocationAutocomplete';
 import { AlertTriangle, CheckCircle, Target, MapPin, Plane, Clock, Loader2, User, Users, X, Heart, ChevronsUpDown, Check, Wind, Droplets, Layers, Zap, RotateCcw } from 'lucide-react';
 import { GeocodeResult } from '@/lib/geocoding';
@@ -152,6 +153,7 @@ export const DemoTripPredictions = ({
   const [loadingCase, setLoadingCase] = useState(false);
   const [livePrediction, setLivePrediction] = useState<LivePrediction | null>(null);
   const [calculatingLive, setCalculatingLive] = useState(false);
+  const [segmentMode, setSegmentMode] = useState<'organ-transport' | 'full-roundtrip'>('organ-transport');
   const {
     toast
   } = useToast();
@@ -424,7 +426,8 @@ export const DemoTripPredictions = ({
               address: selectedDestination.address
             },
             departureDateTime: new Date().toISOString(),
-            passengers: 2 // Pilot + Medical personnel
+            passengers: 2, // Pilot + Medical personnel
+            segmentMode: segmentMode
           }
         }
       );
@@ -529,7 +532,12 @@ export const DemoTripPredictions = ({
             departureTime: new Date().toISOString(),
             insights: analysis.insights,
             suggestions: analysis.suggestions,
-            route: tripData.route
+            route: tripData.route,
+            // Include segment timing data
+            segmentMode: segmentMode,
+            organTransportTime: tripData.timing?.organTransportTime,
+            fullRoundtripTime: tripData.timing?.fullRoundtripTime,
+            positioningTime: tripData.timing?.positioningTime
           });
         }
       }
@@ -775,6 +783,27 @@ export const DemoTripPredictions = ({
                   </span>
                 </div>
               )}
+              
+              {/* Segment Mode Checkbox */}
+              <div className="flex items-start gap-3 mt-3 p-3 bg-muted/50 rounded-md">
+                <Checkbox 
+                  id="segment-mode" 
+                  checked={segmentMode === 'organ-transport'}
+                  onCheckedChange={(checked) => setSegmentMode(checked ? 'organ-transport' : 'full-roundtrip')}
+                  className="mt-0.5"
+                />
+                <div className="space-y-1">
+                  <label
+                    htmlFor="segment-mode"
+                    className="text-sm font-medium leading-none cursor-pointer"
+                  >
+                    Show organ transport time only (pickup to delivery)
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Uncheck to see full round-trip including positioning flights from home base
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Case Number Lookup - Right */}
