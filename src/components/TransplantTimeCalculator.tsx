@@ -1024,12 +1024,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       <div className="px-4 py-3 border-b bg-muted/20">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Conservative</span>
-                          <div className="flex items-center gap-2">
-                            {selectedScenario === 'conservative' && (
-                              <Badge variant="secondary" className="text-xs bg-amber-500 text-white">ACTIVE</Badge>
-                            )}
-                            <div className="h-1 w-1 rounded-full bg-muted-foreground/40" />
-                          </div>
+                          <div className="h-1 w-1 rounded-full bg-muted-foreground/40" />
                         </div>
                       </div>
                       <div className="px-4 py-4">
@@ -1050,12 +1045,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       <div className="px-4 py-3 border-b bg-primary/5">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-medium text-primary uppercase tracking-wide">Expected</span>
-                          <div className="flex items-center gap-2">
-                            {selectedScenario === 'expected' && (
-                              <Badge variant="secondary" className="text-xs bg-primary text-primary-foreground">ACTIVE</Badge>
-                            )}
-                            <div className="h-1 w-1 rounded-full bg-primary" />
-                          </div>
+                          <div className="h-1 w-1 rounded-full bg-primary" />
                         </div>
                       </div>
                       <div className="px-4 py-4">
@@ -1076,12 +1066,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                       <div className="px-4 py-3 border-b bg-muted/20">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Optimistic</span>
-                          <div className="flex items-center gap-2">
-                            {selectedScenario === 'optimistic' && (
-                              <Badge variant="secondary" className="text-xs bg-green-500 text-white">ACTIVE</Badge>
-                            )}
-                            <div className="h-1 w-1 rounded-full bg-muted-foreground/40" />
-                          </div>
+                          <div className="h-1 w-1 rounded-full bg-muted-foreground/40" />
                         </div>
                       </div>
                       <div className="px-4 py-4">
@@ -1090,29 +1075,6 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
                         </div>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="mt-3 p-3 bg-muted/30 rounded-lg">
-                    <p className="text-xs text-muted-foreground">
-                      {selectedScenario === 'conservative' && (
-                        <>
-                          <strong>Conservative scenario:</strong> Assumes stronger headwinds (+15-25% flight time based on distance) 
-                          and heavier traffic (+30-50% ground time based on duration). AI-validated for realism.
-                        </>
-                      )}
-                      {selectedScenario === 'expected' && (
-                        <>
-                          <strong>Expected scenario:</strong> Uses baseline calculations with current weather and typical traffic 
-                          conditions. Most realistic estimate based on real-time data.
-                        </>
-                      )}
-                      {selectedScenario === 'optimistic' && (
-                        <>
-                          <strong>Optimistic scenario:</strong> Assumes favorable winds (-10-15% flight time) and light traffic 
-                          (-10-15% ground time). AI-validated best case scenario.
-                        </>
-                      )}
-                    </p>
                   </div>
                 </div>
 
