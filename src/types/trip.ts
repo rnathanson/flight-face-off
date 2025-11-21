@@ -70,9 +70,4 @@ export interface TripData {
   }>;
   suggestions?: string[];
   route?: any;
-  // Segment mode for time calculation
-  segmentMode?: 'organ-transport' | 'full-roundtrip';
-  organTransportTime?: number;
-  fullRoundtripTime?: number;
-  positioningTime?: number;
 }

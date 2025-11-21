@@ -29,8 +29,7 @@ serve(async (req) => {
       departureDateTime,
       passengers = 4,
       preferredPickupAirport,
-      preferredDestinationAirport,
-      segmentMode = 'organ-transport'
+      preferredDestinationAirport
     } = await req.json();
 
     // Parse departure time and ensure it's in UTC
@@ -552,17 +551,7 @@ serve(async (req) => {
       }
     ];
 
-    // Calculate times based on segment mode
-    const fullRoundtripTime = segments.reduce((sum, seg) => sum + seg.duration, 0);
-    
-    // Organ transport time: Legs 3, 4, 5 (Pickup Hospital → Pickup Airport → Destination Airport → Delivery Hospital)
-    const organTransportTime = segments[2].duration + segments[3].duration + segments[4].duration;
-    
-    // Positioning time: Legs 1, 2 (KFRG → Pickup Airport → Pickup Hospital)
-    const positioningTime = segments[0].duration + segments[1].duration;
-    
-    // Use selected segment mode for primary time
-    const totalTime = segmentMode === 'organ-transport' ? organTransportTime : fullRoundtripTime;
+    const totalTime = segments.reduce((sum, seg) => sum + seg.duration, 0);
     const arrivalTime = new Date(departureTime.getTime() + totalTime * 60 * 1000);
 
     // Calculate conditions for dynamic factors
@@ -628,12 +617,6 @@ serve(async (req) => {
 
     const result = {
       segments,
-      segmentMode,
-      timing: {
-        organTransportTime,
-        fullRoundtripTime,
-        positioningTime
-      },
       totalTime,
       arrivalTime: arrivalTime.toISOString(),
       confidence,

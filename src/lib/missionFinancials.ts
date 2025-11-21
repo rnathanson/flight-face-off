@@ -32,10 +32,7 @@ interface MissionROI {
  */
 export function calculateMissionCosts(tripData: TripData): MissionCosts {
   const flightDistanceNM = (tripData.originAirport?.distance_nm || 0) + (tripData.destAirport?.distance_nm || 0);
-  
-  // Use organ transport time by default, or estimated time
-  const missionTimeMinutes = tripData.organTransportTime || tripData.estimatedTimeMinutes || 0;
-  const estimatedFlightHours = missionTimeMinutes > 0 ? missionTimeMinutes / 60 : flightDistanceNM / 300;
+  const estimatedFlightHours = tripData.estimatedTimeMinutes ? tripData.estimatedTimeMinutes / 60 : flightDistanceNM / 300;
   
   // Fuel cost calculation
   // Vision Jet burns ~60 gallons/hour at 300 knots cruise
