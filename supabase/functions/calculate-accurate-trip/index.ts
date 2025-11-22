@@ -28,18 +28,40 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { 
-      pickupLocation,
-      deliveryLocation,
-      departureDateTime,
+    const rawBody = await req.json();
+
+    const {
+      pickupLocation = rawBody.origin,
+      deliveryLocation = rawBody.destination,
+      departureDateTime = rawBody.departureTime,
       passengers = 4,
       preferredPickupAirport,
-      preferredDestinationAirport
-    } = await req.json();
+      preferredDestinationAirport,
+    } = rawBody;
+
+    if (!pickupLocation || !deliveryLocation || !departureDateTime) {
+      console.error('Missing required trip parameters:', {
+        hasPickupLocation: !!pickupLocation,
+        hasDeliveryLocation: !!deliveryLocation,
+        departureDateTime,
+      });
+      return new Response(JSON.stringify({ error: 'Missing required trip parameters' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     const departureTimeUTC = new Date(departureDateTime);
+    if (isNaN(departureTimeUTC.getTime())) {
+      console.error('Invalid departureDateTime value received:', departureDateTime);
+      return new Response(JSON.stringify({ error: 'Invalid departure time' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     console.log(`🛫 Departure time (UTC): ${departureTimeUTC.toISOString()}`);
-    console.log(`🛫 Departure time (Local): ${new Date(departureDateTime).toLocaleString()}`);
+    console.log(`🛫 Departure time (Local): ${new Date(departureTimeUTC).toLocaleString()}`);
 
     console.log('Calculating 5-leg trip from KFRG home base...');
     console.log('Route: KFRG → Pickup Airport (flight) → Pickup Hospital (ground) → Pickup Airport (ground) → Destination Airport (flight) → Delivery Hospital (ground)');
