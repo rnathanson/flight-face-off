@@ -4,6 +4,8 @@ import { fetchAndParseAirNav } from '../_shared/airnav-parser.ts';
 import { parseMETAR, getWeatherDelayMinutes } from '../_shared/metar-parser.ts';
 import { parseRoute, getFAARoute } from '../_shared/route-parser.ts';
 import { fetchWindsAloft, fetchAverageWindsAlongRoute } from '../_shared/winds-aloft-fetcher.ts';
+import { calculateDistance, calculateCourse, decodePolyline } from '../_shared/geo-utils.ts';
+import { calculateHeadwindComponent } from '../_shared/wind-utils.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1224,48 +1226,6 @@ async function calculateFlightTime(
   };
 }
 
-// Polyline decoder function for Google Maps encoded polylines
-function decodePolyline(encoded: string): [number, number][] {
-  const coordinates: [number, number][] = [];
-  let index = 0;
-  let lat = 0;
-  let lng = 0;
-
-  while (index < encoded.length) {
-    let shift = 0;
-    let result = 0;
-    let byte;
-
-    // Decode latitude
-    do {
-      byte = encoded.charCodeAt(index++) - 63;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20);
-
-    const deltaLat = result & 1 ? ~(result >> 1) : result >> 1;
-    lat += deltaLat;
-
-    shift = 0;
-    result = 0;
-
-    // Decode longitude
-    do {
-      byte = encoded.charCodeAt(index++) - 63;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20);
-
-    const deltaLng = result & 1 ? ~(result >> 1) : result >> 1;
-    lng += deltaLng;
-
-    // Return as [lng, lat] for Mapbox
-    coordinates.push([lng / 1e5, lat / 1e5]);
-  }
-
-  return coordinates;
-}
-
 async function calculateGroundSegmentEnhanced(
   from: { lat: number; lng: number },
   to: { lat: number; lng: number },
@@ -1324,37 +1284,6 @@ async function calculateGroundSegmentEnhanced(
     distance: Math.round(distance * 10) / 10,
     source: 'heuristic'
   };
-}
-
-function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 3440.065; // Earth's radius in nautical miles
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-function calculateCourse(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const dLon = (lng2 - lng1) * Math.PI / 180;
-  const y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
-  const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
-    Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
-  const course = Math.atan2(y, x) * 180 / Math.PI;
-  return (course + 360) % 360;
-}
-
-function calculateHeadwindComponent(windDir: number, windSpeed: number, course: number): number {
-  // Calculate bearing difference: phi in range [-180, 180]
-  let phi = ((windDir - course + 540) % 360) - 180;
-  
-  // Convert to radians and calculate headwind component
-  // Positive = headwind, Negative = tailwind
-  const headwind = windSpeed * Math.cos(phi * Math.PI / 180);
-  
-  return headwind;
 }
 
 function generateAdvisories(weatherDelay: number, headwind: number, trafficMultiplier: number): string[] {
