@@ -4,6 +4,7 @@ import { fetchAndParseAirNav } from '../_shared/airnav-parser.ts';
 import { parseMETAR, getWeatherDelayMinutes } from '../_shared/metar-parser.ts';
 import { parseRoute, getFAARoute } from '../_shared/route-parser.ts';
 import { fetchWindsAloft, fetchAverageWindsAlongRoute } from '../_shared/winds-aloft-fetcher.ts';
+import { calculateDistance } from '../_shared/geo-utils.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1324,17 +1325,6 @@ async function calculateGroundSegmentEnhanced(
     distance: Math.round(distance * 10) / 10,
     source: 'heuristic'
   };
-}
-
-function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 3440.065; // Earth's radius in nautical miles
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
 }
 
 function calculateCourse(lat1: number, lng1: number, lat2: number, lng2: number): number {
