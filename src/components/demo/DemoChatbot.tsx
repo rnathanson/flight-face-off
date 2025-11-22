@@ -23,6 +23,7 @@ export const DemoChatbot = ({ tripData }: DemoChatbotProps) => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   const quickReplies = tripData ? [
@@ -36,9 +37,7 @@ export const DemoChatbot = ({ tripData }: DemoChatbotProps) => {
   ];
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const handleSend = async () => {
@@ -271,6 +270,7 @@ export const DemoChatbot = ({ tripData }: DemoChatbotProps) => {
                       )}
                     </div>
                   )}
+                  <div ref={messagesEndRef} />
                 </ScrollArea>
 
                 <div className="p-4 border-t border-border">
