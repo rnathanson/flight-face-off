@@ -300,8 +300,27 @@ serve(async (req) => {
     // === BUILD FINAL RESPONSE ===
     const result = {
       segments,
-      totalTime,
-      arrivalTime: arrivalTime.toISOString(),
+      total_time_minutes: totalTime,
+      conservative_time_minutes: scenarios.conservative,
+      optimistic_time_minutes: scenarios.optimistic,
+      arrival_time: arrivalTime.toISOString(),
+      conservative_arrival: new Date(departureTime.getTime() + scenarios.conservative * 60 * 1000).toISOString(),
+      optimistic_arrival: new Date(departureTime.getTime() + scenarios.optimistic * 60 * 1000).toISOString(),
+      departure_time: departureTimeUTC.toISOString(),
+      pickup_airport: {
+        code: pickupAirport.code,
+        name: pickupAirport.name,
+        lat: pickupAirport.lat,
+        lng: pickupAirport.lng,
+        distance_nm: calculateDistance(pickupAirport.lat, pickupAirport.lng, pickupLocation.lat, pickupLocation.lng || pickupLocation.lon)
+      },
+      destination_airport: {
+        code: destinationAirport.code,
+        name: destinationAirport.name,
+        lat: destinationAirport.lat,
+        lng: destinationAirport.lng,
+        distance_nm: calculateDistance(destinationAirport.lat, destinationAirport.lng, deliveryLocation.lat, deliveryLocation.lng || deliveryLocation.lon)
+      },
       confidence,
       conditions: {
         weatherDelay: totalWeatherDelay,
@@ -352,48 +371,36 @@ serve(async (req) => {
         }
       },
       advisories,
-      chiefPilotApproval: {
-        required: requiresChiefPilotApproval,
-        reasons: approvalReasons,
-        pickupAirport: approvalData.pickupAirportData ? {
-          code: approvalData.pickupAirportData.code,
-          name: approvalData.pickupAirportData.name,
-          requiresApproval: approvalData.pickupAirportData.requiresChiefPilotApproval,
-          violatedGuidelines: approvalData.pickupAirportData.violatedGuidelines || [],
-          wouldHaveSelected: approvalData.pickupSelection?.closestRejected ? {
-            code: approvalData.pickupSelection.closestRejected.code,
-            name: approvalData.pickupSelection.closestRejected.name,
-            reasons: approvalData.pickupSelection.closestRejected.rejectionReasons
-          } : null,
-          rejectedAirports: approvalData.pickupSelection?.rejectedAirports?.slice(0, 5).map((a: any) => ({
+      chiefPilotApproval: requiresChiefPilotApproval ? {
+        pickup_airport: {
+          code: pickupAirport.code,
+          name: pickupAirport.name,
+          reasons: approvalData.pickupAirportData?.violatedGuidelines?.map((g: string) => ({
+            reason: g,
+            details: `This airport requires chief pilot approval due to ${g}`
+          })) || []
+        },
+        destination_airport: {
+          code: destinationAirport.code,
+          name: destinationAirport.name,
+          reasons: approvalData.deliveryAirportData?.violatedGuidelines?.map((g: string) => ({
+            reason: g,
+            details: `This airport requires chief pilot approval due to ${g}`
+          })) || []
+        },
+        rejected_airports: [
+          ...(approvalData.pickupSelection?.rejectedAirports?.slice(0, 3).map((a: any) => ({
             code: a.code,
             name: a.name,
-            distance_nm: a.distance_nm,
-            groundTransportMinutes: a.groundTransportMinutes,
-            reasons: a.rejectionReasons,
-            failureStage: a.failureStage
-          })) || []
-        } : null,
-        deliveryAirport: approvalData.deliveryAirportData ? {
-          code: approvalData.deliveryAirportData.code,
-          name: approvalData.deliveryAirportData.name,
-          requiresApproval: approvalData.deliveryAirportData.requiresChiefPilotApproval,
-          violatedGuidelines: approvalData.deliveryAirportData.violatedGuidelines || [],
-          wouldHaveSelected: approvalData.deliverySelection?.closestRejected ? {
-            code: approvalData.deliverySelection.closestRejected.code,
-            name: approvalData.deliverySelection.closestRejected.name,
-            reasons: approvalData.deliverySelection.closestRejected.rejectionReasons
-          } : null,
-          rejectedAirports: approvalData.deliverySelection?.rejectedAirports?.slice(0, 5).map((a: any) => ({
+            reason: a.rejectionReasons?.join(', ') || 'Does not meet requirements'
+          })) || []),
+          ...(approvalData.deliverySelection?.rejectedAirports?.slice(0, 3).map((a: any) => ({
             code: a.code,
             name: a.name,
-            distance_nm: a.distance_nm,
-            groundTransportMinutes: a.groundTransportMinutes,
-            reasons: a.rejectionReasons,
-            failureStage: a.failureStage
-          })) || []
-        } : null
-      },
+            reason: a.rejectionReasons?.join(', ') || 'Does not meet requirements'
+          })) || [])
+        ]
+      } : undefined,
       scenarios
     };
 
