@@ -1,7 +1,6 @@
 import { GeocodeResult } from './geocoding';
 import { supabase } from '@/integrations/supabase/client';
 import { decodePolyline } from './polyline';
-import { calculateDistance } from './geoUtils';
 
 export interface DrivingRouteResult {
   distanceMiles: number;
@@ -95,7 +94,15 @@ function setCachedRoute(cacheKey: string, data: DrivingRouteResult): void {
 
 // Haversine distance fallback
 function calculateStraightLineDistance(from: GeocodeResult, to: GeocodeResult): number {
-  return calculateDistance(from.lat, from.lon, to.lat, to.lon, 'mi');
+  const R = 3959; // Earth's radius in miles
+  const dLat = (to.lat - from.lat) * Math.PI / 180;
+  const dLon = (to.lon - from.lon) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(from.lat * Math.PI / 180) * Math.cos(to.lat * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
 }
 
 // Fallback heuristic calculation

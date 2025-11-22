@@ -1,6 +1,5 @@
 // NOAA Aviation Weather Winds Aloft API Integration
 // Provides official flight-level wind and temperature data
-import { calculateDistance } from './geo-utils.ts';
 
 // Winds Aloft Station Lookup Table
 // These are the official NOAA winds aloft reporting stations with their coordinates
@@ -122,6 +121,22 @@ const WINDS_ALOFT_STATIONS: WindsAloftStation[] = [
 const STATION_LOOKUP = new Map(
   WINDS_ALOFT_STATIONS.map(station => [station.code, station])
 );
+
+/**
+ * Calculate the great circle distance between two points using Haversine formula
+ * Returns distance in nautical miles
+ */
+function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 3440.065; // Earth's radius in nautical miles
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 /**
  * Find the closest winds aloft station to a given lat/lng
