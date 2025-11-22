@@ -5,20 +5,7 @@ import { parseMETAR } from '../_shared/metar-parser.ts';
 import { fetchTAFWithFallback } from '../_shared/checkwx-fetcher.ts';
 import { parseTAFPeriods, findRelevantTafPeriod } from '../_shared/taf-period-parser.ts';
 import { searchNearbyAirports } from '../_shared/airnav-search.ts';
-import { AIRPORT_COORDS } from '../_shared/airport-data.ts';
-
-// Calculate distance using Haversine formula
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 3440.065; // Earth's radius in nautical miles
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
-}
+import { AIRPORT_COORDS, calculateDistance } from '../_shared/airport-data.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
