@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Settings, LogOut, Sparkles, Zap } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { TransplantTimeCalculator } from '@/components/TransplantTimeCalculator';
+import { TransplantTimeCalculator } from '@/components/TransplantTimeCalculator/TransplantTimeCalculator';
 import northwellLogo from '@/assets/northwell-health-logo.png';
 const Index = () => {
   const {
