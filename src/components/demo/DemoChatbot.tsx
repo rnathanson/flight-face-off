@@ -301,7 +301,7 @@ export const DemoChatbot = ({ tripData }: DemoChatbotProps) => {
                     <Button
                       key={idx}
                       variant="outline"
-                      className="w-full justify-start text-left h-auto p-3 text-sm"
+                      className="w-full justify-start text-left h-auto p-3 text-sm whitespace-normal"
                       onClick={() => handleQuickReply(reply)}
                       disabled={isLoading}
                     >
