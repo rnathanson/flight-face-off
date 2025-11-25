@@ -169,8 +169,8 @@ serve(async (req) => {
 async function medicalTextSearch(query: string, limit: number) {
   console.log('Using Text Search API for medical query:', query);
   
-  // Text Search API with type=hospital filter, restricted to US
-  const textSearchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&type=hospital&region=us&key=${GOOGLE_MAPS_KEY}`;
+  // Text Search API restricted to US - let Google's NLP determine the place type from query
+  const textSearchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&region=us&key=${GOOGLE_MAPS_KEY}`;
   
   const response = await fetch(textSearchUrl);
   
