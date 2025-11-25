@@ -12,11 +12,6 @@ function isAirportCode(query: string): boolean {
   return /^[A-Z0-9]{3,4}$/i.test(query.trim());
 }
 
-// Detect if query is medical-related (hospital, clinic, medical center, etc.)
-function isMedicalQuery(query: string): boolean {
-  return /hospital|medical|clinic|health|surgery|emergency|trauma|transplant|university.*medical|medical.*center/i.test(query);
-}
-
 interface PlaceAutocompletePrediction {
   description: string;
   place_id: string;
@@ -76,81 +71,80 @@ serve(async (req) => {
     }
 
     const isAirport = isAirportCode(query);
-    const isMedical = isMedicalQuery(query);
-    console.log('Google Places request:', { query, limit, isAirportCode: isAirport, isMedicalQuery: isMedical });
+    console.log('Google Places request:', { query, limit, isAirportCode: isAirport });
 
-    // Route medical queries to Text Search API for better hospital results
-    if (isMedical && !isAirport) {
-      return await medicalTextSearch(query, limit);
-    }
-
-    // Step 1: Get place predictions from Autocomplete API
-    // Restrict to US only and add airport type if searching for airport code
-    const autocompleteUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&components=country:us${isAirport ? '&types=airport' : ''}&key=${GOOGLE_MAPS_KEY}`;
-    
-    const autocompleteResponse = await fetch(autocompleteUrl);
-    
-    if (!autocompleteResponse.ok) {
-      console.error('Google Places API error:', autocompleteResponse.status);
-      throw new Error(`Google Places API error: ${autocompleteResponse.status}`);
-    }
-
-    const autocompleteData: PlaceAutocompleteResult = await autocompleteResponse.json();
-
-    if (autocompleteData.status === 'ZERO_RESULTS') {
-      console.log('No results from Places API, using Geocoding API fallback');
-      return await geocodingFallback(query, limit);
-    }
-
-    if (autocompleteData.status !== 'OK') {
-      console.error('Google Places error:', autocompleteData.status);
-      throw new Error(`Google Places error: ${autocompleteData.status}`);
-    }
-
-    // Step 2: Get details for each place
-    const predictions = autocompleteData.predictions.slice(0, limit);
-    const detailsPromises = predictions.map(async (prediction) => {
-      const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${prediction.place_id}&fields=name,formatted_address,geometry,types,business_status&key=${GOOGLE_MAPS_KEY}`;
+    // Route airport codes to Autocomplete API with airport type filter
+    // All other queries use Text Search API for more comprehensive results
+    if (isAirport) {
+      const autocompleteUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&components=country:us&types=airport&key=${GOOGLE_MAPS_KEY}`;
       
-      const detailsResponse = await fetch(detailsUrl);
-      const detailsData: PlaceDetailsResult = await detailsResponse.json();
+      const autocompleteResponse = await fetch(autocompleteUrl);
       
-      if (detailsData.status !== 'OK') {
-        console.warn(`Failed to get details for ${prediction.place_id}:`, detailsData.status);
-        return null;
+      if (!autocompleteResponse.ok) {
+        console.error('Google Places API error:', autocompleteResponse.status);
+        throw new Error(`Google Places API error: ${autocompleteResponse.status}`);
       }
 
-      const result = detailsData.result;
-      
-      // Determine if we have a named place or just an address
-      const addressFirstPart = result.formatted_address?.split(',')[0].trim();
-      const hasPlaceName = result.name && result.name !== addressFirstPart;
-      
-      const placeName = hasPlaceName 
-        ? result.name
-        : addressFirstPart || prediction.description.split(',')[0];
-      
-      // Always provide both name and full address for comprehensive display
-      return {
-        name: placeName,
-        address: result.formatted_address,
-        display_name: result.formatted_address,
-        lat: result.geometry.location.lat.toString(),
-        lon: result.geometry.location.lng.toString(),
-        place_id: prediction.place_id,
-      };
-    });
+      const autocompleteData: PlaceAutocompleteResult = await autocompleteResponse.json();
 
-    const results = (await Promise.all(detailsPromises)).filter(r => r !== null) as any[];
-
-    console.log('Google Places response:', results.length, 'results');
-
-    return new Response(
-      JSON.stringify(results),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      if (autocompleteData.status === 'ZERO_RESULTS') {
+        console.log('No results from Places API, using Geocoding API fallback');
+        return await geocodingFallback(query, limit);
       }
-    );
+
+      if (autocompleteData.status !== 'OK') {
+        console.error('Google Places error:', autocompleteData.status);
+        throw new Error(`Google Places error: ${autocompleteData.status}`);
+      }
+
+      // Step 2: Get details for each place
+      const predictions = autocompleteData.predictions.slice(0, limit);
+      const detailsPromises = predictions.map(async (prediction) => {
+        const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${prediction.place_id}&fields=name,formatted_address,geometry,types,business_status&key=${GOOGLE_MAPS_KEY}`;
+        
+        const detailsResponse = await fetch(detailsUrl);
+        const detailsData: PlaceDetailsResult = await detailsResponse.json();
+        
+        if (detailsData.status !== 'OK') {
+          console.warn(`Failed to get details for ${prediction.place_id}:`, detailsData.status);
+          return null;
+        }
+
+        const result = detailsData.result;
+        
+        // Determine if we have a named place or just an address
+        const addressFirstPart = result.formatted_address?.split(',')[0].trim();
+        const hasPlaceName = result.name && result.name !== addressFirstPart;
+        
+        const placeName = hasPlaceName 
+          ? result.name
+          : addressFirstPart || prediction.description.split(',')[0];
+        
+        // Always provide both name and full address for comprehensive display
+        return {
+          name: placeName,
+          address: result.formatted_address,
+          display_name: result.formatted_address,
+          lat: result.geometry.location.lat.toString(),
+          lon: result.geometry.location.lng.toString(),
+          place_id: prediction.place_id,
+        };
+      });
+
+      const results = (await Promise.all(detailsPromises)).filter(r => r !== null) as any[];
+
+      console.log('Google Places response:', results.length, 'results');
+
+      return new Response(
+        JSON.stringify(results),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+    
+    // For all non-airport queries, use Text Search API for comprehensive results
+    return await textSearch(query, limit);
   } catch (error) {
     console.error('Geocoding error:', error);
     return new Response(
@@ -165,9 +159,9 @@ serve(async (req) => {
   }
 });
 
-// Use Text Search API for medical queries to get direct hospital results
-async function medicalTextSearch(query: string, limit: number) {
-  console.log('Using Text Search API for medical query:', query);
+// Use Text Search API for all non-airport queries to get comprehensive results (up to 20 results)
+async function textSearch(query: string, limit: number) {
+  console.log('Using Text Search API:', query);
   
   // Text Search API restricted to US - let Google's NLP determine the place type from query
   const textSearchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&region=us&key=${GOOGLE_MAPS_KEY}`;
