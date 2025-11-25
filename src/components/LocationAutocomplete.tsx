@@ -121,34 +121,32 @@ export function LocationAutocomplete({
         )}
         
         {showSuggestions && suggestions.length > 0 && (
-          <Card className="absolute z-50 w-full mt-2 shadow-elevated">
-            <ScrollArea className="max-h-[400px]">
-              <div className="divide-y">
-                {suggestions.map((suggestion) => (
-                  <button
-                    key={suggestion.placeId}
-                    onClick={() => handleSelectSuggestion(suggestion)}
-                    className="w-full text-left p-4 hover:bg-muted transition-colors"
-                  >
-                    <div className="flex items-start gap-3">
-                      <MapPin className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-1" />
-                      <div className="flex-1 min-w-0">
-                        {/* Always show place name if available */}
-                        {suggestion.name && (
-                          <div className="font-semibold text-base mb-0.5">
-                            {suggestion.name}
-                          </div>
-                        )}
-                        {/* Always show full address */}
-                        <div className={`text-xs ${suggestion.name ? 'text-muted-foreground' : 'font-semibold text-base'}`}>
-                          {suggestion.address}
+          <Card className="absolute z-50 w-full mt-2 shadow-elevated overflow-hidden bg-background">
+            <div className="max-h-[32rem] overflow-y-auto divide-y">
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion.placeId}
+                  onClick={() => handleSelectSuggestion(suggestion)}
+                  className="w-full text-left p-4 hover:bg-muted transition-colors"
+                >
+                  <div className="flex items-start gap-3">
+                    <MapPin className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-1" />
+                    <div className="flex-1 min-w-0">
+                      {/* Always show place name if available */}
+                      {suggestion.name && (
+                        <div className="font-semibold text-base mb-0.5">
+                          {suggestion.name}
                         </div>
+                      )}
+                      {/* Always show full address */}
+                      <div className={`text-xs ${suggestion.name ? 'text-muted-foreground' : 'font-semibold text-base'}`}>
+                        {suggestion.address}
                       </div>
                     </div>
-                  </button>
-                ))}
-              </div>
-            </ScrollArea>
+                  </div>
+                </button>
+              ))}
+            </div>
           </Card>
         )}
         
