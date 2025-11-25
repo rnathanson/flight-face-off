@@ -12,6 +12,11 @@ function isAirportCode(query: string): boolean {
   return /^[A-Z0-9]{3,4}$/i.test(query.trim());
 }
 
+// Detect if query is medical-related (hospital, clinic, medical center, etc.)
+function isMedicalQuery(query: string): boolean {
+  return /hospital|medical|clinic|health|surgery|emergency|trauma|transplant|university.*medical|medical.*center/i.test(query);
+}
+
 interface PlaceAutocompletePrediction {
   description: string;
   place_id: string;
@@ -71,7 +76,13 @@ serve(async (req) => {
     }
 
     const isAirport = isAirportCode(query);
-    console.log('Google Places Autocomplete request:', { query, limit, isAirportCode: isAirport });
+    const isMedical = isMedicalQuery(query);
+    console.log('Google Places request:', { query, limit, isAirportCode: isAirport, isMedicalQuery: isMedical });
+
+    // Route medical queries to Text Search API for better hospital results
+    if (isMedical && !isAirport) {
+      return await medicalTextSearch(query, limit);
+    }
 
     // Step 1: Get place predictions from Autocomplete API
     // Restrict to US only and add airport type if searching for airport code
@@ -115,58 +126,9 @@ serve(async (req) => {
       const addressFirstPart = result.formatted_address?.split(',')[0].trim();
       const hasPlaceName = result.name && result.name !== addressFirstPart;
       
-      let placeName = hasPlaceName 
+      const placeName = hasPlaceName 
         ? result.name
         : addressFirstPart || prediction.description.split(',')[0];
-      
-      // For airport code searches, skip hospital search and keep airport names
-      // For regular searches, prefer hospitals/medical centers
-      const nameLooksMedical = /hospital|medical|clinic|center|health/i.test(placeName || '');
-      if (!isAirport) {
-        try {
-          const lat = result.geometry.location.lat;
-          const lng = result.geometry.location.lng;
-          if (!nameLooksMedical || !result.types?.includes('hospital')) {
-            const nearHospitalUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&type=hospital&key=${GOOGLE_MAPS_KEY}`;
-            const nearbyHospitalRes = await fetch(nearHospitalUrl);
-            const nearbyHospital = await nearbyHospitalRes.json();
-
-            let nearbyPlace = null;
-            if (nearbyHospital.status === 'OK' && nearbyHospital.results && nearbyHospital.results.length > 0) {
-              // Prioritize the main hospital name (shortest name that contains "hospital")
-              // This helps prefer "North Shore University Hospital" over "Katz Women's Hospital at North Shore University Hospital"
-              const hospitals = nearbyHospital.results
-                .filter((p: any) => /hospital/i.test(p.name))
-                .sort((a: any, b: any) => {
-                  // Prefer "University Hospital" or main campus names
-                  const aIsMain = /university hospital|medical center|general hospital|regional hospital/i.test(a.name);
-                  const bIsMain = /university hospital|medical center|general hospital|regional hospital/i.test(b.name);
-                  if (aIsMain && !bIsMain) return -1;
-                  if (bIsMain && !aIsMain) return 1;
-                  // Otherwise prefer shorter names (likely main campus)
-                  return a.name.length - b.name.length;
-                });
-              nearbyPlace = hospitals[0] || nearbyHospital.results[0];
-            } else {
-              // Fallback: try keyword-based medical search
-              const nearMedicalUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&keyword=medical%20center|hospital|clinic|health&key=${GOOGLE_MAPS_KEY}`;
-              const nearbyMedicalRes = await fetch(nearMedicalUrl);
-              const nearbyMedical = await nearbyMedicalRes.json();
-              if (nearbyMedical.status === 'OK' && nearbyMedical.results && nearbyMedical.results.length > 0) {
-                nearbyPlace = nearbyMedical.results.find((p: any) => /hospital|medical|clinic|center|health/i.test(p.name)) || nearbyMedical.results[0];
-              }
-            }
-            
-            if (nearbyPlace && nearbyPlace.name && nearbyPlace.name !== addressFirstPart) {
-              placeName = nearbyPlace.name;
-              console.log(`Found nearby place: ${placeName} at ${addressFirstPart}`);
-            }
-          }
-        } catch (error) {
-          console.warn('Nearby search failed:', error);
-          // Continue with existing placeName
-        }
-      }
       
       // Always provide both name and full address for comprehensive display
       return {
@@ -179,28 +141,7 @@ serve(async (req) => {
       };
     });
 
-    let results = (await Promise.all(detailsPromises)).filter(r => r !== null) as any[];
-
-    // Prioritize hospitals/medical centers for regular searches
-    // For airport code searches, treat airports and hospitals equally
-    const score = (name: string) => {
-      const n = (name || '').toLowerCase();
-      let s = 0;
-      
-      if (isAirport) {
-        // For airport codes, prioritize airports but allow hospitals too
-        if (/airport|airfield|air force base/.test(n)) s += 100;
-        if (/hospital|medical center/.test(n)) s += 90;
-      } else {
-        // For regular searches, prioritize hospitals
-        if (/hospital/.test(n)) s += 100;
-        if (/medical center|medical|clinic|university hospital|health/.test(n)) s += 50;
-      }
-      
-      return s;
-    };
-
-    results.sort((a, b) => score(b.name) - score(a.name));
+    const results = (await Promise.all(detailsPromises)).filter(r => r !== null) as any[];
 
     console.log('Google Places response:', results.length, 'results');
 
@@ -224,9 +165,53 @@ serve(async (req) => {
   }
 });
 
-// Fallback to Geocoding API when Places API returns no results
+// Use Text Search API for medical queries to get direct hospital results
+async function medicalTextSearch(query: string, limit: number) {
+  console.log('Using Text Search API for medical query:', query);
+  
+  // Text Search API with type=hospital filter, restricted to US
+  const textSearchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&type=hospital&region=us&key=${GOOGLE_MAPS_KEY}`;
+  
+  const response = await fetch(textSearchUrl);
+  
+  if (!response.ok) {
+    console.error('Text Search API error:', response.status);
+    throw new Error(`Text Search API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+
+  if (data.status === 'ZERO_RESULTS') {
+    console.log('No results from Text Search, using geocoding fallback');
+    return await geocodingFallback(query, limit);
+  }
+
+  if (data.status !== 'OK') {
+    console.error('Text Search error:', data.status);
+    throw new Error(`Text Search error: ${data.status}`);
+  }
+
+  const results = data.results.slice(0, limit).map((result: any) => ({
+    name: result.name,
+    address: result.formatted_address,
+    display_name: result.formatted_address,
+    lat: result.geometry.location.lat.toString(),
+    lon: result.geometry.location.lng.toString(),
+    place_id: result.place_id,
+  }));
+
+  console.log('Text Search response:', results.length, 'hospital results');
+
+  return new Response(
+    JSON.stringify(results),
+    { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    }
+  );
+}
+
+// Fallback to Geocoding API when other APIs return no results
 async function geocodingFallback(query: string, limit: number) {
-  const isAirport = isAirportCode(query);
   // Restrict to US only in fallback as well
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&components=country:us&key=${GOOGLE_MAPS_KEY}`;
   
@@ -242,48 +227,23 @@ async function geocodingFallback(query: string, limit: number) {
     throw new Error(`Google Geocoding error: ${data.status}`);
   }
 
-  const results = await Promise.all(
-    data.results.slice(0, limit).map(async (result) => {
-      const addressFirstPart = result.formatted_address?.split(',')[0].trim();
-      const lat = result.geometry.location.lat;
-      const lng = result.geometry.location.lng;
-
-      // Skip hospital search for airport codes, keep original place name
-      let placeName = addressFirstPart;
-      if (!isAirport) {
-        try {
-          const nearHospitalUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&type=hospital&key=${GOOGLE_MAPS_KEY}`;
-          const nearbyHospitalRes = await fetch(nearHospitalUrl);
-          const nearbyHospital = await nearbyHospitalRes.json();
-          if (nearbyHospital.status === 'OK' && nearbyHospital.results && nearbyHospital.results.length > 0) {
-            placeName = nearbyHospital.results[0].name || placeName;
-          } else {
-            const nearMedicalUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&keyword=medical%20center|hospital&key=${GOOGLE_MAPS_KEY}`;
-            const nearbyMedicalRes = await fetch(nearMedicalUrl);
-            const nearbyMedical = await nearbyMedicalRes.json();
-            if (nearbyMedical.status === 'OK' && nearbyMedical.results && nearbyMedical.results.length > 0) {
-              const preferred = nearbyMedical.results.find((p: any) => /hospital|medical|clinic|center/i.test(p.name)) || nearbyMedical.results[0];
-              placeName = preferred.name || placeName;
-            }
-          }
-        } catch (_) {}
-      }
-
-      return {
-        name: placeName,
-        address: result.formatted_address,
-        display_name: result.formatted_address,
-        lat: lat.toString(),
-        lon: lng.toString(),
-        place_id: result.place_id,
-      };
-    })
-  );
+  const results = data.results.slice(0, limit).map((result) => {
+    const addressFirstPart = result.formatted_address?.split(',')[0].trim();
+    
+    return {
+      name: addressFirstPart,
+      address: result.formatted_address,
+      display_name: result.formatted_address,
+      lat: result.geometry.location.lat.toString(),
+      lon: result.geometry.location.lng.toString(),
+      place_id: result.place_id,
+    };
+  });
 
   return new Response(
     JSON.stringify(results),
     { 
-      headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' } 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     }
   );
 }
