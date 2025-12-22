@@ -5,6 +5,7 @@ import { BrandHeader } from '@/components/BrandHeader';
 import { BrandFooter } from '@/components/BrandFooter';
 import type { Database } from '@/integrations/supabase/types';
 import { Card, CardContent } from '@/components/ui/card';
+import { trackEvent, setTag } from '@/hooks/use-clarity';
 
 type CustomOwnershipEstimate = Database['public']['Tables']['custom_ownership_estimates']['Row'];
 
@@ -30,9 +31,16 @@ export default function CustomerEstimate() {
 
       if (error || !data) {
         setNotFound(true);
+        trackEvent('estimate_not_found');
       } else {
         setEstimate(data);
         await supabase.rpc('increment_estimate_view', { _estimate_id: data.id });
+        
+        // Track successful estimate view with context
+        trackEvent('estimate_loaded');
+        setTag('estimate_id', data.id);
+        setTag('estimate_customer', data.customer_name);
+        setTag('estimate_aircraft', data.aircraft_type);
       }
       setLoading(false);
     };

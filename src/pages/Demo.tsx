@@ -13,6 +13,7 @@ import { DemoROI } from '@/components/demo/DemoROI';
 import { DemoChiefPilot } from '@/components/demo/DemoChiefPilot';
 import { DemoLearning } from '@/components/demo/DemoLearning';
 import { TripData } from '@/types/trip';
+import { trackEvent, setTag } from '@/hooks/use-clarity';
 
 const Demo = () => {
   const navigate = useNavigate();
@@ -26,16 +27,31 @@ const Demo = () => {
     if (state?.tripData) {
       setInitialTripData(state.tripData);
       setTripData(state.tripData);
+      // Track that trip data was loaded from calculator
+      trackEvent('ai_platform_trip_loaded');
+      setTag('trip_origin', state.tripData.originAirport?.code || 'unknown');
+      setTag('trip_destination', state.tripData.destAirport?.code || 'unknown');
     }
   }, [location]);
 
   const handleTripCalculated = (data: TripData) => {
     setTripData(data);
+    trackEvent('ai_platform_trip_calculated');
+    setTag('trip_origin', data.originAirport?.code || 'unknown');
+    setTag('trip_destination', data.destAirport?.code || 'unknown');
   };
 
   const handleClearTrip = () => {
     setTripData(null);
     setInitialTripData(null);
+    trackEvent('ai_platform_trip_cleared');
+  };
+
+  // Track tab changes
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    trackEvent(`ai_demo_tab_${value}`);
+    setTag('active_demo_tab', value);
   };
 
   return (
@@ -86,7 +102,7 @@ const Demo = () => {
 
       <main className="flex-1 py-6">
         <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
             <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-7 mb-6 h-auto gap-2">
               <TabsTrigger value="predictions" className="text-xs md:text-sm">
                 Trip AI

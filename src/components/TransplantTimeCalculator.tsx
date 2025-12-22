@@ -20,6 +20,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { trackEvent, setTag } from '@/hooks/use-clarity';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface TripSegment {
@@ -394,6 +395,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
     }
 
     setCalculating(true);
+    trackEvent('trip_calculation_started');
     
     try {
       setLoadingStage('Computing door-to-door timeline...');
@@ -441,12 +443,24 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
         setShowChiefPilotModal(true);
       }
       
+      // Track successful calculation with context
+      trackEvent('trip_calculation_complete');
+      setTag('last_trip_from', result.route?.pickupAirport?.code || 'unknown');
+      setTag('last_trip_to', result.route?.destinationAirport?.code || 'unknown');
+      setTag('trip_total_time', formatDuration(result.totalTime));
+      
+      // Track if chief pilot approval needed
+      if (result.chiefPilotApproval?.required) {
+        trackEvent('chief_pilot_approval_required');
+      }
+      
       toast({
         title: 'Trip Calculated',
         description: `Total time: ${formatDuration(result.totalTime)}`,
       });
     } catch (error) {
       console.error('Trip calculation error:', error);
+      trackEvent('trip_calculation_error');
       toast({
         title: 'Calculation Error',
         description: error instanceof Error ? error.message : 'Failed to calculate trip',
