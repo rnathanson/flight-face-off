@@ -14,6 +14,7 @@ import { DemoChiefPilot } from '@/components/demo/DemoChiefPilot';
 import { DemoLearning } from '@/components/demo/DemoLearning';
 import { TripData } from '@/types/trip';
 import { trackEvent, setTag } from '@/hooks/use-clarity';
+import { useSectionVisibilityMultiple } from '@/hooks/use-section-visibility';
 
 const Demo = () => {
   const navigate = useNavigate();
@@ -21,6 +22,12 @@ const Demo = () => {
   const [activeTab, setActiveTab] = useState('predictions');
   const [initialTripData, setInitialTripData] = useState<TripData | null>(null);
   const [tripData, setTripData] = useState<TripData | null>(null);
+
+  // Section visibility tracking with 700ms animation delay
+  const { getRef, resetTracking } = useSectionVisibilityMultiple(
+    ['predictions', 'success', 'roi', 'chatbot', 'brief', 'pilot', 'learning'],
+    { animationDelay: 700 }
+  );
 
   useEffect(() => {
     const state = location.state as { tripData?: TripData } | null;
@@ -47,11 +54,12 @@ const Demo = () => {
     trackEvent('ai_platform_trip_cleared');
   };
 
-  // Track tab changes
+  // Track tab changes and reset section visibility for new tab
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     trackEvent(`ai_demo_tab_${value}`);
     setTag('active_demo_tab', value);
+    resetTracking(); // Reset visibility tracking for fresh tab content
   };
 
   return (
@@ -128,34 +136,48 @@ const Demo = () => {
             </TabsList>
 
             <TabsContent value="predictions" className="animate-fade-in">
-              <DemoTripPredictions 
-                initialTripData={initialTripData} 
-                onTripCalculated={handleTripCalculated}
-              />
+              <div ref={getRef('predictions')}>
+                <DemoTripPredictions 
+                  initialTripData={initialTripData} 
+                  onTripCalculated={handleTripCalculated}
+                />
+              </div>
             </TabsContent>
 
             <TabsContent value="success" className="animate-fade-in">
-              <DemoSuccessRate tripData={tripData} />
+              <div ref={getRef('success')}>
+                <DemoSuccessRate tripData={tripData} />
+              </div>
             </TabsContent>
 
             <TabsContent value="roi" className="animate-fade-in">
-              <DemoROI tripData={tripData} />
+              <div ref={getRef('roi')}>
+                <DemoROI tripData={tripData} />
+              </div>
             </TabsContent>
 
             <TabsContent value="chatbot" className="animate-fade-in">
-              <DemoChatbot tripData={tripData} />
+              <div ref={getRef('chatbot')}>
+                <DemoChatbot tripData={tripData} />
+              </div>
             </TabsContent>
 
             <TabsContent value="brief" className="animate-fade-in">
-              <DemoCrewBrief tripData={tripData} />
+              <div ref={getRef('brief')}>
+                <DemoCrewBrief tripData={tripData} />
+              </div>
             </TabsContent>
 
             <TabsContent value="pilot" className="animate-fade-in">
-              <DemoChiefPilot tripData={tripData} />
+              <div ref={getRef('pilot')}>
+                <DemoChiefPilot tripData={tripData} />
+              </div>
             </TabsContent>
 
             <TabsContent value="learning" className="animate-fade-in">
-              <DemoLearning tripData={tripData} />
+              <div ref={getRef('learning')}>
+                <DemoLearning tripData={tripData} />
+              </div>
             </TabsContent>
           </Tabs>
         </div>
