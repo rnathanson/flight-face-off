@@ -966,7 +966,7 @@ export function TransplantTimeCalculator({ onAIPlatformClick }: TransplantTimeCa
 
             return (
               <>
-                <Card className="border-2 border-primary/20">
+                <Card className="border-2 border-primary/20" data-clarity-unmask="true">
                   <CardContent className="pt-6">
                     <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-4 border-b pb-6 mb-6">
                 <div className="flex items-center gap-2">

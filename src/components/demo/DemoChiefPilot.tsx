@@ -61,7 +61,7 @@ export const DemoChiefPilot = ({ tripData }: DemoChiefPilotProps) => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-clarity-unmask="true">
       <Card className="shadow-card">
         <CardHeader>
           <div className="flex items-start justify-between">
