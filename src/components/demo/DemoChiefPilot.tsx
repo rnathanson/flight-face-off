@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { CheckCircle2, XCircle, Clock, AlertTriangle, Mail, FileText, TrendingUp } from 'lucide-react';
 import { TripData } from '@/types/trip';
+import { trackEvent } from '@/hooks/use-clarity';
 
 interface DemoChiefPilotProps {
   tripData?: TripData | null;
@@ -115,7 +116,11 @@ export const DemoChiefPilot = ({ tripData }: DemoChiefPilotProps) => {
                           <p className="text-sm text-muted-foreground">{dispatch.route} • Requested {dispatch.time}</p>
                         </div>
                         <div className="flex gap-2">
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => trackEvent('demo_brief_viewed')}
+                          >
                             <FileText className="w-4 h-4 mr-2" />
                             View Full Brief
                           </Button>
@@ -148,15 +153,25 @@ export const DemoChiefPilot = ({ tripData }: DemoChiefPilotProps) => {
                       </div>
 
                       <div className="flex gap-2">
-                        <Button className="flex-1 bg-success hover:bg-success/90">
+                        <Button 
+                          className="flex-1 bg-success hover:bg-success/90"
+                          onClick={() => trackEvent('demo_dispatch_approved')}
+                        >
                           <CheckCircle2 className="w-4 h-4 mr-2" />
                           Approve Dispatch
                         </Button>
-                        <Button variant="outline" className="flex-1 border-destructive text-destructive hover:bg-destructive/10">
+                        <Button 
+                          variant="outline" 
+                          className="flex-1 border-destructive text-destructive hover:bg-destructive/10"
+                          onClick={() => trackEvent('demo_dispatch_denied')}
+                        >
                           <XCircle className="w-4 h-4 mr-2" />
                           Deny with Feedback
                         </Button>
-                        <Button variant="outline">
+                        <Button 
+                          variant="outline"
+                          onClick={() => trackEvent('demo_info_requested')}
+                        >
                           <Mail className="w-4 h-4 mr-2" />
                           Request Info
                         </Button>

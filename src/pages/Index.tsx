@@ -5,6 +5,7 @@ import { Settings, LogOut, Sparkles, Zap } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { TransplantTimeCalculator } from '@/components/TransplantTimeCalculator';
 import northwellLogo from '@/assets/northwell-health-logo.png';
+import { trackEvent, setTag } from '@/hooks/use-clarity';
 const Index = () => {
   const {
     isAdmin,
@@ -16,6 +17,10 @@ const Index = () => {
     window.location.reload();
   };
   const handleAIPlatformClick = (tripData?: any) => {
+    // Track AI platform click with trip data context
+    trackEvent('ai_platform_clicked');
+    setTag('has_trip_data', tripData ? 'true' : 'false');
+    
     navigate('/ai-platform', {
       state: {
         tripData

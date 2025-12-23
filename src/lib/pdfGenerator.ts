@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { trackEvent } from '@/hooks/use-clarity';
 
 interface PDFData {
   customerName: string;
@@ -83,6 +84,8 @@ const COLORS = {
 
 export async function generatePDF(data: PDFData): Promise<void> {
   try {
+    // Track PDF generation event
+    trackEvent('estimate_pdf_generated');
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
