@@ -17,8 +17,25 @@ declare global {
   }
 }
 
+/**
+ * Check if we're on a production host (not Lovable preview or localhost)
+ */
+const isProductionHost = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  
+  const hostname = window.location.hostname;
+  
+  // Block all Lovable preview environments
+  if (hostname.includes('lovable.app')) return false;
+  
+  // Block localhost and local IPs
+  if (hostname === 'localhost' || hostname === '127.0.0.1') return false;
+  
+  return true;
+};
+
 const isClarityReady = (): boolean => {
-  return typeof window !== 'undefined' && typeof window.clarity === 'function';
+  return isProductionHost() && typeof window.clarity === 'function';
 };
 
 /**
