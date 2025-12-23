@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
-import { trackEvent, setTag, upgradeSession } from '@/hooks/use-clarity';
+import { trackEvent, setTag, upgradeSession, identify } from '@/hooks/use-clarity';
 import { useScrollTracking } from '@/hooks/use-scroll-tracking';
 
 /**
@@ -33,7 +33,30 @@ const shouldUpgradeSession = (pathname: string): string | null => {
 export const ClarityRouteTracker = () => {
   const location = useLocation();
   const previousPathRef = useRef<string>('');
+  const adminCheckedRef = useRef<boolean>(false);
   const { resetMilestones } = useScrollTracking(true);
+
+  // Memoize reset to prevent dependency issues
+  const handleResetMilestones = useCallback(() => {
+    resetMilestones();
+  }, [resetMilestones]);
+
+  // Check and tag admin sessions on mount
+  useEffect(() => {
+    if (adminCheckedRef.current) return;
+    adminCheckedRef.current = true;
+    
+    const adminToken = localStorage.getItem('admin_session');
+    if (adminToken) {
+      // Tag this as an admin session
+      identify('admin');
+      setTag('user_type', 'admin');
+      setTag('session_type', 'admin');
+    } else {
+      setTag('user_type', 'visitor');
+      setTag('session_type', 'visitor');
+    }
+  }, []);
 
   useEffect(() => {
     const { pathname } = location;
@@ -51,7 +74,7 @@ export const ClarityRouteTracker = () => {
     setTag('current_page', routeName);
     
     // Reset scroll tracking for new page
-    resetMilestones();
+    handleResetMilestones();
 
     // Upgrade session for high-value pages
     const upgradeReason = shouldUpgradeSession(pathname);
@@ -67,7 +90,7 @@ export const ClarityRouteTracker = () => {
         trackEvent('estimate_viewed');
       }
     }
-  }, [location, resetMilestones]);
+  }, [location, handleResetMilestones]);
 
   return null; // This component renders nothing
 };
